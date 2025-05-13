@@ -456,8 +456,6 @@ class DebugDataset(torch.utils.data.Dataset):
         return len(self.image_paths)
     
 
-
-
 class TestDataset(torch.utils.data.Dataset):
     def __init__(
             self, 
@@ -472,12 +470,20 @@ class TestDataset(torch.utils.data.Dataset):
             self.membrane_paths = [os.path.join(membrane, image_id) for image_id in sorted(os.listdir(dataset_dir)) if "DS" not in image_id]
         else: self.membrane_paths = None
         self.td = td
+        
+    def __len__(self):
+        # return length of 
+        return len(self.image_paths)
 
     def __getitem__(self, i):
         # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
         if not self.td:
             try:
-                image = cv2.cvtColor(cv2.imread(self.image_paths[i]), cv2.COLOR_BGR2GRAY) # each pixel is 
+                image0 = cv2.imread(self.image_paths[i])
+                #Padding and Cropping
+                if (image0.shape[-1] != 512) or (image0.shape[-2] != 512): #Current image should be 2D: (lxw)
+                    image0 = resize_image(image0, 512, 512, (0,0,0))
+                image = cv2.cvtColor(image0, cv2.COLOR_BGR2GRAY) 
                 mask = np.zeros_like(image)#cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
                 if self.membrane_paths: memb = cv2.imread(self.membrane_paths[i].replace("sem_dauer_2_em_", "20240325_SEM_dauer_2_nr_vnc_neurons_head_muscles.vsseg_export_"), -1) == 0
             except Exception as e:
@@ -495,7 +501,19 @@ class TestDataset(torch.utils.data.Dataset):
             
             image = np.stack(img, axis=0)
             memb = np.stack(mem, axis=0)
+            
+        """ REVISIT FOR MASK AND MEMBRANE WHEN NEEDED
+        if image.shape[-1] != 512: 
+            image = torch.zeros(image.shape[:-1]+(512,))
+            mask = torch.zeros(image.shape[:-1]+(512,))
+            if self.membrane_paths: memb = torch.zeros(memb.shape[:-1]+(512,))
+        if image.shape[-2] != 512: 
+            image = torch.zeros(image.shape[:-2]+(512,512))
+            mask = torch.zeros(image.shape[:-1]+(512,))
+            if self.membrane_paths: memb = torch.zeros(memb.shape[:-2]+(512,512))
+        """
 
+        #Transform to tensor
         _transform = []
         _transform.append(transforms.ToTensor()) 
         if self.membrane_paths: memb = transforms.Compose(_transform)(memb)
@@ -510,21 +528,8 @@ class TestDataset(torch.utils.data.Dataset):
             image = image.squeeze(0) 
             if self.membrane_paths: memb = memb.squeeze(0)
             mask = mask.squeeze(0)
-
-
-        if image.shape[-1] != 512: 
-            image = torch.zeros(image.shape[:-1]+(512,))
-            mask = torch.zeros(image.shape[:-1]+(512,))
-            if self.membrane_paths: memb = torch.zeros(memb.shape[:-1]+(512,))
-        if image.shape[-2] != 512: 
-            image = torch.zeros(image.shape[:-2]+(512,512))
-            mask = torch.zeros(image.shape[:-1]+(512,))
-            if self.membrane_paths: memb = torch.zeros(memb.shape[:-2]+(512,512))
-
-        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) if not self.membrane_paths else memb.unsqueeze(0).float(), image.unsqueeze(0)
-    def __len__(self):
-        # return length of 
-        return len(self.image_paths)
+        #Add batch dimension to image, mask
+        return image, mask, image if not self.membrane_paths else memb.unsqueeze(0).float(), image.unsqueeze(0)
 
 class ExtendDataset(torch.utils.data.Dataset):
 
