@@ -484,7 +484,7 @@ class TestDataset(torch.utils.data.Dataset):
                 #Padding and Cropping
                 if (image0.shape[-1] != 512) or (image0.shape[-2] != 512): #Current image should be 2D: (lxw)
                     image0 = resize_image(image0, 512, 512, (0,0,0))
-                image = cv2.cvtColor(image0, cv2.COLOR_BGR2GRAY) 
+                image = cv2.cvtColor(np.array(image0), cv2.COLOR_BGR2GRAY) 
                 mask = np.zeros_like(image)#cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
                 if self.membrane_paths: memb = cv2.imread(self.membrane_paths[i].replace("sem_dauer_2_em_", "20240325_SEM_dauer_2_nr_vnc_neurons_head_muscles.vsseg_export_"), -1) == 0
             except Exception as e:
@@ -530,7 +530,7 @@ class TestDataset(torch.utils.data.Dataset):
             if self.membrane_paths: memb = memb.squeeze(0)
             mask = mask.squeeze(0)
         #Add batch dimension to image, mask
-        return image, mask, image if not self.membrane_paths else memb.unsqueeze(0).float(), image.unsqueeze(0)
+        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) if not self.membrane_paths else memb.unsqueeze(0).float(), image.unsqueeze(0)
 
 class ExtendDataset(torch.utils.data.Dataset):
 
