@@ -457,8 +457,6 @@ class DebugDataset(torch.utils.data.Dataset):
         return len(self.image_paths)
     
 
-
-
 class TestDataset(torch.utils.data.Dataset):
     def __init__(
             self, 
