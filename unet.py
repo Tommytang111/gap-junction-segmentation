@@ -59,6 +59,8 @@ def make_dataset_new(dataset_dir, aug=False, neuron_mask=False, mito_mask=False,
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomVerticalFlip(p=0.5),
         v2.RandomApply([v2.RandomRotation(degrees=(0, 180))], p=0.4)
+        v2.RandomZoomOut(fill=0, side_range=(1,2), p=0.5)
+        v2.RandomAffine(degrees=0, scale=(1.0, 2.0), fill=0)
     ])
     if chain_length:
         train = SectionsDataset(
