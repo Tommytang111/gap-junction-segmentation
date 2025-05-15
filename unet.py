@@ -58,8 +58,8 @@ def make_dataset_new(dataset_dir, aug=False, neuron_mask=False, mito_mask=False,
     augmentation = v2.Compose([
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomVerticalFlip(p=0.5),
-        v2.RandomApply([v2.RandomRotation(degrees=(0, 180))], p=0.4)
-        v2.RandomZoomOut(fill=0, side_range=(1,2), p=0.5)
+        v2.RandomApply([v2.RandomRotation(degrees=(0, 180))], p=0.4),
+        v2.RandomZoomOut(fill=0, side_range=(1,2), p=0.5),
         v2.RandomAffine(degrees=0, scale=(1.0, 2.0), fill=0)
     ])
     if chain_length:
@@ -185,54 +185,82 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
             pbar.refresh()
             # break
 
+        # Initialize arrays to track validation metrics
         val_loss_avg, val_count = [], []
         val_prec_avg, val_recall_avg = [], []
+        # Disable gradient calculation for validation to save memory
         with torch.no_grad():
                     
+            # Flag to track if any validation batch has non-empty predictions
             epoch_non_empty = False
 
+            # Iterate through validation data loader
             for i, data in enumerate(valid_loader):            
+                # Handle different data formats depending on whether gap junction entities are generated
                 if gen_gj_entities:
+                    # Unpack data with gap junction entity information
                     valid_inputs, valid_labels, valid_label_centers, valid_label_contours, valid_pad_mask, valid_neuron_mask, valid_mito_mask = data
+                    # Move tensors to GPU/CPU device
                     valid_label_centers, valid_label_contours, valid_pad_mask = valid_label_centers.to(DEVICE), valid_label_contours.to(DEVICE), valid_pad_mask.to(DEVICE)
                 else:
+                     # Unpack standard data format
                      valid_inputs, valid_labels, valid_neuron_mask, valid_mito_mask = data
+                # Move input and label tensors to device
                 valid_inputs, valid_labels = valid_inputs.to(DEVICE), valid_labels.to(DEVICE)
 
+                # Move masks to device if they exist
                 if valid_neuron_mask != []: valid_neuron_mask = valid_neuron_mask.to(DEVICE)
                 if valid_mito_mask != []: valid_mito_mask = valid_mito_mask.to(DEVICE)
+                # Run forward pass with or without membrane features
                 valid_pred = model(valid_inputs) if not mem_feat else model(valid_inputs, valid_neuron_mask.to(torch.float32))
 
+                # Handle membrane prediction mode
                 if args.pred_mem:
+                    # Verify neuron mask exists for membrane prediction
                     assert valid_neuron_mask != []
+                    # Convert to long type for one-hot encoding
                     valid_neuron_mask = valid_neuron_mask.long()
+                    # Transform mask values: 0->2, 1->0 (remapping for one-hot encoding)
                     valid_neuron_mask[valid_neuron_mask == 0] = 2
                     valid_neuron_mask[valid_neuron_mask == 1] = 0
+                    # Combine labels with transformed neuron mask
                     valid_labels = valid_labels + valid_neuron_mask
+                    # Ensure gap junctions are represented as class 1
                     valid_labels[valid_labels == 3] = 1 # make it a gapjnc
+                    # Convert to one-hot encoding for multi-class cross-entropy
                     valid_labels = F.one_hot(valid_labels.long()).to(torch.float32).permute((0, 1, 4, 2, 3))
+                    # Set cross-entropy loss for multi-class segmentation
                     loss_f_ = F.cross_entropy
-                else: loss_f_ = F.binary_cross_entropy_with_logits
+                else: 
+                    # Use binary cross-entropy with logits for binary segmentation
+                    loss_f_ = F.binary_cross_entropy_with_logits
 
+                # Calculate validation loss with appropriate loss function
                 if args.focalweight == 0:
+                    # Loss with scale factors (s1, s2)
                     valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1), valid_neuron_mask.squeeze(1) if valid_neuron_mask != [] and not mem_feat else [], valid_mito_mask if valid_mito_mask !=[] else [], model.s1, model.s2, loss_fn=loss_f_)
                 else:   
+                    # Loss with gap junction entities or standard format
                     valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1) if not gen_gj_entities else (valid_label_centers, valid_label_contours, valid_pad_mask), valid_neuron_mask.squeeze(1) if valid_neuron_mask != [] and not mem_feat else [], valid_mito_mask if valid_mito_mask !=[] else [], loss_fn=loss_f_,fn_reweight=fn_rwt )
                 
-                #--ADD FOR CEDAR IF WANT --
-                # mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
-                #                         masks = {
-                #                             "predictions" : {
-                #                 "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
-                #                 "class_labels" : class_labels
-                #             },
-                #             "ground_truth" : {
-                #                 "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
-                #                 "class_labels" : class_labels
-                #             }}
-                # )
-                # table.add_data(f"Epoch {epoch} Step {i}", mask_img)
-                # wandb.log({"valid_loss": valid_loss})
+                """
+                Visualization code for Weights & Biases (currently commented out)
+                --ADD FOR CEDAR IF WANT --
+                mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
+                                        masks = {
+                                            "predictions" : {
+                                "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
+                                "class_labels" : class_labels
+                            },
+                            "ground_truth" : {
+                                "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
+                                "class_labels" : class_labels
+                            }}
+                )
+                table.add_data(f"Epoch {epoch} Step {i}", mask_img)
+                wandb.log({"valid_loss": valid_loss})
+                """
+                
                 val_loss_avg.append(valid_loss.detach().item())
                 val_count.append(valid_inputs.shape[0])
                 uniques = np.unique(torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))).detach().cpu().numpy())
@@ -330,31 +358,6 @@ def extend_train_loop(model, train_loader, criterion, optimizer, valid_loader=No
             epoch_non_empty = False
 
             for i, data in enumerate(valid_loader):            
-                valid_inputs, valid_pred_image, valid_pred_mask, valid_labels = data
-                valid_inputs, valid_labels = valid_inputs.to(DEVICE), valid_labels.to(DEVICE)
-                valid_pred_mask, valid_pred_image = valid_pred_mask.to(DEVICE), valid_pred_image.to(DEVICE)
-
-                valid_pred = model(valid_inputs, valid_pred_image, valid_pred_mask)
-                valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1))
-                mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
-                                        masks = {
-                                            "predictions" : {
-                                "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
-                                "class_labels" : class_labels
-                            },
-                            "ground_truth" : {
-                                "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
-                                "class_labels" : class_labels
-                            }}
-                )
-                table.add_data(f"Epoch {epoch} Step {i}", mask_img)
-                # wandb.log({"valid_loss": valid_loss})
-                val_loss_avg.append(valid_loss.detach().item())
-                val_count.append(valid_inputs.shape[0])
-                uniques = np.unique(torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))).detach().cpu().numpy())
-                if len(uniques) == 2:
-                    if not epoch_non_empty:
-                        epoch_non_empty = True
                         print("UNIQUE OUTPUTS!")
                 else:
                     epoch_non_empty = False
