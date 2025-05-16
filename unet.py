@@ -30,6 +30,7 @@ import time
 from tqdm import tqdm
 import signal
 import sys, csv
+import copy
 
 model_folder = "/mnt/e/Mishaal/GapJunction/models/"
 sample_preds_folder = "home/tommytang111/results/"
@@ -124,6 +125,10 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
     
     print(f"Using device: {DEVICE}")
     model_name = "model5"
+    #Track validation loss and best epoch for model saving
+    best_valid_loss = float('inf') 
+    best_epoch = 0
+    
     def sigint_handler(sig, frame):
         if table is not None:
             print("logging to WANDB")
@@ -137,6 +142,9 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
 
     recall_f = lambda pred, gt: torch.nansum(pred[(pred == 1) & (gt == 1)])/torch.nansum(gt[gt == 1])
     precision_f = lambda pred, gt: torch.nansum(pred[(pred == 1) & (gt == 1)])/torch.nansum(pred[pred == 1])
+    
+    # Save a copy of the initial model
+    best_model_state = copy.deepcopy(model.state_dict())
 
     for epoch in range(epochs):
         pbar = tqdm(total=len(train_loader), position=0, leave=True)
@@ -185,82 +193,55 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
             pbar.refresh()
             # break
 
-        # Initialize arrays to track validation metrics
         val_loss_avg, val_count = [], []
         val_prec_avg, val_recall_avg = [], []
-        # Disable gradient calculation for validation to save memory
+        
         with torch.no_grad():
                     
-            # Flag to track if any validation batch has non-empty predictions
             epoch_non_empty = False
 
-            # Iterate through validation data loader
             for i, data in enumerate(valid_loader):            
-                # Handle different data formats depending on whether gap junction entities are generated
                 if gen_gj_entities:
-                    # Unpack data with gap junction entity information
                     valid_inputs, valid_labels, valid_label_centers, valid_label_contours, valid_pad_mask, valid_neuron_mask, valid_mito_mask = data
-                    # Move tensors to GPU/CPU device
                     valid_label_centers, valid_label_contours, valid_pad_mask = valid_label_centers.to(DEVICE), valid_label_contours.to(DEVICE), valid_pad_mask.to(DEVICE)
                 else:
-                     # Unpack standard data format
                      valid_inputs, valid_labels, valid_neuron_mask, valid_mito_mask = data
-                # Move input and label tensors to device
                 valid_inputs, valid_labels = valid_inputs.to(DEVICE), valid_labels.to(DEVICE)
 
-                # Move masks to device if they exist
                 if valid_neuron_mask != []: valid_neuron_mask = valid_neuron_mask.to(DEVICE)
                 if valid_mito_mask != []: valid_mito_mask = valid_mito_mask.to(DEVICE)
-                # Run forward pass with or without membrane features
                 valid_pred = model(valid_inputs) if not mem_feat else model(valid_inputs, valid_neuron_mask.to(torch.float32))
 
-                # Handle membrane prediction mode
                 if args.pred_mem:
-                    # Verify neuron mask exists for membrane prediction
                     assert valid_neuron_mask != []
-                    # Convert to long type for one-hot encoding
                     valid_neuron_mask = valid_neuron_mask.long()
-                    # Transform mask values: 0->2, 1->0 (remapping for one-hot encoding)
                     valid_neuron_mask[valid_neuron_mask == 0] = 2
                     valid_neuron_mask[valid_neuron_mask == 1] = 0
-                    # Combine labels with transformed neuron mask
                     valid_labels = valid_labels + valid_neuron_mask
-                    # Ensure gap junctions are represented as class 1
                     valid_labels[valid_labels == 3] = 1 # make it a gapjnc
-                    # Convert to one-hot encoding for multi-class cross-entropy
                     valid_labels = F.one_hot(valid_labels.long()).to(torch.float32).permute((0, 1, 4, 2, 3))
-                    # Set cross-entropy loss for multi-class segmentation
                     loss_f_ = F.cross_entropy
-                else: 
-                    # Use binary cross-entropy with logits for binary segmentation
-                    loss_f_ = F.binary_cross_entropy_with_logits
+                else: loss_f_ = F.binary_cross_entropy_with_logits
 
-                # Calculate validation loss with appropriate loss function
                 if args.focalweight == 0:
-                    # Loss with scale factors (s1, s2)
                     valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1), valid_neuron_mask.squeeze(1) if valid_neuron_mask != [] and not mem_feat else [], valid_mito_mask if valid_mito_mask !=[] else [], model.s1, model.s2, loss_fn=loss_f_)
                 else:   
-                    # Loss with gap junction entities or standard format
                     valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1) if not gen_gj_entities else (valid_label_centers, valid_label_contours, valid_pad_mask), valid_neuron_mask.squeeze(1) if valid_neuron_mask != [] and not mem_feat else [], valid_mito_mask if valid_mito_mask !=[] else [], loss_fn=loss_f_,fn_reweight=fn_rwt )
                 
-                """
-                Visualization code for Weights & Biases (currently commented out)
-                --ADD FOR CEDAR IF WANT --
-                mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
-                                        masks = {
-                                            "predictions" : {
-                                "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
-                                "class_labels" : class_labels
-                            },
-                            "ground_truth" : {
-                                "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
-                                "class_labels" : class_labels
-                            }}
-                )
-                table.add_data(f"Epoch {epoch} Step {i}", mask_img)
-                wandb.log({"valid_loss": valid_loss})
-                """
-                
+                #--ADD FOR CEDAR IF WANT --
+                # mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
+                #                         masks = {
+                #                             "predictions" : {
+                #                 "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
+                #                 "class_labels" : class_labels
+                #             },
+                #             "ground_truth" : {
+                #                 "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
+                #                 "class_labels" : class_labels
+                #             }}
+                # )
+                # table.add_data(f"Epoch {epoch} Step {i}", mask_img)
+                # wandb.log({"valid_loss": valid_loss})
                 val_loss_avg.append(valid_loss.detach().item())
                 val_count.append(valid_inputs.shape[0])
                 uniques = np.unique(torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))).detach().cpu().numpy())
@@ -283,23 +264,38 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
                 # else:
                 #     # print(torch.unique(torch.argmax(valid_pred.squeeze(1), dim=1), return_counts=True))
                 #     write_valid_imgs(valid_pred.squeeze(1).argmax(dim=1) == 1, valid_labels.squeeze(1).argmax(dim=1) * 0.5, i, epoch)
-            # log some metrics
+            # Calculate Validation Loss
             valid_loss = np.sum(np.array(val_loss_avg) * np.array(val_count))/sum(val_count)
             wandb.log({"valid_loss": val_loss_avg})
             val_prec_avg = np.sum(np.array(val_prec_avg) * np.array(val_count))/sum(val_count)
             val_recall_avg = np.sum(np.array(val_recall_avg) * np.array(val_count))/sum(val_count)
             wandb.log({"valid_precision": val_prec_avg})
             wandb.log({"valid_recall": val_recall_avg})
+            
+            #Save model only if it's the best so far
+            if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                best_epoch = epoch
+                best_model_state = copy.deepcopy(model.state_dict())
+                print(f'New best model at epoch {epoch} with validation loss: {valid_loss:.4f}')
+            
         if decay is not None: decay.step(valid_loss)
 
         print(f"Epoch: {epoch} | Loss: {loss} | Valid Loss: {valid_loss} | Valid Prec: {val_prec_avg} | Valid Recall: {val_recall_avg}")
         print(f"Time elapsed: {time.time() - start} seconds")
-        temp_name = model_name+"_epoch"+str(epoch)
-        joblib.dump(model, os.path.join(model_folder, f"{temp_name}.pk1"))
+        
+    #Restore best model at the end of training
+    model.load_state_dict(best_model_state)
+
     print(f"Total time: {time.time() - start} seconds")
+    print(f"Best model was from epoch {best_epoch} with validation loss: {best_valid_loss:.4f}")
     wandb.log({"Table" : table})
-    joblib.dump(model, os.path.join(model_folder, f"{model_name}.pk1"))
+    
+    #Save final best model
+    joblib.dump(model, os.path.join(model_folder, f"{model_name}_epoch{best_epoch}}.pk1"))
     wandb.finish()
+    
+    #Loss history
     try:
         joblib.dump(loss_list, os.path.join(model_folder, "loss_list_1.pkl"))
     except:
@@ -310,6 +306,11 @@ def extend_train_loop(model, train_loader, criterion, optimizer, valid_loader=No
     
     print(f"Using device: {DEVICE}")
     model_name = "model5"
+    
+    #Track validation loss and best epoch for model saving
+    best_valid_loss = float('inf') 
+    best_epoch = 0
+    
     def sigint_handler(sig, frame):
         if table is not None:
             print("logging to WANDB")
@@ -324,6 +325,9 @@ def extend_train_loop(model, train_loader, criterion, optimizer, valid_loader=No
     recall_f = lambda pred, gt: torch.nansum(pred[(pred == 1) & (gt == 1)])/torch.nansum(gt[gt == 1])
     precision_f = lambda pred, gt: torch.nansum(pred[(pred == 1) & (gt == 1)])/torch.nansum(pred[pred == 1])
 
+    #Save a copy of the initial model
+    best_model_state = copy.deepcopy(model.state_dict())
+    
     for epoch in range(epochs):
         pbar = tqdm(total=len(train_loader))
         for i, data in enumerate(train_loader):
@@ -358,6 +362,31 @@ def extend_train_loop(model, train_loader, criterion, optimizer, valid_loader=No
             epoch_non_empty = False
 
             for i, data in enumerate(valid_loader):            
+                valid_inputs, valid_pred_image, valid_pred_mask, valid_labels = data
+                valid_inputs, valid_labels = valid_inputs.to(DEVICE), valid_labels.to(DEVICE)
+                valid_pred_mask, valid_pred_image = valid_pred_mask.to(DEVICE), valid_pred_image.to(DEVICE)
+
+                valid_pred = model(valid_inputs, valid_pred_image, valid_pred_mask)
+                valid_loss = criterion(valid_pred.squeeze(1), valid_labels.squeeze(1))
+                mask_img = wandb.Image(valid_inputs[0].squeeze(0).cpu().numpy()[0] if args.td else valid_inputs[0].squeeze(0).cpu().numpy(), 
+                                        masks = {
+                                            "predictions" : {
+                                "mask_data" : (torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))) * 255).cpu().detach().numpy(),
+                                "class_labels" : class_labels
+                            },
+                            "ground_truth" : {
+                                "mask_data" : (valid_labels[0].squeeze(0) * 255).cpu().numpy(),
+                                "class_labels" : class_labels
+                            }}
+                )
+                table.add_data(f"Epoch {epoch} Step {i}", mask_img)
+                # wandb.log({"valid_loss": valid_loss})
+                val_loss_avg.append(valid_loss.detach().item())
+                val_count.append(valid_inputs.shape[0])
+                uniques = np.unique(torch.round(nn.Sigmoid()(valid_pred[0].squeeze(0))).detach().cpu().numpy())
+                if len(uniques) == 2:
+                    if not epoch_non_empty:
+                        epoch_non_empty = True
                         print("UNIQUE OUTPUTS!")
                 else:
                     epoch_non_empty = False
@@ -366,23 +395,39 @@ def extend_train_loop(model, train_loader, criterion, optimizer, valid_loader=No
 
                 #save it locally:
                 # write_valid_imgs(valid_pred, valid_labels, i, epoch)
-            # log some metrics
+                
+            # Calculate validation loss
             valid_loss = np.sum(np.array(val_loss_avg) * np.array(val_count))/sum(val_count)
             wandb.log({"valid_loss": val_loss_avg})
             val_prec_avg = np.sum(np.array(val_prec_avg) * np.array(val_count))/sum(val_count)
             val_recall_avg = np.sum(np.array(val_recall_avg) * np.array(val_count))/sum(val_count)
             wandb.log({"valid_precision": val_prec_avg})
             wandb.log({"valid_recall": val_recall_avg})
+            
+        #Save model only if it's the best so far
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
+            best_epoch = epoch
+            best_model_state = copy.deepcopy(model.state_dict())
+            print(f'New best model at epoch {epoch} with validation loss: {valid_loss:.4f}')    
+            
         if decay is not None: decay.step(valid_loss)
-
+        
         print(f"Epoch: {epoch} | Loss: {loss} | Valid Loss: {valid_loss} | Valid Prec: {val_prec_avg} | Valid Recall: {val_recall_avg}")
         print(f"Time elapsed: {time.time() - start} seconds")
-        temp_name = model_name+"_epoch"+str(epoch)
-        joblib.dump(model, os.path.join(model_folder, f"{temp_name}.pk1"))
+    
+    #Restore best model at the end of training
+    model.load_state_dict(best_model_state)
+        
     print(f"Total time: {time.time() - start} seconds")
+    print(f"Best model was from epoch {best_epoch} with validation loss: {best_valid_loss:.4f}")
     wandb.log({"Table" : table})
-    joblib.dump(model, os.path.join(model_folder, f"{model_name}.pk1"))
+    
+    #Save final best model
+    joblib.dump(model, os.path.join(model_folder, f"{model_name}_epoch{best_epoch}.pk1"))
     wandb.finish()
+    
+    #Loss history
     try:
         joblib.dump(loss_list, os.path.join(model_folder, "loss_list_1.pkl"))
     except:
