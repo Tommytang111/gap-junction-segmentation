@@ -43,17 +43,17 @@ if __name__ == "__main__":
 
     # -- Post-processing Flags --
 
-    parser.add_argument("-missing_dir", default=None, type=str, help="Directory where missing image data is stored. Generally used when GJs or neuron-wise filtering of dataset was done")
+    parser.add_argument("--missing_dir", default=None, type=str, help="Directory where missing image data is stored. Generally used when GJs or neuron-wise filtering of dataset was done")
     parser.add_argument("--preds_dir", default=None, type=str, help="Full path to the predictions directory")
     parser.add_argument("--extend_dir", default=None, type=str, help="Full path to the directory where the extended predictions are stored")
     parser.add_argument("--filter_gjs", action="store_true", help="Filter out GJs from the predictions using cell ids")
 
     parser.add_argument("--Smin", type=int, default=101, help="starting S index for the image")
     parser.add_argument("--Smax", type=int, default=109, help="Ending S index for the image")
-    parser.add_argument("--Xmin", default=0, help="Starting X index for the image")
-    parser.add_argument("--Ymin", default=0, help="Starting Y index for the image")
-    parser.add_argument("--Ymax", default=17, help="Ending Y index for the image") #nincl
-    parser.add_argument("--Xmax", default=19, help="Ending X index for the image") #nincl
+    parser.add_argument("--Xmin", default=0, type=int, help="Starting X index for the image")
+    parser.add_argument("--Ymin", default=0, type=int, help="Starting Y index for the image")
+    parser.add_argument("--Ymax", default=17, type=int, help="Ending Y index for the image") #nincl
+    parser.add_argument("--Xmax", default=19, type=int, help="Ending X index for the image") #nincl
     parser.add_argument("--offset", default=256, type=int, help="generally half of the image size")
     parser.add_argument("--plot_legend", action="store_true", help="Print the legend for the assembled EM predictions")
 

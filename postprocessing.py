@@ -42,9 +42,9 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
                 im =cv2.cvtColor(cv2.imread(os.path.join(img_dir, img_templ+ suffix + ".png")), cv2.COLOR_BGR2GRAY)
 
                 try:
-                    if gt_dir: gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + ".png")), cv2.COLOR_BGR2GRAY) 
+                    if gt_dir: gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "_label.png")), cv2.COLOR_BGR2GRAY) 
                     if True:
-                        pred = np.load(os.path.join(pred_dir, img_templ + suffix + ".png.npy"))
+                        pred = np.load(os.path.join(pred_dir, img_templ + suffix + "_pred.png")) #.png.npy
                         # 
                         pred = 1/(1+np.exp(-pred)) >= 0.5
 
@@ -82,7 +82,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
                         im1 = cv2.cvtColor(cv2.imread(os.path.join(img_dir, img_templ +suffix + "off.png")), cv2.COLOR_BGR2GRAY)
                         if gt_dir: gt1 = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "off.png")), cv2.COLOR_BGR2GRAY)
                         if True:
-                            pred1 = np.load(os.path.join(pred_dir, img_templ + suffix + "off.png.npy"))
+                            pred1 = np.load(os.path.join(pred_dir, img_templ + suffix + "off.png")) #off.png.npy
                             pred1 = 1/(1+np.exp(-pred1)) >= 0.5
 
                             # pred1 = np.argmax(pred, axis=0)
@@ -185,6 +185,9 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
         if gt_dir: new_gt1 = np.repeat(new_gt[:, :, np.newaxis], 3, axis=-1)
         new_pred1 = np.repeat(new_pred[:, :, np.newaxis], 3, axis=-1).astype(np.uint8)            
 
+        #Update suffix to include only the section
+        suffix = f"s{'0'*(3-len(str(s)))+str(s)}"
+
         if not fn and plot_legend:
             # else: 
             #color statistics now
@@ -239,17 +242,17 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
             #write them all in
             if not os.path.isdir(save_dir):
                 os.mkdir(save_dir)
-            assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_img.png"), new_img1)
-            assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_pred.png"), new_pred1)
-            assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_gt.png"), new_gt1)
+            assert cv2.imwrite(os.path.join(save_dir, img_templ + suffix + "_img.png"), new_img1)
+            assert cv2.imwrite(os.path.join(save_dir, img_templ + suffix + "_pred.png"), new_pred1)
+            assert cv2.imwrite(os.path.join(save_dir, seg_templ + suffix + "_label.png"), new_gt1)
         elif not fn and not plot_legend:
             if gt_dir: new_gt1[new_gt == 1] = (255, 255, 255)
             new_pred1[new_pred == 1] = (255, 0, 0)
             if not os.path.isdir(save_dir):
                 os.mkdir(save_dir)
-            assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_img.png"), new_img1)
-            assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_pred.png"), new_pred1)
-            if gt_dir: assert cv2.imwrite(os.path.join(save_dir, "SEM_dauer_2_image_export_" + suffix + "_gt.png"), new_gt1)
+            assert cv2.imwrite(os.path.join(save_dir, img_templ + suffix + "_img.png"), new_img1)
+            assert cv2.imwrite(os.path.join(save_dir, img_templ + suffix + "_pred.png"), new_pred1)
+            if gt_dir: assert cv2.imwrite(os.path.join(save_dir, seg_templ + suffix + "_label.png"), new_gt1)
         else: 
             mask = glob.glob(fn_mask_dir+f"*s{'0'*(3-len(str(s)))}{s}*")[0]
             mask = cv2.imread(mask, -1)

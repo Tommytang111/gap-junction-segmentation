@@ -292,7 +292,7 @@ def train_loop(model, train_loader, criterion, optimizer, valid_loader=None, mem
     wandb.log({"Table" : table})
     
     #Save final best model
-    joblib.dump(model, os.path.join(model_folder, f"{model_name}_epoch{best_epoch}}.pk1"))
+    joblib.dump(model, os.path.join(model_folder, f"{model_name}_epoch{best_epoch}.pk1"))
     wandb.finish()
     
     #Loss history
