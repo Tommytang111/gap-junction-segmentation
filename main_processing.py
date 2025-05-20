@@ -179,9 +179,10 @@ if __name__ == "__main__":
         print(f"Offset: {args.offset}")
         print("Note: Unreported arguments were ignored.")
     
-    cont = input("Do you want to continue? (y/n): ")
-    if cont.lower() != 'y':
-        sys.exit(0)
+    # Uncomment the following lines to add a prompt for user confirmation before proceeding
+    # cont = input("Do you want to continue? (y/n): ")
+    # if cont.lower() != 'y':
+    #     sys.exit(0)
 
     if args.preprocessing and args.unsupervised_dataset and args.cell_id_dir:
         create_unsupervised_dataset(args.imgs_dir, args.cell_id_dir, args.nr_mask_dir, args.img_template, args.cell_id_template, args.nr_mask_template, args.output_dir, args.img_size)

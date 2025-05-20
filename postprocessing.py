@@ -38,16 +38,15 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
 
                 if not os.path.isfile(os.path.join(img_dir, img_templ +suffix + ".png")): 
                     assert missing_dir is not None, f"Missing image {img_templ +suffix + '.png'}"
-                    #shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), os.path.join(img_dir, img_templ + suffix + ".png"))
+                    shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), os.path.join(img_dir, img_templ + suffix + ".png"))
                 im =cv2.cvtColor(cv2.imread(os.path.join(img_dir, img_templ+ suffix + ".png")), cv2.COLOR_BGR2GRAY)
 
                 try:
                     if gt_dir: 
                         gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "_label.png")), cv2.COLOR_BGR2GRAY) 
                     if True:
-                        pred = np.load(os.path.join(pred_dir, img_templ + suffix + "_pred.png")) #.png.npy
-                        # 
-                        pred = 1/(1+np.exp(-pred)) >= 0.5
+                        pred = cv2.imread(os.path.join(pred_dir, img_templ + suffix + "_pred.png"), cv2.IMREAD_GRAYSCALE)
+                        #pred = 1/(1+np.exp(-pred)) >= 0.5 #Apply sigmoid function WHY?
 
                         #softmax on channel 1 of size 3
                         # pred = np.argmax(pred, axis=0) == 1
@@ -113,7 +112,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
                         # continue
 
             s_acc_img.append(np.concatenate(y_acc_img, axis=1))
-            s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
+            s_acc_pred.append(np.concatenate(y_acc_pred, axis=0))
             if gt_dir: s_acc_gt.append(np.concatenate(y_acc_gt, axis=1))
             if offset:
                 try:
@@ -133,7 +132,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
             new_pred1 = np.concatenate(s_acc_pred1, axis=0)
             if gt_dir: new_gt1 = np.concatenate(s_acc_gt1, axis=0)
 
-        #calculate and color statsitic
+        #calculate and color statistic
         if gt_dir:
             new_gt[(new_gt == 2) | (new_gt == 15)] = 0
             new_gt_conf = new_gt.copy()
@@ -184,7 +183,8 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
         new_img = t
         new_img1 = np.repeat(new_img[:, :, np.newaxis], 3, axis=-1)
         if gt_dir: new_gt1 = np.repeat(new_gt[:, :, np.newaxis], 3, axis=-1)
-        new_pred1 = np.repeat(new_pred[:, :, np.newaxis], 3, axis=-1).astype(np.uint8)            
+        #new_pred1 = np.repeat(new_pred[:, :, np.newaxis], 3, axis=-1).astype(np.uint8)    
+        new_pred1 = new_pred.astype(np.uint8)          
 
         #Update suffix to include only the section
         suffix = f"s{'0'*(3-len(str(s)))+str(s)}"
