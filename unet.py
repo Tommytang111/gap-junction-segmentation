@@ -25,7 +25,6 @@ from datasets import *
 # import segmentation_models_pytorch.utils.metrics
 import wandb
 import random
-import torch
 import time
 from tqdm import tqdm
 import signal

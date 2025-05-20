@@ -38,11 +38,12 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
 
                 if not os.path.isfile(os.path.join(img_dir, img_templ +suffix + ".png")): 
                     assert missing_dir is not None, f"Missing image {img_templ +suffix + '.png'}"
-                    shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), os.path.join(img_dir, img_templ + suffix + ".png"))
+                    #shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), os.path.join(img_dir, img_templ + suffix + ".png"))
                 im =cv2.cvtColor(cv2.imread(os.path.join(img_dir, img_templ+ suffix + ".png")), cv2.COLOR_BGR2GRAY)
 
                 try:
-                    if gt_dir: gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "_label.png")), cv2.COLOR_BGR2GRAY) 
+                    if gt_dir: 
+                        gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "_label.png")), cv2.COLOR_BGR2GRAY) 
                     if True:
                         pred = np.load(os.path.join(pred_dir, img_templ + suffix + "_pred.png")) #.png.npy
                         # 
