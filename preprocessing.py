@@ -126,11 +126,13 @@ def create_dataset_2d_from_full(imgs_dir, output_dir, seg_dir=None, img_size=512
 
     if os.path.isdir(output_dir):
         print("WARNING: Output directory already exists, deleting it")
-        response = input("Do you want to continue? (y/n): ")
-        if response.lower() == 'y':
-            os.system(f"rm -rf {output_dir}")
-        else:
-            sys.exit(0)
+        os.system(f"rm -rf {output_dir}")
+        #Optional user confirmation block
+        #response = input("Do you want to continue? (y/n): ")
+        # if response.lower() == 'y':
+        #     os.system(f"rm -rf {output_dir}")
+        # else:
+        #     sys.exit(0)
 
     os.makedirs(output_dir)
     #make subdirs

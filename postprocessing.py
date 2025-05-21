@@ -40,19 +40,19 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
                     assert missing_dir is not None, f"Missing image {img_templ +suffix + '.png'}"
                     shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), os.path.join(img_dir, img_templ + suffix + ".png"))
                 im =cv2.cvtColor(cv2.imread(os.path.join(img_dir, img_templ+ suffix + ".png")), cv2.COLOR_BGR2GRAY)
-
+                
                 try:
                     if gt_dir: 
                         gt = cv2.cvtColor(cv2.imread(os.path.join(gt_dir, seg_templ + suffix + "_label.png")), cv2.COLOR_BGR2GRAY) 
-                    if True:
-                        pred = cv2.imread(os.path.join(pred_dir, img_templ + suffix + "_pred.png"), cv2.IMREAD_GRAYSCALE)
-                        #pred = 1/(1+np.exp(-pred)) >= 0.5 #Apply sigmoid function WHY?
 
-                        #softmax on channel 1 of size 3
-                        # pred = np.argmax(pred, axis=0) == 1
-                    else:
-                        pred = cv2.cvtColor(cv2.imread(os.path.join(pred_dir, img_templ + suffix + "off.png")), cv2.COLOR_BGR2GRAY)
-                        pred = pred == 255
+                    pred = cv2.imread(os.path.join(pred_dir, img_templ + suffix + "_pred.png"), cv2.IMREAD_GRAYSCALE)
+                    if pred is None: raise Exception
+                    
+                    #pred = 1/(1+np.exp(-pred)) >= 0.5 #Apply sigmoid function WHY?
+
+                    #softmax on channel 1 of size 3
+                    # pred = np.argmax(pred, axis=0) == 1
+
                     if extend_dir:
                         try:
                             ext_pred = cv2.imread(os.path.join(extend_dir, img_templ + suffix + ".png"))
@@ -112,7 +112,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
                         # continue
 
             s_acc_img.append(np.concatenate(y_acc_img, axis=1))
-            s_acc_pred.append(np.concatenate(y_acc_pred, axis=0))
+            s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
             if gt_dir: s_acc_gt.append(np.concatenate(y_acc_gt, axis=1))
             if offset:
                 try:
@@ -142,7 +142,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
             new_gt1[(new_gt1 == 2) | (new_gt1 == 15)] = 0
             new_gt1[new_gt1 != 0] = 1
         
-        new_pred[new_pred !=0 ] = 1
+        new_pred[new_pred !=0 ] = 255
         if offset: new_pred1[new_pred1 !=0 ] = 1
         if offset:
             if gt_dir: new_gt[offset:-offset, offset:-offset] = new_gt[offset:-offset, offset:-offset] | new_gt1
@@ -248,7 +248,7 @@ def assemble_overlap(img_dir, gt_dir, pred_dir, save_dir, extend_dir=None, overl
             assert cv2.imwrite(os.path.join(save_dir, seg_templ + suffix + "_label.png"), new_gt1)
         elif not fn and not plot_legend:
             if gt_dir: new_gt1[new_gt == 1] = (255, 255, 255)
-            new_pred1[new_pred == 1] = (255, 0, 0)
+            #new_pred1[new_pred == 1] = (255, 0, 0)
             if not os.path.isdir(save_dir):
                 os.mkdir(save_dir)
             assert cv2.imwrite(os.path.join(save_dir, img_templ + suffix + "_img.png"), new_img1)
