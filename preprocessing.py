@@ -11,16 +11,27 @@ Split a full EM image into tiles of size @tile_size, with an optional offset fro
 @param names: whether to return the names of the tiles
 @return: a list of the tiles, and optionally the names of the tiles
 """
+# def split_img(img, offset=256, tile_size=512, names=False):
+#     if offset:
+#         img = img[offset:-offset, offset:-offset]
+#     imgs = []
+#     names_list = []
+#     for i in range(img.shape[0]//tile_size+1):
+#         for j in range(img.shape[1]//tile_size+1):
+#             imgs.append(img[i*tile_size:(i+1)*tile_size, j*tile_size:(j+1)*tile_size])
+#             names_list.append("Y{}_X{}".format(i, j))
+#     return (imgs, names_list) if names else imgs 
+
 def split_img(img, offset=256, tile_size=512, names=False):
     if offset:
         img = img[offset:-offset, offset:-offset]
     imgs = []
     names_list = []
-    for i in range(img.shape[0]//tile_size+1):
-        for j in range(img.shape[1]//tile_size+1):
-            imgs.append(img[i*tile_size:(i+1)*tile_size, j*tile_size:(j+1)*tile_size])
-            names_list.append("Y{}_X{}".format(i, j))
-    return (imgs, names_list) if names else imgs 
+    for i in range(0, img.shape[0], tile_size):
+        for j in range(0, img.shape[1], tile_size):
+            imgs.append(img[i:i+tile_size, j:j+tile_size])
+            names_list.append("Y{}_X{}".format(i//tile_size, j//tile_size))
+    return (imgs, names_list) if names else imgs
 
 """
 Given an image at a certain cross_section, get corresponding area at a different cross-section at offset i from current depth
