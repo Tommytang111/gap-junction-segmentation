@@ -59,8 +59,23 @@ class CaImagesDataset(torch.utils.data.Dataset):
         images_dir = os.path.join(dataset_dir, f"{prefix}_imgs")
         masks_dir = os.path.join(dataset_dir, f"{prefix}_gts")
         
-        self.mask_paths = [os.path.join(masks_dir, image_id) for image_id in sorted(os.listdir(os.path.join(dataset_dir, f"{prefix}_gts"))) if "DS" not in image_id and (True and self.centers_and_contours(cv2.imread(os.path.join(masks_dir, image_id)), filter_mode=True))]
-        self.image_paths = [os.path.join(images_dir, os.path.split(image_id.replace("sem2dauer_gj_2d_training.vsseg_export_", "SEM_dauer_2_image_export_"))[-1]) for image_id in self.mask_paths if "DS" not in image_id]
+        self.mask_paths = []
+        for image_id in sorted(os.listdir(masks_dir)):
+            if "DS" in image_id:
+                continue
+            img0 = cv2.imread(os.path.join(masks_dir, image_id))
+            img0[img0 != 0] = 255
+            if self.centers_and_contours(img0, filter_mode=True):
+                self.mask_paths.append(os.path.join(masks_dir, image_id))
+        
+        self.image_paths = []
+        for image_id in self.mask_paths:
+            if "DS" in image_id:
+                continue
+            filename = os.path.split(image_id)[-1]
+            # Remove '_label' before .png (or .jpg) to get the image filename
+            filename_img = filename.replace('_label', '')
+            self.image_paths.append(os.path.join(images_dir, filename_img))
 
         if mask_neurons:
             assert "SEM_dauer_2_image_export_" in os.listdir(images_dir)[0], "illegal naming, feds on the way"
@@ -153,7 +168,6 @@ class CaImagesDataset(torch.utils.data.Dataset):
         return center_arr.to(dtype=torch.float32), contour_arr.to(dtype=torch.float32)
 
     def __getitem__(self, i):
-        
         # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
         try:
             image = cv2.cvtColor(cv2.imread(self.image_paths[i]), cv2.COLOR_BGR2GRAY) # each pixel is 
@@ -164,7 +178,6 @@ class CaImagesDataset(torch.utils.data.Dataset):
         if self.gen_gj_entities: centers, contours = self.centers_and_contours(cv2.imread(self.mask_paths[i]))
 
         # make sure each pixel is 0 or 255
-        
         mask_labels, counts = np.unique(mask, return_counts=True)
         # if (len(mask_labels)>2):
         #     print("More than 2 labels found for mask")
@@ -172,13 +185,24 @@ class CaImagesDataset(torch.utils.data.Dataset):
         mask[mask == 255] = 1
         
         mask_ref = mask.copy()
+        
+        image_np = cv2.cvtColor(cv2.imread(self.image_paths[i]), cv2.COLOR_BGR2GRAY)
+        mask_np = cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
+
+        # Convert to PIL Images for torchvision v2 transforms
+        image = Image.fromarray(image_np)
+        mask = Image.fromarray(mask_np)
+        
         # apply augmentations
         if self.augmentation:
             image, mask = self.augmentation(image, mask)
             image = v2.RandomAutocontrast()(image)
             image = v2.GaussianBlur(5)(image)
+            
+        # Convert back to numpy for further processing if needed
+        image = np.array(image)
+        mask = np.array(mask)
 
-        
         # apply preprocessing
         _transform = []
         _transform.append(transforms.ToTensor())
@@ -299,13 +323,11 @@ class SectionsDataset(torch.utils.data.Dataset):
         if self.mito_mask: self.mito_mask = chain_mito_paths
 
     def __getitem__(self, i):
-
         # directory is arranged as before, current, future1, future2
 
         images = sorted(os.listdir(self.image_paths[i]))
         masks = sorted(os.listdir(self.mask_paths[i]))
         
-
         img = []
         ns = []
         if self.neuron_paths: neurons = sorted(os.listdir(self.neuron_paths[i]))
