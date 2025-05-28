@@ -204,7 +204,7 @@ class GenDLoss(nn.Module):
     def __init__(self):
         super(GenDLoss, self).__init__()
     
-    def forward(self, inputs, targets, loss_mask=[], mito_mask=[], loss_fn=None):
+    def forward(self, inputs, targets, loss_mask=[], mito_mask=[], loss_fn=None, fn_reweight=None):
         inputs = nn.Sigmoid()(inputs)
         targets, inputs = targets.view(targets.shape[0], -1), inputs.view(inputs.shape[0], -1)
 

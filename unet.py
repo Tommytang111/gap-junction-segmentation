@@ -823,7 +823,7 @@ def setup_wandb(epochs, lr):
     wandb.init(
         # set the wandb project where this run will be logged
         project="gap-junction-segmentation",
-        entity="tommytang111-lunenfeld-tanenbaum-research-institute",
+        entity="zhen_lab",
         dir="/home/tommytang111/wandb",
         
         # track hyperparameters and run metadata
