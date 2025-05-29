@@ -33,8 +33,15 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
 
     img = img.resize((resized_width, resized_height), Image.LANCZOS)
 
+    # Determine mode and pad color
+    mode = img.mode
+    if mode == 'L':
+        pad_color = pad_clr[0] if isinstance(pad_clr, (tuple, list)) else pad_clr
+    else:
+        pad_color = pad_clr
+        
     # Create new image and paste resized image onto center
-    new_img = Image.new('RGB', (new_width, new_length), pad_clr)
+    new_img = Image.new(mode, (new_width, new_length), pad_color)
     paste_x = (new_width - resized_width) // 2
     paste_y = (new_length - resized_height) // 2
     new_img.paste(img, (paste_x, paste_y))
