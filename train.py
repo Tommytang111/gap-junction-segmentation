@@ -155,11 +155,11 @@ def get_custom_augmentation():
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.5,1.5), rotate_limit=90, translate_percent=0.15, p=1.0),
+        A.Affine(scale=(0.5,1.5), rotate=90, translate_percent=0.15, shear = (-45, 45), p=0.9),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.GaussNoise(p=0.3),
         A.Normalize(mean=0.0, std=1.0),
-        A.Resize(512, 512, always_apply=True),
+        A.Resize(512, 512),
         ToTensorV2()
     ])
 
@@ -244,7 +244,7 @@ def get_heavy_augmentation():
     ])
     
 #Define training function
-def train(dataloader, model, loss_fn, optimizer):
+def train(dataloader, model, loss_fn, optimizer, recall, precision, f1):
     """
     Training logic for the epoch.
     """
@@ -287,7 +287,7 @@ def train(dataloader, model, loss_fn, optimizer):
     
     return train_loss_per_epoch, train_recall, train_precision, train_f1
     
-def validate(dataloader, model, loss_fn):
+def validate(dataloader, model, loss_fn, recall, precision, f1):
     """
     Validation logic for the epoch.
     """
@@ -411,10 +411,10 @@ def main():
         print(f"Epoch {epoch+1}")
         
         #Training
-        train_loss, train_recall, train_precision, train_f1 = train(train_dataloader, model, loss_fn, optimizer)
+        train_loss, train_recall, train_precision, train_f1 = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1)
 
         #Validation
-        val_loss, val_recall, val_precision, val_f1 = validate(valid_dataloader, model, loss_fn)
+        val_loss, val_recall, val_precision, val_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1)
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
