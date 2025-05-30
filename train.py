@@ -13,7 +13,7 @@ from albumentations.pytorch import ToTensorV2
 import numpy as np
 import os
 import cv2
-from tqdm.notebook import tqdm #Change to tqdm.tqdm if not using Jupyter Notebook
+from tqdm import tqdm 
 import copy
 import wandb
 #Custom Libraries
@@ -55,15 +55,15 @@ class TrainingDataset(Dataset):
         if self.augmentation and self.train:
             if mask is not None:
                 #Use mask in augmentation
-                augmented = self.augmentation(image=image, mask=mask, label=label)
+                augmented = self.augmentation(image=image, mask=label, label=mask)
                 image = augmented['image']
-                label = augmented['label']
-                mask = augmented['mask']
+                label = augmented['mask']
+                mask = augmented['label']
             else:
                 #Without mask
-                augmented = self.augmentation(image=image, label=label)
+                augmented = self.augmentation(image=image, mask=label)
                 image = augmented['image']
-                label = augmented['label']
+                label = augmented['mask']
 
         #Add entity recognition clause later if needed
         
@@ -155,11 +155,11 @@ def get_custom_augmentation():
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.1, rotate_limit=15, p=0.5),
+        A.Affine(scale=(0.5,1.5), rotate_limit=90, translate_percent=0.15, p=1.0),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.GaussNoise(p=0.4),
+        A.GaussNoise(p=0.3),
         A.Normalize(mean=0.0, std=1.0),
+        A.Resize(512, 512, always_apply=True),
         ToTensorV2()
     ])
 
@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    wandb_init("unet_pooled_run_1")
+    wandb_init("unet_v1_custom_augmentation")
 
     #Set seed for reproducibility
     seed_everything(42)
@@ -365,14 +365,14 @@ def main():
     ])
     
     #Initialize dataset
-    train = TrainingDataset(
+    train_dataset = TrainingDataset(
     images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/imgs",
     labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/gts",
     augmentation=train_augmentation,
     train=True,
     )
 
-    valid = TrainingDataset(
+    valid_dataset = TrainingDataset(
         images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/imgs",
         labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/gts",
         augmentation=valid_augmentation,
@@ -380,9 +380,9 @@ def main():
     )
 
     #Load datasets into DataLoader
-    train_dataloader = DataLoader(train, batch_size=8, shuffle=True, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
-        
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
+
     #Set device and model
     device = torch.device("cuda")    
     model = UNet().to(device)
@@ -457,3 +457,6 @@ def main():
     #Save the best logged model state
     torch.save(best_model_state, f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt")
     print(f"Saved PyTorch Model to {run.name}.pt")
+        
+if __name__ == "__main__":
+    main()
