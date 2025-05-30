@@ -1,0 +1,16 @@
+{"time":"2025-05-29T17:01:21.612077691-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_170121-vebiolku/logs/debug-core.log"}
+{"time":"2025-05-29T17:01:21.856039173-04:00","level":"INFO","msg":"created new stream","id":"vebiolku"}
+{"time":"2025-05-29T17:01:21.856115029-04:00","level":"INFO","msg":"stream: started","id":"vebiolku"}
+{"time":"2025-05-29T17:01:21.856149801-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:21.856203512-04:00","level":"INFO","msg":"handler: started","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:21.856244384-04:00","level":"INFO","msg":"sender: started","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:21.946876116-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T17:01:22.369227197-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T17:01:22.369430707-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T17:01:23.012599393-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T17:01:23.137732984-04:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-05-29T17:01:23.145448008-04:00","level":"INFO","msg":"stream: closing","id":"vebiolku"}
+{"time":"2025-05-29T17:01:23.145580067-04:00","level":"INFO","msg":"handler: closed","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:23.145599959-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:23.145631333-04:00","level":"INFO","msg":"sender: closed","stream_id":"vebiolku"}
+{"time":"2025-05-29T17:01:23.145668713-04:00","level":"INFO","msg":"stream: closed","id":"vebiolku"}

@@ -1,0 +1,12 @@
+wandb_version: 1
+
+batch_size:
+  value: 8
+dropout:
+  value: 0
+learning_rate:
+  value: 1.0e-05
+scheduler_patience:
+  value: 10
+weight_decay:
+  value: 1.0e-05

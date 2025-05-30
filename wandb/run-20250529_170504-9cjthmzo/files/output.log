@@ -1,0 +1,202 @@
+Epoch 1
+Train | Loss: 0.9574, Recall: 0.4280, Precision: 0.0226, F1: 0.0429
+Val   | Loss: 0.9293, Recall: 0.1775, Precision: 0.0341, F1: 0.0572
+-----------------------------
+[34m[1mwandb[0m: [33mWARNING[0m Saving files without folders. If you want to preserve subdirectories pass base_path to wandb.save, i.e. wandb.save("/mnt/folder/file.h5", base_path="/mnt")
+Epoch 2
+Train | Loss: 0.9568, Recall: 0.4107, Precision: 0.0236, F1: 0.0446
+Val   | Loss: 0.9293, Recall: 0.0028, Precision: 0.0182, F1: 0.0049
+-----------------------------
+Epoch 3
+Train | Loss: 0.9538, Recall: 0.3482, Precision: 0.0282, F1: 0.0521
+Val   | Loss: 0.9292, Recall: 0.0001, Precision: 0.0076, F1: 0.0003
+-----------------------------
+Epoch 4
+Train | Loss: 0.9500, Recall: 0.2636, Precision: 0.0318, F1: 0.0568
+Val   | Loss: 0.9271, Recall: 0.0161, Precision: 0.0494, F1: 0.0242
+-----------------------------
+Epoch 5
+Train | Loss: 0.9364, Recall: 0.2651, Precision: 0.0409, F1: 0.0709
+Val   | Loss: 0.9241, Recall: 0.6361, Precision: 0.0399, F1: 0.0751
+-----------------------------
+Epoch 6
+Train | Loss: 0.9204, Recall: 0.3053, Precision: 0.0496, F1: 0.0854
+Val   | Loss: 0.9253, Recall: 0.2224, Precision: 0.0398, F1: 0.0675
+-----------------------------
+Epoch 7
+Train | Loss: 0.8781, Recall: 0.3250, Precision: 0.0835, F1: 0.1329
+Val   | Loss: 0.9281, Recall: 0.1150, Precision: 0.0356, F1: 0.0544
+-----------------------------
+Epoch 8
+Train | Loss: 0.8239, Recall: 0.2606, Precision: 0.1636, F1: 0.2010
+Val   | Loss: 0.9218, Recall: 0.0954, Precision: 0.0480, F1: 0.0638
+-----------------------------
+Epoch 9
+Train | Loss: 0.7820, Recall: 0.1929, Precision: 0.2429, F1: 0.2150
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 10
+Train | Loss: 0.7252, Recall: 0.2107, Precision: 0.3194, F1: 0.2539
+Val   | Loss: 0.9254, Recall: 0.0169, Precision: 0.0441, F1: 0.0244
+-----------------------------
+Epoch 11
+Train | Loss: 0.7033, Recall: 0.2536, Precision: 0.3275, F1: 0.2859
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 12
+Train | Loss: 0.6576, Recall: 0.2414, Precision: 0.4059, F1: 0.3027
+Val   | Loss: 0.9256, Recall: 0.0181, Precision: 0.0433, F1: 0.0255
+-----------------------------
+Epoch 13
+Train | Loss: 0.6313, Recall: 0.2675, Precision: 0.4394, F1: 0.3326
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 14
+Train | Loss: 0.6083, Recall: 0.2705, Precision: 0.5036, F1: 0.3520
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 15
+Train | Loss: 0.5729, Recall: 0.2640, Precision: 0.5928, F1: 0.3653
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0500, F1: 0.0001
+-----------------------------
+Epoch 16
+Train | Loss: 0.5406, Recall: 0.3221, Precision: 0.5680, F1: 0.4111
+Val   | Loss: 0.9275, Recall: 0.0068, Precision: 0.0433, F1: 0.0118
+-----------------------------
+Epoch 17
+Train | Loss: 0.5129, Recall: 0.3323, Precision: 0.6188, F1: 0.4324
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0060, F1: 0.0000
+-----------------------------
+Epoch 18
+Train | Loss: 0.4766, Recall: 0.3553, Precision: 0.6650, F1: 0.4632
+Val   | Loss: 0.9294, Recall: 0.0007, Precision: 0.0438, F1: 0.0015
+-----------------------------
+Epoch 19
+Train | Loss: 0.4668, Recall: 0.3661, Precision: 0.6855, F1: 0.4772
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 20
+Train | Loss: 0.4518, Recall: 0.3681, Precision: 0.7158, F1: 0.4862
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 21
+Train | Loss: 0.4260, Recall: 0.4084, Precision: 0.6986, F1: 0.5154
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.3333, F1: 0.0000
+-----------------------------
+Epoch 22
+Train | Loss: 0.4046, Recall: 0.4038, Precision: 0.7825, F1: 0.5327
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0792, F1: 0.0001
+-----------------------------
+Epoch 23
+Train | Loss: 0.3897, Recall: 0.4114, Precision: 0.8006, F1: 0.5435
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 24
+Train | Loss: 0.3769, Recall: 0.4245, Precision: 0.8144, F1: 0.5581
+Val   | Loss: 0.9292, Recall: 0.0000, Precision: 0.0411, F1: 0.0000
+-----------------------------
+Epoch 25
+Train | Loss: 0.3679, Recall: 0.4367, Precision: 0.8216, F1: 0.5703
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 26
+Train | Loss: 0.3608, Recall: 0.4399, Precision: 0.8419, F1: 0.5779
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 27
+Train | Loss: 0.3522, Recall: 0.4484, Precision: 0.8500, F1: 0.5871
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0034, F1: 0.0000
+-----------------------------
+Epoch 28
+Train | Loss: 0.3447, Recall: 0.4532, Precision: 0.8607, F1: 0.5938
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0060, F1: 0.0000
+-----------------------------
+Epoch 29
+Train | Loss: 0.3391, Recall: 0.4590, Precision: 0.8689, F1: 0.6007
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 30
+Train | Loss: 0.3350, Recall: 0.4641, Precision: 0.8745, F1: 0.6064
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 31
+Train | Loss: 0.3308, Recall: 0.4682, Precision: 0.8773, F1: 0.6106
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0171, F1: 0.0000
+-----------------------------
+Epoch 32
+Train | Loss: 0.3271, Recall: 0.4680, Precision: 0.8914, F1: 0.6137
+Val   | Loss: 0.9293, Recall: 0.0000, Precision: 0.0000, F1: 0.0000
+-----------------------------
+Epoch 33
+Train | Loss: 0.3242, Recall: 0.4754, Precision: 0.8853, F1: 0.6186
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0026, F1: 0.0000
+-----------------------------
+Epoch 34
+Train | Loss: 0.3214, Recall: 0.4772, Precision: 0.8926, F1: 0.6219
+Val   | Loss: 0.9295, Recall: 0.0000, Precision: 0.0059, F1: 0.0001
+-----------------------------
+Epoch 35
+Train | Loss: 0.3187, Recall: 0.4796, Precision: 0.8989, F1: 0.6255
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0036, F1: 0.0000
+-----------------------------
+Epoch 36
+Train | Loss: 0.3170, Recall: 0.4797, Precision: 0.9018, F1: 0.6263
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0025, F1: 0.0000
+-----------------------------
+Epoch 37
+Train | Loss: 0.3151, Recall: 0.4807, Precision: 0.9083, F1: 0.6287
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0030, F1: 0.0000
+-----------------------------
+Epoch 38
+Train | Loss: 0.3143, Recall: 0.4860, Precision: 0.8996, F1: 0.6310
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0084, F1: 0.0001
+-----------------------------
+Epoch 39
+Train | Loss: 0.3132, Recall: 0.4830, Precision: 0.9126, F1: 0.6317
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0067, F1: 0.0000
+-----------------------------
+Epoch 40
+Train | Loss: 0.3104, Recall: 0.4891, Precision: 0.9025, F1: 0.6344
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0064, F1: 0.0000
+-----------------------------
+Epoch 41
+Train | Loss: 0.3104, Recall: 0.4866, Precision: 0.9128, F1: 0.6348
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0036, F1: 0.0000
+-----------------------------
+Epoch 42
+Train | Loss: 0.3091, Recall: 0.4891, Precision: 0.9089, F1: 0.6360
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0061, F1: 0.0000
+-----------------------------
+Epoch 43
+Train | Loss: 0.3079, Recall: 0.4908, Precision: 0.9107, F1: 0.6379
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0060, F1: 0.0000
+-----------------------------
+Epoch 44
+Train | Loss: 0.3072, Recall: 0.4920, Precision: 0.9091, F1: 0.6385
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0061, F1: 0.0000
+-----------------------------
+Epoch 45
+Train | Loss: 0.3061, Recall: 0.4927, Precision: 0.9120, F1: 0.6398
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0060, F1: 0.0000
+-----------------------------
+Epoch 46
+Train | Loss: 0.3048, Recall: 0.4940, Precision: 0.9130, F1: 0.6411
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0066, F1: 0.0000
+-----------------------------
+Epoch 47
+Train | Loss: 0.3040, Recall: 0.4948, Precision: 0.9138, F1: 0.6420
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0060, F1: 0.0000
+-----------------------------
+Epoch 48
+Train | Loss: 0.3039, Recall: 0.4949, Precision: 0.9134, F1: 0.6420
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0061, F1: 0.0000
+-----------------------------
+Epoch 49
+Train | Loss: 0.3038, Recall: 0.4940, Precision: 0.9196, F1: 0.6427
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0071, F1: 0.0001
+-----------------------------
+Epoch 50
+Train | Loss: 0.3051, Recall: 0.4953, Precision: 0.9102, F1: 0.6416
+Val   | Loss: 0.9294, Recall: 0.0000, Precision: 0.0120, F1: 0.0001
+-----------------------------
+Training Complete!

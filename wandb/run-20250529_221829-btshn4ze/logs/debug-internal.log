@@ -1,0 +1,16 @@
+{"time":"2025-05-29T22:18:29.333586317-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_221829-btshn4ze/logs/debug-core.log"}
+{"time":"2025-05-29T22:18:29.560958192-04:00","level":"INFO","msg":"created new stream","id":"btshn4ze"}
+{"time":"2025-05-29T22:18:29.561062339-04:00","level":"INFO","msg":"stream: started","id":"btshn4ze"}
+{"time":"2025-05-29T22:18:29.561171607-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:18:29.561224815-04:00","level":"INFO","msg":"sender: started","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:18:29.561415468-04:00","level":"INFO","msg":"handler: started","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:18:29.688192175-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T22:23:41.867091949-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T22:23:41.867268208-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T22:23:42.830999595-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_btshn4ze.pt","runtime_seconds":0.726332855,"progress":"38.2MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T22:23:44.245889958-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T22:23:44.387271466-04:00","level":"INFO","msg":"stream: closing","id":"btshn4ze"}
+{"time":"2025-05-29T22:23:44.387394749-04:00","level":"INFO","msg":"handler: closed","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:23:44.387414941-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:23:44.387539565-04:00","level":"INFO","msg":"sender: closed","stream_id":"btshn4ze"}
+{"time":"2025-05-29T22:23:44.387552527-04:00","level":"INFO","msg":"stream: closed","id":"btshn4ze"}

@@ -1,0 +1,16 @@
+{"time":"2025-05-29T23:22:21.247606265-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_232221-yog9gffx/logs/debug-core.log"}
+{"time":"2025-05-29T23:22:21.478755414-04:00","level":"INFO","msg":"created new stream","id":"yog9gffx"}
+{"time":"2025-05-29T23:22:21.478840956-04:00","level":"INFO","msg":"stream: started","id":"yog9gffx"}
+{"time":"2025-05-29T23:22:21.478947391-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:22:21.479281924-04:00","level":"INFO","msg":"handler: started","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:22:21.479275643-04:00","level":"INFO","msg":"sender: started","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:22:21.584550295-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T23:27:58.717569179-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T23:27:58.717792439-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T23:27:59.724056182-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_yog9gffx.pt","runtime_seconds":0.476425139,"progress":"22.5MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T23:28:01.208408074-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T23:28:01.329376363-04:00","level":"INFO","msg":"stream: closing","id":"yog9gffx"}
+{"time":"2025-05-29T23:28:01.329501962-04:00","level":"INFO","msg":"handler: closed","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:28:01.329525774-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:28:01.329591305-04:00","level":"INFO","msg":"sender: closed","stream_id":"yog9gffx"}
+{"time":"2025-05-29T23:28:01.329653384-04:00","level":"INFO","msg":"stream: closed","id":"yog9gffx"}

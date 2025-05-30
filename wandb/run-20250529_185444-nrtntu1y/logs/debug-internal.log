@@ -1,0 +1,16 @@
+{"time":"2025-05-29T18:54:44.140665629-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_185444-nrtntu1y/logs/debug-core.log"}
+{"time":"2025-05-29T18:54:44.357190741-04:00","level":"INFO","msg":"created new stream","id":"nrtntu1y"}
+{"time":"2025-05-29T18:54:44.357241324-04:00","level":"INFO","msg":"stream: started","id":"nrtntu1y"}
+{"time":"2025-05-29T18:54:44.357274132-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T18:54:44.357346338-04:00","level":"INFO","msg":"sender: started","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T18:54:44.357379142-04:00","level":"INFO","msg":"handler: started","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T18:54:44.463493559-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T19:00:06.462553207-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T19:00:06.462723209-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T19:00:07.455213191-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_nrtntu1y.pt","runtime_seconds":0.418803187,"progress":"13.7MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T19:00:08.997162827-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T19:00:09.135923679-04:00","level":"INFO","msg":"stream: closing","id":"nrtntu1y"}
+{"time":"2025-05-29T19:00:09.136054468-04:00","level":"INFO","msg":"handler: closed","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T19:00:09.13607574-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T19:00:09.136131549-04:00","level":"INFO","msg":"sender: closed","stream_id":"nrtntu1y"}
+{"time":"2025-05-29T19:00:09.136232111-04:00","level":"INFO","msg":"stream: closed","id":"nrtntu1y"}

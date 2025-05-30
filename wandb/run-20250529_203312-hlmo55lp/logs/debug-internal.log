@@ -1,0 +1,16 @@
+{"time":"2025-05-29T20:33:12.102637058-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_203312-hlmo55lp/logs/debug-core.log"}
+{"time":"2025-05-29T20:33:12.33151907-04:00","level":"INFO","msg":"created new stream","id":"hlmo55lp"}
+{"time":"2025-05-29T20:33:12.331590635-04:00","level":"INFO","msg":"stream: started","id":"hlmo55lp"}
+{"time":"2025-05-29T20:33:12.331678693-04:00","level":"INFO","msg":"handler: started","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:33:12.331744443-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:33:12.331767339-04:00","level":"INFO","msg":"sender: started","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:33:12.425208019-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T20:38:35.400398358-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T20:38:35.4005534-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T20:38:36.378636294-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_hlmo55lp.pt","runtime_seconds":0.36141695,"progress":"8.3MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T20:38:38.140810144-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T20:38:38.255935748-04:00","level":"INFO","msg":"stream: closing","id":"hlmo55lp"}
+{"time":"2025-05-29T20:38:38.256060768-04:00","level":"INFO","msg":"handler: closed","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:38:38.25608246-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:38:38.256111684-04:00","level":"INFO","msg":"sender: closed","stream_id":"hlmo55lp"}
+{"time":"2025-05-29T20:38:38.256200379-04:00","level":"INFO","msg":"stream: closed","id":"hlmo55lp"}

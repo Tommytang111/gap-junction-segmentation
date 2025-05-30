@@ -1,0 +1,16 @@
+{"time":"2025-05-29T23:28:06.682373803-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_232806-yr3b1jhz/logs/debug-core.log"}
+{"time":"2025-05-29T23:28:06.916747274-04:00","level":"INFO","msg":"created new stream","id":"yr3b1jhz"}
+{"time":"2025-05-29T23:28:06.91683872-04:00","level":"INFO","msg":"stream: started","id":"yr3b1jhz"}
+{"time":"2025-05-29T23:28:06.916864405-04:00","level":"INFO","msg":"handler: started","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:28:06.916921899-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:28:06.916923257-04:00","level":"INFO","msg":"sender: started","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:28:06.988883013-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T23:33:27.382936372-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T23:33:27.383033609-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T23:33:28.388919449-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_yr3b1jhz.pt","runtime_seconds":0.253158529,"progress":"2.6MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T23:33:29.999807333-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T23:33:30.12743478-04:00","level":"INFO","msg":"stream: closing","id":"yr3b1jhz"}
+{"time":"2025-05-29T23:33:30.12757276-04:00","level":"INFO","msg":"handler: closed","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:33:30.127596342-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:33:30.127659526-04:00","level":"INFO","msg":"sender: closed","stream_id":"yr3b1jhz"}
+{"time":"2025-05-29T23:33:30.127764884-04:00","level":"INFO","msg":"stream: closed","id":"yr3b1jhz"}

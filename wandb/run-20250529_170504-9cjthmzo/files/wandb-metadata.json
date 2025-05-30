@@ -1,0 +1,41 @@
+{
+  "os": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.31",
+  "python": "CPython 3.10.16",
+  "startedAt": "2025-05-29T21:05:04.619483Z",
+  "program": "/home/tommytang111/gap-junction-segmentation/code/train.ipynb",
+  "codePath": "train.ipynb",
+  "git": {
+    "remote": "https://github.com/Tommytang111/gap-junction-segmentation",
+    "commit": "da2f2366c7f1b29f58237e0e4d0e211da806d9ae"
+  },
+  "email": "tommytang111@gmail.com",
+  "root": "/home/tommytang111/gap-junction-segmentation/code",
+  "host": "zhenlab-del",
+  "executable": "/home/tommytang111/.conda/envs/gap_junction/bin/python",
+  "codePathLocal": "train.ipynb",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "269427478528",
+      "used": "46847451136"
+    }
+  },
+  "memory": {
+    "total": "42023936000"
+  },
+  "cpu": {
+    "count": 6,
+    "countLogical": 12
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 3090",
+      "memoryTotal": "25769803776",
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.6"
+}

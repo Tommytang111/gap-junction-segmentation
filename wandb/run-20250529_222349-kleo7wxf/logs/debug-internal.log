@@ -1,0 +1,16 @@
+{"time":"2025-05-29T22:23:49.731831918-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_222349-kleo7wxf/logs/debug-core.log"}
+{"time":"2025-05-29T22:23:50.066606295-04:00","level":"INFO","msg":"created new stream","id":"kleo7wxf"}
+{"time":"2025-05-29T22:23:50.066681929-04:00","level":"INFO","msg":"stream: started","id":"kleo7wxf"}
+{"time":"2025-05-29T22:23:50.066769234-04:00","level":"INFO","msg":"handler: started","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:23:50.066801797-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:23:50.066852179-04:00","level":"INFO","msg":"sender: started","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:23:50.17549558-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T22:29:05.556814197-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T22:29:05.556994821-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T22:29:06.533851032-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_kleo7wxf.pt","runtime_seconds":0.258996887,"progress":"2.7MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T22:29:08.23450728-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T22:29:08.401516255-04:00","level":"INFO","msg":"stream: closing","id":"kleo7wxf"}
+{"time":"2025-05-29T22:29:08.401655204-04:00","level":"INFO","msg":"handler: closed","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:29:08.401676947-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:29:08.40170264-04:00","level":"INFO","msg":"sender: closed","stream_id":"kleo7wxf"}
+{"time":"2025-05-29T22:29:08.401819505-04:00","level":"INFO","msg":"stream: closed","id":"kleo7wxf"}

@@ -1,0 +1,16 @@
+{"time":"2025-05-29T18:21:50.100252383-04:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_182150-pi2x85gu/logs/debug-core.log"}
+{"time":"2025-05-29T18:21:50.319867145-04:00","level":"INFO","msg":"created new stream","id":"pi2x85gu"}
+{"time":"2025-05-29T18:21:50.31996242-04:00","level":"INFO","msg":"stream: started","id":"pi2x85gu"}
+{"time":"2025-05-29T18:21:50.32002046-04:00","level":"INFO","msg":"writer: Do: started","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:21:50.320088271-04:00","level":"INFO","msg":"sender: started","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:21:50.320111857-04:00","level":"INFO","msg":"handler: started","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:21:50.463439609-04:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T18:27:08.292531313-04:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T18:27:08.292734781-04:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T18:27:09.2984289-04:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading models/sweep_model_pi2x85gu.pt","runtime_seconds":0.442387139,"progress":"16.0MB/147.8MB"}],"total_operations":1}}
+{"time":"2025-05-29T18:27:10.779817806-04:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T18:27:10.887904523-04:00","level":"INFO","msg":"stream: closing","id":"pi2x85gu"}
+{"time":"2025-05-29T18:27:10.88803224-04:00","level":"INFO","msg":"handler: closed","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:27:10.888065185-04:00","level":"INFO","msg":"sender: closed","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:27:10.888058094-04:00","level":"INFO","msg":"writer: Close: closed","stream_id":"pi2x85gu"}
+{"time":"2025-05-29T18:27:10.88817924-04:00","level":"INFO","msg":"stream: closed","id":"pi2x85gu"}

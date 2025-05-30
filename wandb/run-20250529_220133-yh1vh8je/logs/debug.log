@@ -1,0 +1,35 @@
+2025-05-29 22:01:33,893 INFO    Thread-186 (_run_job):8087 [wandb_setup.py:_flush():68] Current SDK version is 0.19.10
+2025-05-29 22:01:33,893 INFO    Thread-186 (_run_job):8087 [wandb_setup.py:_flush():68] Configure stats pid to 8087
+2025-05-29 22:01:33,893 INFO    Thread-186 (_run_job):8087 [wandb_setup.py:_flush():68] Loading settings from /home/tommytang111/.config/wandb/settings
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_setup.py:_flush():68] Loading settings from /home/tommytang111/gap-junction-segmentation/code/wandb/settings
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_setup.py:_flush():68] Loading settings from environment variables
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_init.py:setup_run_log_directory():724] Logging user logs to /home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_220133-yh1vh8je/logs/debug.log
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_init.py:setup_run_log_directory():725] Logging internal logs to /home/tommytang111/gap-junction-segmentation/code/wandb/run-20250529_220133-yh1vh8je/logs/debug-internal.log
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_init.py:monkeypatch_ipython():643] configuring jupyter hooks <wandb.sdk.wandb_init._WandbInit object at 0x7f5413d52ec0>
+2025-05-29 22:01:33,894 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():852] calling init triggers
+2025-05-29 22:01:33,895 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():857] wandb.init called with sweep_config: {'batch_size': 4, 'dropout': 0.2, 'learning_rate': 1e-05, 'scheduler_patience': 10, 'weight_decay': 0.0001}
+config: {'_wandb': {}}
+2025-05-29 22:01:33,895 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():893] starting backend
+2025-05-29 22:01:33,895 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():897] sending inform_init request
+2025-05-29 22:01:33,909 INFO    Thread-186 (_run_job):8087 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-05-29 22:01:33,910 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():907] backend started and connected
+2025-05-29 22:01:33,925 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_config_callback():1429] config_cb None None {'batch_size': 4, 'dropout': 0.2, 'learning_rate': 1e-05, 'scheduler_patience': 10, 'weight_decay': 0.0001}
+2025-05-29 22:01:33,940 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_label_probe_notebook():1369] probe notebook
+2025-05-29 22:01:33,943 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():1002] updated telemetry
+2025-05-29 22:01:33,960 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():1026] communicating run to backend with 90.0 second timeout
+2025-05-29 22:01:34,234 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():1101] starting run threads in backend
+2025-05-29 22:01:34,656 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_console_start():2566] atexit reg
+2025-05-29 22:01:34,657 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_redirect():2414] redirect: wrap_raw
+2025-05-29 22:01:34,657 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_redirect():2483] Wrapping output streams.
+2025-05-29 22:01:34,657 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_redirect():2506] Redirects installed.
+2025-05-29 22:01:34,667 INFO    Thread-186 (_run_job):8087 [wandb_init.py:init():1147] run started, returning control to user process
+2025-05-29 22:07:07,038 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_finish():2314] finishing run zhen_lab/gap-junction-segmentation/yh1vh8je
+2025-05-29 22:07:07,039 INFO    Thread-186 (_run_job):8087 [jupyter.py:save_history():477] not saving jupyter history
+2025-05-29 22:07:07,039 INFO    Thread-186 (_run_job):8087 [jupyter.py:save_ipynb():401] not saving jupyter notebook
+2025-05-29 22:07:07,039 INFO    Thread-186 (_run_job):8087 [wandb_init.py:_jupyter_teardown():628] cleaning up jupyter logic
+2025-05-29 22:07:07,039 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_atexit_cleanup():2531] got exitcode: 0
+2025-05-29 22:07:07,040 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_restore():2513] restore
+2025-05-29 22:07:07,040 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_restore():2519] restore done
+2025-05-29 22:07:09,620 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_footer_history_summary_info():4160] rendering history
+2025-05-29 22:07:09,621 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_footer_history_summary_info():4192] rendering summary
+2025-05-29 22:07:09,624 INFO    Thread-186 (_run_job):8087 [wandb_run.py:_footer_sync_info():4121] logging synced files
