@@ -244,7 +244,7 @@ def get_heavy_augmentation():
     ])
     
 #Define training function
-def train(dataloader, model, loss_fn, optimizer, recall, precision, f1):
+def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda'):
     """
     Training logic for the epoch.
     """
@@ -287,7 +287,7 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1):
     
     return train_loss_per_epoch, train_recall, train_precision, train_f1
     
-def validate(dataloader, model, loss_fn, recall, precision, f1):
+def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
     """
     Validation logic for the epoch.
     """
@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    wandb_init("unet_v1_custom_augmentation")
+    run = wandb_init("unet_v1_custom_augmentation")
 
     #Set seed for reproducibility
     seed_everything(42)
@@ -451,12 +451,11 @@ def main():
             "lr": optimizer.param_groups[0]["lr"]
         })
 
-        print("Training Complete!")
-        wandb.finish()
-    
+    print("Training Complete!")
     #Save the best logged model state
     torch.save(best_model_state, f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt")
     print(f"Saved PyTorch Model to {run.name}.pt")
+    wandb.finish()
         
 if __name__ == "__main__":
     main()
