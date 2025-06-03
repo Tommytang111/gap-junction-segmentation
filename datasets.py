@@ -506,7 +506,7 @@ class TestDataset(torch.utils.data.Dataset):
                 image0 = cv2.imread(self.image_paths[i])
                 #Padding and Cropping
                 if (image0.shape[-1] != 512) or (image0.shape[-2] != 512): #Current image should be 2D: (lxw)
-                    image0 = resize_image(image0, 512, 512, (0,0,0))
+                    image0 = resize_image(image0, 512, 512, (0,0,0), channels=True)
                 image = cv2.cvtColor(np.array(image0), cv2.COLOR_BGR2GRAY) 
                 mask = np.zeros_like(image)#cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
                 if self.membrane_paths: memb = cv2.imread(self.membrane_paths[i].replace("sem_dauer_2_em_", "20240325_SEM_dauer_2_nr_vnc_neurons_head_muscles.vsseg_export_"), -1) == 0
