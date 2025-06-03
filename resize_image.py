@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 from typing import Union
 
-def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad_clr:tuple) -> Image.Image:
+def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad_clr:tuple, grayscale:False) -> Image.Image:
     """
     Resize an image to fit within a specified width and length, maintaining the aspect ratio.
     If the image does not fit within the specified dimensions, it will be padded with a specified color.
@@ -13,6 +13,7 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     new_width: New width of the image
     new_length: New length of the image
     pad_clr: Color to pad the image with if it does not fit within the specified dimensions
+    grayscale: If True, a grayscale image will be converted to grayscale after resizing.
     
     Returns: Resized image as a PIL image.
     """
@@ -35,7 +36,7 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
 
     # Determine mode and pad color
     mode = img.mode
-    if mode == 'L':
+    if mode == 'L' and grayscale:
         pad_color = pad_clr[0] if isinstance(pad_clr, (tuple, list)) else pad_clr
     else:
         pad_color = pad_clr

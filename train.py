@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_v1_custom_augmentation")
+    run = wandb_init("unet_v1_error_check")
 
     #Set seed for reproducibility
     seed_everything(42)
