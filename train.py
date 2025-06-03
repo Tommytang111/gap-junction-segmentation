@@ -155,7 +155,7 @@ def get_custom_augmentation():
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.5,1.5), rotate=90, translate_percent=0.15, shear = (-45, 45), p=0.9),
+        A.Affine(scale=(0.5,1.5), rotate=90, translate_percent=0.15, shear=(-45, 45), p=0.9),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.GaussNoise(p=0.3),
         A.Normalize(mean=0.0, std=1.0),
@@ -336,7 +336,7 @@ def wandb_init(run_name):
             config={
                 "learning_rate": 0.001,
                 "batch_size": 8,
-                "epochs": 30,
+                "epochs": 100,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
                 "optimizer": "Adam",
@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_v1_error_check")
+    run = wandb_init("unet_base_sem_adult_s200-209_train_s250-259_val")
 
     #Set seed for reproducibility
     seed_everything(42)
@@ -366,22 +366,22 @@ def main():
     
     #Initialize dataset
     train_dataset = TrainingDataset(
-    images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/imgs",
-    labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/gts",
+    images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/imgs",
+    labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/gts",
     augmentation=train_augmentation,
     train=True,
     )
 
     valid_dataset = TrainingDataset(
-        images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/imgs",
-        labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s200-209/gts",
+        images="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/imgs",
+        labels="/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s250-259/gts",
         augmentation=valid_augmentation,
         train=False
     )
 
     #Load datasets into DataLoader
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=True, worker_init_fn=worker_init_fn)
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
 
     #Set device and model
     device = torch.device("cuda")    
@@ -401,7 +401,7 @@ def main():
     torch.cuda.empty_cache()
     
     #Initialize training variables
-    epochs = 50
+    epochs = 100
     best_f1 = 0.0
     best_val_loss = float('inf')
     best_epoch = 0
