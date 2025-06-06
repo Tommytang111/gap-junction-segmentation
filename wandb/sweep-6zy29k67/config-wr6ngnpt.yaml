@@ -1,0 +1,14 @@
+wandb_version: 1
+
+augmentation:
+  value: custom2
+batch_size:
+  value: 8
+dropout:
+  value: 0.2
+learning_rate:
+  value: 0.01
+loss_function:
+  value: FocalLoss
+optimizer:
+  value: SGD

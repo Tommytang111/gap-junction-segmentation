@@ -1,0 +1,14 @@
+wandb_version: 1
+
+augmentation:
+  value: custom1
+batch_size:
+  value: 16
+dropout:
+  value: 0
+learning_rate:
+  value: 0.001
+loss_function:
+  value: FocalLoss
+optimizer:
+  value: AdamW
