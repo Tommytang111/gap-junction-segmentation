@@ -302,9 +302,11 @@ class UpBlock(nn.Module):
         if up_sample_mode == 'conv_transpose':
             if three: self.up_sample = nn.Sequential(
                 nn.ConvTranspose3d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+                nn.Batchnorm3d(in_channels-out_channels),
                 nn.ReLU())       
             else: self.up_sample = nn.Sequential(
                 nn.ConvTranspose2d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+                nn.BatchNorm2d(in_channels-out_channels),
                 nn.ReLU())
         elif up_sample_mode == 'bilinear':
             self.up_sample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True, three=three)

@@ -155,7 +155,7 @@ def get_custom_augmentation():
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.5,1.5), rotate=90, translate_percent=0.15, shear=(-45, 45), p=0.9),
+        A.Affine(scale=(0.8,1.2), rotate=360, translate_percent=0.15, shear=(-45, 45), p=0.9),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.GaussNoise(p=0.3),
         A.Normalize(mean=0.0, std=1.0),
@@ -334,12 +334,12 @@ def wandb_init(run_name):
             dir="/home/tommytang111/gap-junction-segmentation/wandb",
             reinit=True,
             config={
-                "learning_rate": 0.0001,
+                "learning_rate": 0.001,
                 "batch_size": 8,
                 "epochs": 100,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
-                "optimizer": "Adam",
+                "optimizer": "SGD",
                 "scheduler": "ReduceLROnPlateau"
             }
     )
@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_base_sem_adult_pooled200_train_pooled40_val")
+    run = wandb_init("unet_base_sem_combined_pooled200_train_pooled40_val")
 
     #Set seed for reproducibility
     seed_everything(42)
@@ -389,7 +389,7 @@ def main():
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
-    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = SGD(model.parameters(), momentum=0.9, lr=1e-3, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
     #Send evaluation metrics to device
