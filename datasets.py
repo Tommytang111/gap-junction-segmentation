@@ -11,9 +11,6 @@ import torchvision.transforms.functional as TF
 import torchvision.transforms.v2 as v2
 from resize_image import resize_image
 from pathlib import Path
-# import segmentation_models_pytorch as smp
-# import albumentations as album
-import joblib
 
 from typing import Tuple, List
 # from sklearn.model_selection import train_test_split

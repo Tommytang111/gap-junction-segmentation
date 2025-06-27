@@ -16,6 +16,9 @@ import cv2
 from tqdm import tqdm 
 import copy
 import wandb
+import random
+import shutil
+from sklearn.model_selection import train_test_split
 #Custom Libraries
 from resize_image import resize_image
 
@@ -148,6 +151,76 @@ def worker_init_fn(worker_id):
     seed = 42 + worker_id
     np.random.seed(seed)
     torch.manual_seed(seed)
+    
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=42):
+    """
+    Split a dataset into train, validation, and test sets.
+
+    Args:
+        source_img_dir: Directory containing all source images
+        source_gt_dir: Directory containing all ground truth masks
+        output_base_dir: Base directory where train/val/test folders will be created
+        train_size, val_size, test_size: Proportions for the splits (should sum to 1)
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Dictionary with paths to the created datasets
+    """
+    # Create output directories
+    os.makedirs(output_base_dir, exist_ok=True)
+    train_dir = os.path.join(output_base_dir, 'train')
+    val_dir = os.path.join(output_base_dir, 'val')
+    test_dir = os.path.join(output_base_dir, 'test')
+
+    for directory in [train_dir, val_dir, test_dir]:
+        os.makedirs(os.path.join(directory, 'imgs'), exist_ok=True)
+        os.makedirs(os.path.join(directory, 'gts'), exist_ok=True)
+
+    # Get all image filenames
+    all_images = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))])
+
+    # First split: train vs (val+test)
+    train_images, remaining_images = train_test_split(
+        all_images, 
+        train_size=train_size, 
+        random_state=random_state
+    )
+
+    # Second split: val vs test (from the remaining)
+    val_ratio = val_size / (val_size + test_size)
+    val_images, test_images = train_test_split(
+        remaining_images, 
+        train_size=val_ratio, 
+        random_state=random_state
+    )
+
+    # Copy the files to their respective directories
+    for image_list, target_dir in [
+        (train_images, train_dir), 
+        (val_images, val_dir), 
+        (test_images, test_dir)
+    ]:
+        for img_name in image_list:
+            # Copy image
+            shutil.copy(
+                os.path.join(source_img_dir, img_name),
+                os.path.join(target_dir, 'imgs', img_name)
+            )
+            
+            # Copy ground truth 
+            gt_name = os.path.splitext(img_name)[0] + "_label.png"  
+            shutil.copy(
+                os.path.join(source_gt_dir, gt_name),
+                os.path.join(target_dir, 'gts', gt_name)
+            )
+
+    print(f"Dataset split completed: {len(train_images)} training, {len(val_images)} validation, {len(test_images)} test images")
+
+    return {
+        'train': {'imgs': os.path.join(train_dir, 'imgs'), 'gts': os.path.join(train_dir, 'gts')},
+        'val': {'imgs': os.path.join(val_dir, 'imgs'), 'gts': os.path.join(val_dir, 'gts')},
+        'test': {'imgs': os.path.join(test_dir, 'imgs'), 'gts': os.path.join(test_dir, 'gts')}
+    }
     
 #Add augmentation functions
 # Custom augmentation
@@ -323,6 +396,57 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
     return val_loss_per_epoch, val_recall, val_precision, val_f1
     print(f"Avg loss: {test_loss:>7f}\n")
 
+def test(model, dataloader, loss_fn, device='cuda'):
+    """
+    Evaluate the model on the test dataset
+    
+    Args:
+        model: Trained PyTorch model
+        test_dataloader: DataLoader for test dataset
+        loss_fn: Loss function
+        device: Device to run evaluation on
+        
+    Returns:
+        Dictionary with test metrics
+    """
+    model.eval()
+    test_loss = 0
+    num_batches = len(dataloader)
+    
+    # Initialize metrics
+    recall = BinaryRecall().to(device)
+    precision = BinaryPrecision().to(device)
+    f1 = BinaryF1Score().to(device)
+    
+    with torch.no_grad():
+        for X, y, _ in tqdm(dataloader, desc="Test Evaluation"):
+            X, y = X.to(device), y.to(device)
+            pred = model(X)
+            test_loss += loss_fn(pred, y).item()
+            
+            # Calculate metrics
+            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1)
+            
+            # Update metrics
+            recall.update(pred_binary, y)
+            precision.update(pred_binary, y)
+            f1.update(pred_binary, y)
+            
+    # Compute final metrics
+    test_metrics = {
+        "test_loss": test_loss / num_batches,
+        "test_recall": recall.compute().item(),
+        "test_precision": precision.compute().item(),
+        "test_f1": f1.compute().item()
+    }
+    
+    print(f"Test Results | Loss: {test_metrics['test_loss']:.4f}, "
+          f"Recall: {test_metrics['test_recall']:.4f}, "
+          f"Precision: {test_metrics['test_precision']:.4f}, "
+          f"F1: {test_metrics['test_f1']:.4f}")
+    
+    return test_metrics
+
 def wandb_init(run_name):
     """
     WandB Initialization
@@ -350,10 +474,28 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_base_sem_combined_pilot2_pooled200_train_pooled40_val")
+    run = wandb_init("unet_base_pooled_2695imgs_sem_dauer_2_516imgs_sem_adult")
 
     #Set seed for reproducibility
     seed_everything(42)
+
+    # Create dataset splits (uncomment and run once to create the splits)
+    source_img_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
+    source_gt_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/gts"
+    output_base_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
+    
+    #Create the splits (comment out after first run)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir)
+    
+    #Alternatively, if splits already exist, define paths manually
+    # dataset_paths = {
+    #     'train': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/imgs', 
+    #               'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/gts'},
+    #     'val': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/imgs', 
+    #             'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/gts'},
+    #     'test': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/imgs', 
+    #              'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/gts'}
+    # }
 
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
@@ -364,25 +506,33 @@ def main():
         ToTensorV2()
     ])
     
-    #Initialize dataset
+    #Initialize datasets
     train_dataset = TrainingDataset(
-        images="/home/tommytang111/gap-junction-segmentation/data/pilot2/train/imgs",
-        labels="/home/tommytang111/gap-junction-segmentation/data/pilot2/train/gts",
+        images=dataset_paths['train']['imgs'],
+        labels=dataset_paths['train']['gts'],
         augmentation=train_augmentation,
         train=True,
     )
 
     valid_dataset = TrainingDataset(
-        images="/home/tommytang111/gap-junction-segmentation/data/pilot2/val/imgs",
-        labels="/home/tommytang111/gap-junction-segmentation/data/pilot2/val/gts",
+        images=dataset_paths['val']['imgs'],
+        labels=dataset_paths['val']['gts'],
+        augmentation=valid_augmentation,
+        train=False
+    )
+    
+    test_dataset = TrainingDataset(
+        images=dataset_paths['test']['imgs'],
+        labels=dataset_paths['test']['gts'],
         augmentation=valid_augmentation,
         train=False
     )
 
     #Load datasets into DataLoader
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
-
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
+    
     #Set device and model
     device = torch.device("cuda")    
     model = UNet().to(device)
@@ -401,7 +551,7 @@ def main():
     torch.cuda.empty_cache()
     
     #Initialize training variables
-    epochs = 100
+    epochs = 200
     best_f1 = 0.0
     best_val_loss = float('inf')
     best_epoch = 0
@@ -452,9 +602,22 @@ def main():
         })
 
     print("Training Complete!")
+    
     #Save the best logged model state
-    torch.save(best_model_state, f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt")
-    print(f"Saved PyTorch Model to {run.name}.pt")
+    model_save_path = f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt"
+    torch.save(best_model_state, model_save_path)
+    print(f"Saved PyTorch Model to {model_save_path}")
+    
+    # Load the best model for evaluation
+    model.load_state_dict(best_model_state)
+    
+    # Evaluate on test set
+    print("\nEvaluating on test set...")
+    test_metrics = test(model, test_dataloader, loss_fn, device)
+    
+    # Log test metrics to wandb
+    wandb.log(test_metrics)
+    
     wandb.finish()
         
 if __name__ == "__main__":
