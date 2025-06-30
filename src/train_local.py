@@ -502,7 +502,7 @@ def main():
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
 
-    #For validation without augmentation
+    #For validation/test without augmentation
     valid_augmentation = A.Compose([
         A.Normalize(mean=0.0, std=1.0),
         ToTensorV2()
