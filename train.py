@@ -152,11 +152,7 @@ def worker_init_fn(worker_id):
     np.random.seed(seed)
     torch.manual_seed(seed)
     
-<<<<<<< HEAD
-def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=42):
-=======
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=14):
->>>>>>> 0d9e5d5 (Update)
     """
     Split a dataset into train, validation, and test sets.
 
@@ -551,15 +547,9 @@ def main():
     )
 
     #Load datasets into DataLoader
-<<<<<<< HEAD
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
-    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
-=======
     train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
     valid_dataloader = DataLoader(valid_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
     test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
->>>>>>> 0d9e5d5 (Update)
     
     #Set device and model
     device = torch.device("cuda")    
@@ -632,11 +622,7 @@ def main():
     print("Training Complete!")
     
     #Save the best logged model state
-<<<<<<< HEAD
-    model_save_path = f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt"
-=======
     model_save_path = f"/home/tommy111/projects/def-mzhen/tommy111/models/{run.name}_{run.id}.pt"
->>>>>>> 0d9e5d5 (Update)
     torch.save(best_model_state, model_save_path)
     print(f"Saved PyTorch Model to {model_save_path}")
     
