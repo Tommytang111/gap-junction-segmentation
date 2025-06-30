@@ -152,7 +152,11 @@ def worker_init_fn(worker_id):
     np.random.seed(seed)
     torch.manual_seed(seed)
     
+<<<<<<< HEAD
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=42):
+=======
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=14):
+>>>>>>> 0d9e5d5 (Update)
     """
     Split a dataset into train, validation, and test sets.
 
@@ -451,16 +455,16 @@ def wandb_init(run_name):
     """
     WandB Initialization
     """
-    wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
+    #wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
-            dir="/home/tommytang111/gap-junction-segmentation/wandb",
+            dir="/home/tommy111/projects/def-mzhen/tommy111",
             reinit=True,
             config={
                 "learning_rate": 0.0001,
-                "batch_size": 8,
-                "epochs": 100,
+                "batch_size": 16,
+                "epochs": 200,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
                 "optimizer": "AdamW",
@@ -477,7 +481,25 @@ def main():
     run = wandb_init("unet_base_pooled_2695imgs_sem_dauer_2_516imgs_sem_adult")
 
     #Set seed for reproducibility
-    seed_everything(42)
+    seed_everything(14)
+
+    # Create dataset splits (uncomment and run once to create the splits)
+    source_img_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
+    source_gt_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/gts"
+    output_base_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
+
+    #Create the splits (comment out after first run)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir)
+    
+    #Alternatively, if splits already exist, define paths manually
+    # dataset_paths = {
+    #     'train': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/imgs', 
+    #               'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/gts'},
+    #     'val': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/imgs', 
+    #             'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/gts'},
+    #     'test': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/imgs', 
+    #              'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/gts'}
+    # }
 
     # Create dataset splits (uncomment and run once to create the splits)
     source_img_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
@@ -529,9 +551,15 @@ def main():
     )
 
     #Load datasets into DataLoader
+<<<<<<< HEAD
     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
     valid_dataloader = DataLoader(valid_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
     test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
+=======
+    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+>>>>>>> 0d9e5d5 (Update)
     
     #Set device and model
     device = torch.device("cuda")    
@@ -604,7 +632,11 @@ def main():
     print("Training Complete!")
     
     #Save the best logged model state
+<<<<<<< HEAD
     model_save_path = f"/home/tommytang111/gap-junction-segmentation/models/{run.name}.pt"
+=======
+    model_save_path = f"/home/tommy111/projects/def-mzhen/tommy111/models/{run.name}_{run.id}.pt"
+>>>>>>> 0d9e5d5 (Update)
     torch.save(best_model_state, model_save_path)
     print(f"Saved PyTorch Model to {model_save_path}")
     
