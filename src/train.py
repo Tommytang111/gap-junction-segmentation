@@ -154,7 +154,7 @@ def worker_init_fn(worker_id):
     np.random.seed(seed)
     torch.manual_seed(seed)
     
-def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=GLOBAL_SEED):
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=None):
     """
     Split a dataset into train, validation, and test sets.
 
@@ -487,25 +487,7 @@ def main():
     output_base_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
 
     #Create the splits (comment out after first run)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir)
-    
-    #Alternatively, if splits already exist, define paths manually
-    # dataset_paths = {
-    #     'train': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/imgs', 
-    #               'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/gts'},
-    #     'val': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/imgs', 
-    #             'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/gts'},
-    #     'test': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/imgs', 
-    #              'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/gts'}
-    # }
-
-    # Create dataset splits (uncomment and run once to create the splits)
-    source_img_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
-    source_gt_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/gts"
-    output_base_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
-    
-    #Create the splits (comment out after first run)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=GLOBAL_SEED)
     
     #Alternatively, if splits already exist, define paths manually
     # dataset_paths = {
