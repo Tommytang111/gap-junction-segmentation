@@ -96,7 +96,7 @@ def split_large_img(source_path, target_path):
         for i, split in enumerate(split_imgs):
             cv2.imwrite(f"{target_path}/{re.sub(r'.png$', r'', img)}_part{i+5}.png", split)
             
-!python3 main_processing.py \
+"""!python3 main_processing.py \
   --postprocessing \
   --imgs_dir "/mnt/e/Mishaal/sem_dauer_2/image_export" \
   --preds_dir "/home/tommytang111/results" \
@@ -106,7 +106,7 @@ def split_large_img(source_path, target_path):
   --Smin 0 --Smax 51 \
   --Ymin 0 --Ymax 17 \
   --Xmin 0 --Xmax 19 \
-  --offset 0
+  --offset 0"""
 
 def filter_pixels(img) -> np.ndarray:
     """
