@@ -381,13 +381,13 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             
-        #Calculate metrics
-        pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
-        
-        #Update metrics
-        recall.update(pred_binary, y)
-        precision.update(pred_binary, y)
-        f1.update(pred_binary, y)
+            #Calculate metrics
+            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
+            
+            #Update metrics
+            recall.update(pred_binary, y)
+            precision.update(pred_binary, y)
+            f1.update(pred_binary, y)
             
         #Compute final metrics per epoch
         val_recall = recall.compute().item()
