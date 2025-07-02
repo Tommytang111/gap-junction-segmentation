@@ -86,3 +86,132 @@ class MultiGenDLoss(nn.Module):
         return torch.nanmean(1 - 2 * torch.nansum(weights * torch.nansum(targets * inputs, dim=-1))/\
                           torch.nansum(weights * torch.nansum(targets + inputs, dim=-1)))
         
+#Models
+
+class DoubleConv(nn.Module):
+    """(Conv2d -> BN -> ReLU) * 2"""
+    def __init__(self, in_channels, out_channels, three=False, spatial=False, residual=False, dropout=0):
+        super(DoubleConv, self).__init__()
+        self.dropout = torch.nn.Dropout(p=dropout)
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
+        )
+        self.projection_add = nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0)
+        self.final = nn.Sequential(
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=False),
+            self.dropout,
+        )
+        self.spatial=spatial
+        if spatial: 
+            self.spatial_sample = PyramidPooling(levels=[2, 2, 4, 4, 4, 4, 4, 4,4, 4], td=three)
+        self.residual = residual
+
+    def forward(self, x_in):
+        x = self.double_conv(x_in)
+        # if self.residual: x = x + self.projection_add(x_in)
+        # x = self.final(x)
+        con_shape = x.shape
+        # if self.spatial: # Spatial pyramidal pooling
+        #     x = self.spatial_sample(x)
+        #     x = x.reshape(con_shape)
+        return x
+    
+class DownBlock(nn.Module):
+    """Double Convolution followed by Max Pooling"""
+    def __init__(self, in_channels, out_channels, three=False, spatial=True, dropout=0, residual=False):
+        super(DownBlock, self).__init__()
+        self.double_conv = DoubleConv(in_channels, out_channels, three=three, dropout=dropout, residual=residual)
+        self.spatial = spatial
+        if spatial: 
+            self.spatial_sample = PyramidPooling(levels=[2, 2, 4, 4, 4, 4, 4, 4,4, 4], td=three)
+        self.down_sample = nn.MaxPool2d(2, stride=2) if not three else nn.MaxPool3d(2, stride=2)
+
+    def forward(self, x):
+        skip_out = self.double_conv(x)
+        # if self.spatial: 
+        #     x = self.spatial_sample(skip_out)
+        #     x = x.reshape(skip_out.shape)
+        #     down_out = self.down_sample(x)
+        # else:   
+        down_out = self.down_sample(skip_out)
+        return (down_out, skip_out)
+
+class UpBlock(nn.Module):
+    """Up Convolution (Upsampling followed by Double Convolution)"""
+    def __init__(self, in_channels, out_channels, up_sample_mode, kernel_size=2, three=False, dropout=0, residual=False):
+        super(UpBlock, self).__init__()
+        if up_sample_mode == 'conv_transpose':
+            if three: self.up_sample = nn.Sequential(
+                nn.ConvTranspose3d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+                nn.Batchnorm3d(in_channels-out_channels),
+                nn.ReLU())       
+            else: self.up_sample = nn.Sequential(
+                nn.ConvTranspose2d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+                nn.BatchNorm2d(in_channels-out_channels),
+                nn.ReLU())
+        elif up_sample_mode == 'bilinear':
+            self.up_sample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True, three=three)
+        else:
+            raise ValueError("Unsupported `up_sample_mode` (can take one of `conv_transpose` or `bilinear`)")
+        self.double_conv = DoubleConv(in_channels, out_channels, three=three, residual=residual)
+        self.dropout = torch.nn.Dropout(p=dropout)
+
+    def forward(self, down_input, skip_input):
+        x = self.up_sample(down_input)
+        x = torch.cat([x, skip_input], dim=1)
+        return self.double_conv(x)
+    
+class UNet(nn.Module):
+    """UNet Architecture"""
+    def __init__(self, out_classes=2, up_sample_mode='conv_transpose', three=False, attend=False, residual=False, scale=False, spatial=False, dropout=0, classes=2):
+        """Initialize the UNet model"""
+        super(UNet, self).__init__()
+        self.three = three
+        self.up_sample_mode = up_sample_mode
+        self.dropout=dropout
+
+        # Downsampling Path
+        self.down_conv1 = DownBlock(1, 64, three=three, spatial=False, residual=residual) # 3 input channels --> 64 output channels
+        self.down_conv2 = DownBlock(64, 128, three=three, spatial=spatial, dropout=self.dropout, residual=residual) # 64 input channels --> 128 output channels
+        self.down_conv3 = DownBlock(128, 256, spatial=spatial, dropout=self.dropout, residual=residual) # 128 input channels --> 256 output channels
+        self.down_conv4 = DownBlock(256, 512, spatial=spatial, dropout=self.dropout, residual=residual) # 256 input channels --> 512 output channels
+        # Bottleneck
+        self.double_conv = DoubleConv(512, 1024,spatial=spatial, dropout=self.dropout, residual=residual)
+        # Upsampling Path
+        self.up_conv4 = UpBlock(512 + 1024, 512, self.up_sample_mode, dropout=self.dropout, residual=residual) # 512 + 1024 input channels --> 512 output channels
+        self.up_conv3 = UpBlock(256 + 512, 256, self.up_sample_mode, dropout=self.dropout, residual=residual)
+        self.up_conv2 = UpBlock(128+ 256, 128, self.up_sample_mode, dropout=self.dropout, residual=residual)
+        self.up_conv1 = UpBlock(128 + 64, 64, self.up_sample_mode)
+        # Final Convolution
+        self.conv_last = nn.Conv2d(64, 1 if classes == 2 else classes, kernel_size=1)
+        self.attend = attend
+        if scale:
+            self.s1, self.s2 = torch.nn.Parameter(torch.ones(1), requires_grad=True), torch.nn.Parameter(torch.ones(1), requires_grad=True) # learn scaling
+
+
+    def forward(self, x):
+        """Forward pass of the UNet model
+        x: (16, 1, 512, 512)
+        """
+        # print(x.shape)
+        x, skip1_out = self.down_conv1(x) # x: (16, 64, 256, 256), skip1_out: (16, 64, 512, 512) (batch_size, channels, height, width)    
+        x, skip2_out = self.down_conv2(x) # x: (16, 128, 128, 128), skip2_out: (16, 128, 256, 256)
+        if self.three: x = x.squeeze(-3)   
+        x, skip3_out = self.down_conv3(x) # x: (16, 256, 64, 64), skip3_out: (16, 256, 128, 128)
+        x, skip4_out = self.down_conv4(x) # x: (16, 512, 32, 32), skip4_out: (16, 512, 64, 64)
+        x = self.double_conv(x) # x: (16, 1024, 32, 32)
+        x = self.up_conv4(x, skip4_out) # x: (16, 512, 64, 64)
+        x = self.up_conv3(x, skip3_out) # x: (16, 256, 128, 128)
+        if self.three: 
+            #attention_mode???
+            skip1_out = torch.mean(skip1_out, dim=2)
+            skip2_out = torch.mean(skip2_out, dim=2)
+        x = self.up_conv2(x, skip2_out) # x: (16, 128, 256, 256)
+        x = self.up_conv1(x, skip1_out) # x: (16, 64, 512, 512)
+        x = self.conv_last(x) # x: (16, 1, 512, 512)
+        return x
+        
