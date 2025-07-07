@@ -350,7 +350,7 @@ def main():
     Main function to run training and validation loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_base_sem_combined_pilot2_pooled200_train_pooled40_val")
+    run = wandb_init("unet_base_sem_combined_pilot1_pooled200_train_pooled40_val")
 
     #Set seed for reproducibility
     seed_everything(42)
@@ -366,15 +366,15 @@ def main():
     
     #Initialize dataset
     train_dataset = TrainingDataset(
-        images="/home/tommytang111/gap-junction-segmentation/data/pilot2/train/imgs",
-        labels="/home/tommytang111/gap-junction-segmentation/data/pilot2/train/gts",
+        images="/home/tommytang111/gap-junction-segmentation/data/pilot1/train/imgs",
+        labels="/home/tommytang111/gap-junction-segmentation/data/pilot1/train/gts",
         augmentation=train_augmentation,
         train=True,
     )
 
     valid_dataset = TrainingDataset(
-        images="/home/tommytang111/gap-junction-segmentation/data/pilot2/val/imgs",
-        labels="/home/tommytang111/gap-junction-segmentation/data/pilot2/val/gts",
+        images="/home/tommytang111/gap-junction-segmentation/data/pilot1/val/imgs",
+        labels="/home/tommytang111/gap-junction-segmentation/data/pilot1/val/gts",
         augmentation=valid_augmentation,
         train=False
     )

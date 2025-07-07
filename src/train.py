@@ -20,7 +20,7 @@ import random
 import shutil
 from sklearn.model_selection import train_test_split
 #Custom Libraries
-from resize_image import resize_image
+from utils import resize_image
 
 #DATASET CLASS
 #Class can load any mask as long as the model corresponds to the mask type
@@ -457,16 +457,17 @@ def wandb_init(run_name):
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
-            dir="/home/tommy111/projects/def-mzhen/tommy111",
+            dir="/home/tommytang111/gap-junction-segmentation/wandb",
             reinit=True,
             config={
-                "learning_rate": 0.0001,
+                "learning_rate": 0.01,
                 "batch_size": 16,
                 "epochs": 200,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
-                "optimizer": "AdamW",
-                "scheduler": "ReduceLROnPlateau"
+                "optimizer": "SGD",
+                "scheduler": "ReduceLROnPlateau",
+                "augmentation": "Custom Augmentation"
             }
     )
     return run
@@ -606,7 +607,7 @@ def main():
     print("Training Complete!")
     
     #Save the best logged model state
-    model_save_path = f"/home/tommy111/projects/def-mzhen/tommy111/models/{run.name}_{run.id}.pt"
+    model_save_path = f"/home/tommytang111/gap-junction-segmentation/models/{run.name}_{run.id}.pt"
     torch.save(best_model_state, model_save_path)
     print(f"Saved PyTorch Model to {model_save_path}")
     

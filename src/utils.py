@@ -66,6 +66,8 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     paste_y = (new_length - resized_height) // 2
     new_img.paste(img, (paste_x, paste_y))
     
+    return new_img
+    
 def split_img(img, offset=256, tile_size=512, names=False):
     """
     Split a full EM image into tiles of a specified size, with an optional offset.

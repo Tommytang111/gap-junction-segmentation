@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import torchvision.transforms.v2 as v2
-from resize_image import resize_image
+from utils import resize_image
 from pathlib import Path
 
 from typing import Tuple, List
@@ -485,10 +485,10 @@ class TestDataset(torch.utils.data.Dataset):
             td=False,
             membrane=False
     ):      
-        self.image_paths = [os.path.join(Path(dataset_dir) / "imgs", image_id) for image_id in sorted(os.listdir(Path(dataset_dir) / "imgs")) if "DS" not in image_id]
-        self.mask_paths = [os.path.join(Path(dataset_dir) / "gts", image_id) for image_id in sorted(os.listdir(Path(dataset_dir) / "gts")) if "DS" not in image_id]
+        self.image_paths = [Path(dataset_dir) / "imgs" / image_id for image_id in sorted(os.listdir(Path(dataset_dir) / "imgs")) if "DS" not in image_id]
+        self.mask_paths = [Path(dataset_dir) / "gts" / image_id for image_id in sorted(os.listdir(Path(dataset_dir) / "gts")) if "DS" not in image_id]
         if membrane:
-            self.membrane_paths = [os.path.join(membrane, image_id) for image_id in sorted(os.listdir(dataset_dir)) if "DS" not in image_id]
+            self.membrane_paths = [Path(membrane) / image_id for image_id in sorted(os.listdir(dataset_dir)) if "DS" not in image_id]
         else: self.membrane_paths = None
         self.td = td
         

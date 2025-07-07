@@ -20,7 +20,7 @@ import random
 import shutil
 from sklearn.model_selection import train_test_split
 #Custom Libraries
-from resize_image import resize_image
+from utils import resize_image
 
 #DATASET CLASS
 #Class can load any mask as long as the model corresponds to the mask type
@@ -482,13 +482,13 @@ def main():
     seed_everything(40)
 
     # Create dataset splits (uncomment and run once to create the splits)
-    source_img_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
-    source_gt_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/gts"
-    output_base_dir = "/home/tommytang111/gap-junction-segmentation/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
+    source_img_dir = "/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult/imgs"
+    source_gt_dir = "/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult/gts"
+    output_base_dir = "/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult_split"
     
     #Create the splits (comment out after first run)
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=GLOBAL_SEED)
-    
+
     #Alternatively, if splits already exist, define paths manually
     # dataset_paths = {
     #     'train': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/imgs', 
