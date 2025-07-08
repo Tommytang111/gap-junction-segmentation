@@ -269,9 +269,103 @@ def overlay_img(img:str, pred:str):
     plt.imshow(pred, cmap="gray", alpha=0.4)
     return plot
 
-def filter_pixels(img) -> np.ndarray:
+def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
     """
-    Changes all non-zero pixel islands in an image to zero if they are less than 8 pixels in size. Designed for greyscale images.
+    Assess image quality by evaluating sharpness and artifact level using the Sobel filter.
+
+    This function computes the gradient magnitude of a grayscale image using the Sobel operator.
+    It then uses the mean and standard deviation of the gradient magnitude to determine if the image
+    should be excluded due to blurriness or excessive artifacts, or if it is suitable for further use.
+    Thresholds can be adjusted for different datasets.
+
+    Parameters:
+        image_path (str): Path to the image file to be evaluated.
+        threshold_blur (float): Mean gradient threshold below which the image is considered blurry.
+        threshold_artifact (float): Standard deviation threshold below which the image is considered to have artifacts.
+        verbose (bool): If True, prints the mean and standard deviation of the gradient magnitude.
+        apply_filter (bool): If True, returns the mean and standard deviation instead of classification.
+
+    Returns:
+        str or tuple: If apply_filter is False, returns 'exclude' if the image is likely blurry or has artifacts,
+                      otherwise returns 'ok'. If apply_filter is True, returns (mean_grad, std_grad).
+
+    Raises:
+        ValueError: If the image cannot be read from the provided path.
+
+    Example:
+        result = sobel_filter('/path/to/image.png')
+        if result == 'ok':
+            print("Image is suitable for use.")
+    """
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError(f"Cannot read image: {image_path}")
+
+    # Compute Sobel gradients
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+    
+    #Get image of pixel-wise sobel-filtered magnitudes
+    grad_mag = np.sqrt(sobelx**2 + sobely**2)
+
+    #Get mean and std of gradient magnitude
+    mean_grad = grad_mag.mean()
+    std_grad = grad_mag.std()
+
+    if verbose:
+        print(f"Image: {image_path}, \nMean Gradient: {mean_grad} \nStd Gradient: {std_grad}")
+
+    if apply_filter:
+        return grad_mag
+    else:
+        # These thresholds should be tuned per dataset depending on scale and contrast of images
+        # Good EM images (for sem_adult and sem_dauer_2) have:
+        # 1. mean_grad > 35 
+        # 2. std_grad > 25
+        # 3. std_grad < 1.1 * mean_grad (content to noise ratio)
+        # 4. std_grad < 56 if mean_grad > 86
+        
+        if (mean_grad < threshold_blur) or (std_grad < threshold_artifact) or (std_grad > 1.1*mean_grad) or ((std_grad > 56) and (mean_grad < 86)):
+            return 'exclude'
+        else:
+            return 'ok'
+
+def check_filtered(folder:str, filter_func=sobel_filter):
+    """
+    Checks all images in a folder using a specified filter function and reports those that should be excluded.
+
+    Parameters:
+        folder (str): Path to the folder containing images to check.
+        filter_func (callable): A function that takes an image path and returns 'exclude' if the image should be excluded,
+                                or any other value if it should be kept. Default is sobel_filter.
+
+    Returns:
+        None. Prints the names of excluded images and a summary count.
+    """
+    count = 0
+
+    for img in os.listdir(folder):
+        if filter_func(os.path.join(folder, img)) == 'exclude':
+            print(f"Image {Path(img).name} is excluded.")
+            count += 1
+
+    print(f"Total excluded images: {count}/{len(os.listdir(folder))}")
+
+def filter_pixels(img: np.ndarray, size_threshold: int = 8) -> np.ndarray:
+    """
+    Removes small non-zero pixel islands from a grayscale image.
+
+    For each connected component (island) of non-zero pixels in the input image,
+    this function sets all pixels in that component to zero if the component contains
+    fewer than the number of pixels defined by size_threshold. Designed for use with grayscale images to filter out small
+    annotation errors or noise.
+
+    Parameters:
+        img (np.ndarray): Input grayscale image as a NumPy array.
+        size_threshold (int): Minimum size of pixel islands to keep (default: 8).
+
+    Returns:
+        np.ndarray: The filtered image with small pixel islands removed.
     """
     # Create a copy to avoid modifying the original during iteration
     filtered = img.copy()
@@ -288,17 +382,75 @@ def filter_pixels(img) -> np.ndarray:
                     continue
                 # Count pixels in this component
                 count = np.sum(labeled == component_label)
-                if count < 8:
+                if count < size_threshold:
                     filtered[y, x] = 0
     return filtered
 
-def is_blurry(image_path, threshold=250):
+def view_label(file:str):
     """
-    Check if an image is blurry using the Laplacian variance method. Can tune threshold to adjust sensitivity. 
-    Current threshold of 400 is a good default for SEM images.
+    Displays a grayscale label, converting all non-zero pixels to 255 (white).
+
+    Parameters:
+        file (str): Path to the image file to display.
+
+    Returns:
+        None. Shows the processed image using matplotlib.
     """
-    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if image is None:
-        raise ValueError(f"Cannot read image: {image_path}")
-    laplacian_var = cv2.Laplacian(image, cv2.CV_64F).var()
-    return laplacian_var < threshold
+    img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+    img[img != 0] = 255
+    plt.figure()
+    plt.imshow(img, cmap='gray')
+    plt.show()
+
+def plot_3D(file:str, title:str='Title', xlab:str='X', ylab:str='Y', zlab:str='Z', elev:int=20, azim:int=90, figx:int=10, figy:int=7, dpi:int=None):
+    """
+    Plots a grayscale image as a 3D surface, where the Z axis represents pixel intensity.
+
+    Parameters:
+        file (str): Path to the image file to plot.
+        title (str): Title of the plot (default: 'Title').
+        xlab (str): Label for the X axis (default: 'X').
+        ylab (str): Label for the Y axis (default: 'Y').
+        zlab (str): Label for the Z axis (default: 'Z').
+        elev (int): Elevation angle in the z plane for the 3D plot view (default: 20).
+        azim (int): Azimuth angle in the x,y plane for the 3D plot view (default: 90).
+        figx (int): Width of the figure in inches (default: 10).
+        figy (int): Height of the figure in inches (default: 7).
+        dpi (int, optional): Dots per inch for the figure. If None, uses default.
+
+    Returns:
+        None. Displays the 3D surface plot of the image.
+    """
+    #Load image as grayscale
+    img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+    
+    #Get image dimensions
+    x_size = img.shape[1]
+    y_size = img.shape[0]
+    
+    #Create X, Y coordinate arrays
+    X, Y = np.meshgrid(np.arange(x_size), np.arange(y_size))
+    
+    fig = plt.figure(figsize=(figx, figy), dpi=dpi)
+    ax = plt.axes(projection='3d')
+    
+    #Plot surface
+    surface = ax.plot_surface(X, Y, img, cmap='magma', alpha=0.5)
+    ax.set_title(title, y=0.90)
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    ax.set_zlabel(zlab)
+    ax.set_xlim(0, x_size)
+    ax.set_ylim(0, y_size)
+    ax.set_zlim(0, 255)
+    ax.invert_xaxis()
+    ax.grid(True)
+    ax.set_box_aspect(None, zoom=0.85)
+    ax.view_init(elev=elev, azim=azim)
+    #ax.contour3D(X, Y, img, 50, cmap='magma', alpha=1)
+    #colorbar modifiers
+    #surface.set_clim(0, 255)  # Set color limits for the surface
+    #cbar_ax = fig.add_axes([0.8, 0.35, 0.02, 0.3])  
+    #fig.colorbar(surface, cax=cbar_ax)
+    plt.tight_layout()
+    plt.show()
