@@ -16,6 +16,68 @@ from pathlib import Path
 import cv2
 from PIL import Image
 
+#DEPENDENCY FUNCTIONS
+def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
+    """
+    Assess image quality by evaluating sharpness and artifact level using the Sobel filter.
+
+    This function computes the gradient magnitude of a grayscale image using the Sobel operator.
+    It then uses the mean and standard deviation of the gradient magnitude to determine if the image
+    should be excluded due to blurriness or excessive artifacts, or if it is suitable for further use.
+    Thresholds can be adjusted for different datasets.
+
+    Parameters:
+        image_path (str): Path to the image file to be evaluated.
+        threshold_blur (float): Mean gradient threshold below which the image is considered blurry.
+        threshold_artifact (float): Standard deviation threshold below which the image is considered to have artifacts.
+        verbose (bool): If True, prints the mean and standard deviation of the gradient magnitude.
+        apply_filter (bool): If True, returns the mean and standard deviation instead of classification.
+
+    Returns:
+        str or tuple: If apply_filter is False, returns 'exclude' if the image is likely blurry or has artifacts,
+                      otherwise returns 'ok'. If apply_filter is True, returns (mean_grad, std_grad).
+
+    Raises:
+        ValueError: If the image cannot be read from the provided path.
+
+    Example:
+        result = sobel_filter('/path/to/image.png')
+        if result == 'ok':
+            print("Image is suitable for use.")
+    """
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError(f"Cannot read image: {image_path}")
+
+    # Compute Sobel gradients
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+    
+    #Get image of pixel-wise sobel-filtered magnitudes
+    grad_mag = np.sqrt(sobelx**2 + sobely**2)
+
+    #Get mean and std of gradient magnitude
+    mean_grad = grad_mag.mean()
+    std_grad = grad_mag.std()
+
+    if verbose:
+        print(f"Image: {image_path}, \nMean Gradient: {mean_grad} \nStd Gradient: {std_grad}")
+
+    if apply_filter:
+        return grad_mag
+    else:
+        # These thresholds should be tuned per dataset depending on scale and contrast of images
+        # Good EM images (for sem_adult and sem_dauer_2) have:
+        # 1. mean_grad > 35 
+        # 2. std_grad > 25
+        # 3. std_grad < 1.1 * mean_grad (content to noise ratio)
+        # 4. std_grad < 56 if mean_grad > 86
+        
+        if (mean_grad < threshold_blur) or (std_grad < threshold_artifact) or (std_grad > 1.1*mean_grad) or ((std_grad > 56) and (mean_grad < 86)):
+            return 'exclude'
+        else:
+            return 'ok'
+
 #FUNCTIONS
 def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ:str, seg_templ:str, s_range:range, x_range:range, y_range:range, missing_dir:str=None):
     """
@@ -118,6 +180,27 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                 cv2.imwrite(os.path.join(save_dir, seg_templ + out_suffix + "_label.png"), assembled_gt)
             
             print(f"Saved assembled section {s} with shape {assembled_img.shape}")
+
+def check_directory(path: str) -> None:
+    """
+    Ensures a directory exists and is empty.
+
+    If the specified directory exists, all files within it are deleted.
+    If the directory does not exist, it is created.
+
+    Parameters:
+        path (str): The path to the directory to check or create.
+
+    Returns:
+        None
+
+    Example:
+        check_directory("/path/to/output_folder")
+    """
+    if os.path.exists(path):
+        subprocess.run(f"rm -f {path}/*", shell=True)
+    else:
+        os.makedirs(path)
 
 def check_filtered(folder:str, filter_func=sobel_filter):
     """
@@ -332,67 +415,6 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     new_img.paste(img, (paste_x, paste_y))
     
     return new_img
-    
-def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
-    """
-    Assess image quality by evaluating sharpness and artifact level using the Sobel filter.
-
-    This function computes the gradient magnitude of a grayscale image using the Sobel operator.
-    It then uses the mean and standard deviation of the gradient magnitude to determine if the image
-    should be excluded due to blurriness or excessive artifacts, or if it is suitable for further use.
-    Thresholds can be adjusted for different datasets.
-
-    Parameters:
-        image_path (str): Path to the image file to be evaluated.
-        threshold_blur (float): Mean gradient threshold below which the image is considered blurry.
-        threshold_artifact (float): Standard deviation threshold below which the image is considered to have artifacts.
-        verbose (bool): If True, prints the mean and standard deviation of the gradient magnitude.
-        apply_filter (bool): If True, returns the mean and standard deviation instead of classification.
-
-    Returns:
-        str or tuple: If apply_filter is False, returns 'exclude' if the image is likely blurry or has artifacts,
-                      otherwise returns 'ok'. If apply_filter is True, returns (mean_grad, std_grad).
-
-    Raises:
-        ValueError: If the image cannot be read from the provided path.
-
-    Example:
-        result = sobel_filter('/path/to/image.png')
-        if result == 'ok':
-            print("Image is suitable for use.")
-    """
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        raise ValueError(f"Cannot read image: {image_path}")
-
-    # Compute Sobel gradients
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-    
-    #Get image of pixel-wise sobel-filtered magnitudes
-    grad_mag = np.sqrt(sobelx**2 + sobely**2)
-
-    #Get mean and std of gradient magnitude
-    mean_grad = grad_mag.mean()
-    std_grad = grad_mag.std()
-
-    if verbose:
-        print(f"Image: {image_path}, \nMean Gradient: {mean_grad} \nStd Gradient: {std_grad}")
-
-    if apply_filter:
-        return grad_mag
-    else:
-        # These thresholds should be tuned per dataset depending on scale and contrast of images
-        # Good EM images (for sem_adult and sem_dauer_2) have:
-        # 1. mean_grad > 35 
-        # 2. std_grad > 25
-        # 3. std_grad < 1.1 * mean_grad (content to noise ratio)
-        # 4. std_grad < 56 if mean_grad > 86
-        
-        if (mean_grad < threshold_blur) or (std_grad < threshold_artifact) or (std_grad > 1.1*mean_grad) or ((std_grad > 56) and (mean_grad < 86)):
-            return 'exclude'
-        else:
-            return 'ok'
     
 def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
     """ 
