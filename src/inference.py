@@ -5,6 +5,7 @@ June 2, 2025
 """
 
 #LIBRARIES
+from src.utils import *
 from pathlib import Path
 import re
 import matplotlib.pyplot as plt
@@ -48,15 +49,6 @@ def filter_pixels(img) -> np.ndarray:
                 if count < 8:
                     filtered[y, x] = 0
     return filtered
-
-def check_directory(path: str) -> None:
-    """
-    Clear a directory if it exists, and create it if it doesn't.
-    """
-    if os.path.exists(path):
-        subprocess.run(f"rm -f {path}/*", shell=True)
-    else:
-        os.makedirs(path)
         
 #NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
 #NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER

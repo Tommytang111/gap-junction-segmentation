@@ -181,27 +181,6 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
             
             print(f"Saved assembled section {s} with shape {assembled_img.shape}")
 
-def check_directory(path: str) -> None:
-    """
-    Ensures a directory exists and is empty.
-
-    If the specified directory exists, all files within it are deleted.
-    If the directory does not exist, it is created.
-
-    Parameters:
-        path (str): The path to the directory to check or create.
-
-    Returns:
-        None
-
-    Example:
-        check_directory("/path/to/output_folder")
-    """
-    if os.path.exists(path):
-        subprocess.run(f"rm -f {path}/*", shell=True)
-    else:
-        os.makedirs(path)
-
 def check_filtered(folder:str, filter_func=sobel_filter):
     """
     Checks all images in a folder using a specified filter function and reports those that should be excluded.
@@ -245,6 +224,27 @@ def check_img_size(folder:str, target_size=(512, 512)):
             count += 1
             
     print(f'Total images not matching size {target_size}: {count}/{len(os.listdir(folder))}')
+
+def check_output_directory(path: str) -> None:
+    """
+    Ensures an output directory exists and is empty.
+
+    If the specified directory exists, all files within it are deleted.
+    If the directory does not exist, it is created.
+
+    Parameters:
+        path (str): The path to the directory to check or create.
+
+    Returns:
+        None
+
+    Example:
+        check_directory("/path/to/output_folder")
+    """
+    if os.path.exists(path):
+        subprocess.run(f"rm -f {path}/*", shell=True)
+    else:
+        os.makedirs(path)
 
 def filter_pixels(img: np.ndarray, size_threshold: int = 8) -> np.ndarray:
     """
