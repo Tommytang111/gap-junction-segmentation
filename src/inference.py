@@ -21,13 +21,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.transforms.functional import to_tensor
 import torchmetrics
-from torchmetrics.classification import (
-    BinaryAccuracy,
-    BinaryPrecision,
-    BinaryRecall,
-    BinaryF1Score,
-    BinaryJaccardIndex
-)
 
 #Custom libraries
 from models import UNet, TestDataset
@@ -36,7 +29,6 @@ from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_o
 #FUNCTIONS
 #NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
 #NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER
-#NEED FUNCTION FOR RESIZING IMAGES
 
 def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5):
     """
@@ -98,7 +90,35 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
 
 def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5)) -> plt.Figure:
     """
-    Visualizes the segmentation model predictions through a variety of custom plots.
+    Visualizes segmentation model predictions through custom plots comparing original images, predictions, and ground truth.
+
+    This function creates visual comparisons between original images, model predictions, and ground truth segmentation masks.
+    It supports two plotting styles: a 4-panel view with individual components and overlay, or a 3-panel view with 
+    colored overlays. Images are automatically resized to 512x512 if needed, and overlays use distinct colors 
+    (blue for predictions, orange for ground truth) for easy comparison.
+
+    Parameters:
+        data_dir (str): Path to the directory containing 'imgs' and 'gts' subdirectories with original images and ground truth masks.
+        pred_dir (str): Path to the directory containing predicted segmentation masks (with '_pred.png' suffix).
+        base_name (str, optional): Specific image filename to visualize. Required if random=False. Default is None.
+        style (int, optional): Plotting style. 1 for 4-panel view (grayscale + overlay), 2 for 3-panel view (colored overlays). Default is 1.
+        random (bool, optional): If True, randomly selects an image from the dataset. If False, uses base_name. Default is True.
+        figsize (tuple, optional): Figure size as (width, height) in inches. Default is (15, 5).
+
+    Returns:
+        plt.Figure: The matplotlib figure object containing the visualization.
+
+    Raises:
+        ValueError: If data_dir does not contain required 'imgs' and 'gts' subdirectories.
+        AssertionError: If random=False but base_name is None.
+
+    Examples:
+        # Visualize a random image with 4-panel layout
+        fig = visualize("/path/to/data", "/path/to/predictions")
+        
+        # Visualize a specific image with 3-panel colored overlay layout
+        fig = visualize("/path/to/data", "/path/to/predictions", 
+                       base_name="image_001.png", style=2, random=False)
     """
     #Check if input directory has the required subdirectories
     data = os.listdir(data_dir)
@@ -152,10 +172,10 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
 
     #Make overlays
     pred2 = cv2.cvtColor(pred, cv2.COLOR_GRAY2BGR)
-    pred2[pred == 255] = [255, 0, 0] #Blue
+    pred2[pred == 255] = [0, 60, 255] #Blue
     pred_overlay = cv2.addWeighted(resized_img, 1, pred2, 1, 0)
     gts2 = cv2.cvtColor(gts, cv2.COLOR_GRAY2BGR)
-    gts2[gts == 255] = [0, 60, 255] #Orange
+    gts2[gts == 255] = [255, 0, 0] #Orange
     gts_overlay = cv2.addWeighted(resized_img, 1, gts2, 1, 0)
     #Double overlay
     double_overlay = cv2.addWeighted(pred_overlay, 1, gts2, 1, 0)
@@ -165,28 +185,72 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
     print(f"Showing: {name}")
 
     return plt.gcf()
+
+def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Post-Inference Evaluation on Data Y") -> plt.Figure:
+    """
+    Evaluates segmentation model performance by comparing predictions against ground truth masks.
+
+    This function computes standard segmentation metrics (accuracy, precision, recall, F1-score, IoU) 
+    for all images in a dataset by comparing predicted masks with ground truth labels. It processes 
+    each image individually to calculate per-image metrics, then averages them across the entire dataset.
+    The results are displayed in a bar chart for easy visualization of model performance.
+
+    Parameters:
+        data_dir (str): Path to the directory containing 'imgs' and 'gts' subdirectories with original 
+                       images and ground truth masks.
+        pred_dir (str): Path to the directory containing predicted segmentation masks (with '_pred.png' suffix).
+        figsize (tuple, optional): Figure size as (width, height) in inches for the results bar chart. 
+                                 Default is (10, 6).
+        title (str, optional): Title for the evaluation results bar chart. 
+                              Default is "Model X Post-Inference Evaluation on Data Y".
+
+    Returns:
+        plt.Figure: The matplotlib figure object containing the evaluation results bar chart.
+
+    Raises:
+        ValueError: If data_dir does not contain required 'imgs' and 'gts' subdirectories.
+
+    Notes:
+        - Images are automatically resized to match dimensions if needed.
+        - Ground truth labels are filtered to remove small pixel islands (<8 pixels).
+        - Predictions are binarized using threshold of 127, ground truth using threshold of 128.
+        - Metrics are calculated per-image and then averaged across all images.
+        - Results are printed to console and displayed as a bar chart.
+
+    Examples:
+        # Evaluate model performance with default settings
+        fig = evaluate("/path/to/data", "/path/to/predictions")
+        
+        # Evaluate with custom title and figure size
+        fig = evaluate("/path/to/data", "/path/to/predictions", 
+                      figsize=(12, 8), 
+                      title="UNet Performance on Test Dataset")
+    """
+    #Check if input directory has the required subdirectories
+    data = os.listdir(data_dir)
+    if not ("imgs" in data and "gts" in data):
+        raise ValueError("Input directory must contain 'imgs' and 'gts' subdirectories.")
     
-def evaluate():
-    """
-    Evaluates model performance on an example dataset.
-    """
+    #Data and Labels (sorted because naming convention is typically dataset, section, coordinates. Example: SEM_Dauer_2_image_export_s000 -> 001)
+    imgs = [i for i in sorted(os.listdir(Path(data_dir) / "imgs"))] 
+    
     #Create results dictionary
-    results = {'accuracy': [],
-            'precision': [],
-            'recall': [],
-            'f1': [],
-            'iou': [],
-            'dice': []
+    results = {
+        'f1': [],
+        'recall': [],
+        'precision': [],
+        'iou': [],
+        'accuracy': []
     }
     
     #We have a list of all the input image file names in imgs
     for img in tqdm(imgs):
         #Load Predictions
-        gj_pred = Path(output_dir) / re.sub(r'.png$', r'_pred.png', img)
+        gj_pred = Path(pred_dir) / re.sub(r'.png$', r'_pred.png', img)
         gj_pred = cv2.imread(gj_pred, cv2.IMREAD_GRAYSCALE)
 
         #Load labels
-        gj_label = Path(dataset_dir) / 'gts' / re.sub(r'.png$', r'_label.png', img)
+        gj_label = Path(data_dir) / 'gts' / re.sub(r'.png$', r'_label.png', img)
         gj_label = cv2.imread(gj_label, cv2.IMREAD_GRAYSCALE)
         gj_label[gj_label != 0] = 255  # Convert 1s to 255 if they aren't already 255
         gj_label = filter_pixels(gj_label)  # Filter out potential errors
@@ -197,7 +261,7 @@ def evaluate():
             
         #Binarize masks (0 or 1)
         gj_pred_binary = (gj_pred > 127).astype(np.uint8)
-        gj_label_binary = (gj_label > 128).astype(np.uint8)
+        gj_label_binary = (gj_label > 127).astype(np.uint8)
         
         #Flatten masks for metric calculations
         gj_pred_flat = gj_pred_binary.flatten()
@@ -211,15 +275,14 @@ def evaluate():
         recall = tp / (tp + fn + 1e-8)
         f1 = (2 * precision * recall) / (precision + recall + 1e-8)
         iou = tp / (tp + fp + fn + 1e-8)
-        dice = (2 * iou) / (1 + iou)
-        
+        #dice = (2 * iou) / (1 + iou)
+
         #Append to results
-        results['accuracy'].append(accuracy)
-        results['precision'].append(precision)
-        results['recall'].append(recall)
         results['f1'].append(f1)
+        results['recall'].append(recall)
+        results['precision'].append(precision)
         results['iou'].append(iou)
-        results['dice'].append(dice)
+        results['accuracy'].append(accuracy)
 
     #Calculate averages
     for key in results:
@@ -228,8 +291,8 @@ def evaluate():
     print(results)
     
     #Plot bar chart of evaluation results
-    plt.figure(figsize=(10,6))
-    plt.title('modelv7 Post-Inference Evaluation on sem_adult sections 200-209')
+    plt.figure(figsize=figsize)
+    plt.title(f"{title}")
     plt.bar(results.keys(), results.values())
     plt.ylim(0,1)
     plt.xlabel('Segmentation Performance Metrics')
@@ -238,25 +301,36 @@ def evaluate():
     for i, v in enumerate(results.values()):
         plt.text(i, v + 0.01, f"{v:.4f}", ha='center')
     plt.tight_layout()
-    plt.show()
+    
+    return plt.gcf()
     
 def main():
+    #Data and Model
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult_s1mdf621.pt"
+    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered"
+    
     #Process images if necessary
     
     #Run inference
-    # inference(model_path="/home/tommytang111/gap-junction-segmentation/models/unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult_s1mdf621.pt",
-    #           input_dir="/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered",
-    #           output_dir="/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered"
-    #           )
+    inference(model_path=model_path,
+              input_dir=data_dir,
+              output_dir=pred_dir
+              )
     
     #Visualize results
-    fig = visualize(data_dir="/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered",
-                    pred_dir="/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered",
-                    style=1, random=False, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
-    plt.show()
+    for i in range(5):
+        fig = visualize(data_dir=data_dir,
+                        pred_dir=pred_dir,
+                        style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
+        plt.show()
 
     #Evaluate model performance
-    #evaluate()
+    performance_plot = evaluate(data_dir=data_dir,
+                                pred_dir=pred_dir,
+                                title="Model Unet_s1mdf621 Performance on sem_dauer_2_s000-050_filtered",
+                                )
+    plt.show()
 
 if __name__ == "__main__":
     main()
