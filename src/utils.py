@@ -15,6 +15,7 @@ import subprocess
 from pathlib import Path
 import cv2
 from PIL import Image
+import re
 
 #DEPENDENCY FUNCTIONS
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
@@ -225,15 +226,16 @@ def check_img_size(folder:str, target_size=(512, 512)):
             
     print(f'Total images not matching size {target_size}: {count}/{len(os.listdir(folder))}')
 
-def check_output_directory(path: str) -> None:
+def check_output_directory(path:str, clear:bool=True) -> None:
     """
     Ensures an output directory exists and is empty.
 
-    If the specified directory exists, all files within it are deleted.
+    If the specified directory exists, a message will print and all files within it are deleted (optional).
     If the directory does not exist, it is created.
 
     Parameters:
         path (str): The path to the directory to check or create.
+        clear (bool): If True, clears the directory if it exists. If False, does not clear existing files.
 
     Returns:
         None
@@ -242,11 +244,234 @@ def check_output_directory(path: str) -> None:
         check_directory("/path/to/output_folder")
     """
     if os.path.exists(path):
-        subprocess.run(f"rm -f {path}/*", shell=True)
+        print(f"Output directory already exists: {path}")
+        if clear:
+            print(f"Clearing output directory: {path}")
+            subprocess.run(f"rm -f {path}/*", shell=True)
     else:
         os.makedirs(path)
+        
+def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, create_overlap=False, seg_ignore=(2, 15), test=False):
+    """
+    Function to create a 2d dataset from a dataset of full EM images
+    @param imgs_dir: the directory of the full EM images
+    @param output_dir: the directory to output the 2d dataset
+    @param seg_dir: the directory of the segmentations
+    @param img_size: the size of the images
+    @param image_to_seg_name_map: the mapping from image to segmentation name
+    @param add_dir: the additional directories to include in the dataset
+    @param add_dir_maps: the mapping from image to additional data directory
+    @param create_overlap: whether to create overlapping tiles - an offset of img_size//2 is used -- helps with predictions since every GJ is given a centered context
+    @param seg_ignore: the values to ignore in the segmentation
+    @param test: whether to run in test mode - just an images dataset
+    @return: None (creates and saves your dataset to specified directory)
+    """
+    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), "Missing additional directory name mapping for additional data directories, or vice versa"
+    if not test and image_to_seg_name_map is None:
+        print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
+        image_to_seg_name_map = lambda x: x.replace('img', 'seg')
 
-def filter_pixels(img: np.ndarray, size_threshold: int = 8) -> np.ndarray:
+    if os.path.isdir(output_dir):
+        print("WARNING: Output directory already exists, deleting it")
+        os.system(f"rm -rf {output_dir}")
+        #Optional user confirmation block
+        #response = input("Do you want to continue? (y/n): ")
+        # if response.lower() == 'y':
+        #     os.system(f"rm -rf {output_dir}")
+        # else:
+        #     sys.exit(0)
+
+    os.makedirs(output_dir)
+    #make subdirs
+    os.makedirs(os.path.join(output_dir, "imgs"))
+    if not test:
+        os.makedirs(os.path.join(output_dir, "gts"))
+        if add_dir:
+            for i in (add_dir):
+                os.makedirs(os.path.join(output_dir, os.path.split(i)[-1]))
+
+    imgs = sorted(os.listdir(imgs_dir))
+
+    def split_subroutine(img, gt, offset=0):
+
+            img_imgs, img_names = split_img(img, offset=offset, tile_size=img_size, names=True)
+            if not test: 
+                gt_imgs = split_img(gt, offset=offset, tile_size=img_size)
+                add_data = [] if add_dir else None
+                if add_dir:
+                    for j in range(len(add_dir)):
+                        dat = cv2.imread(os.path.join(add_dir[j], add_dir_maps[add_dir[j]](imgs[i])))
+                        dat = split_img(dat, offset=offset, tile_size=img_size)
+                        add_data.append(dat)
+
+            for j in range(len(img_imgs)):
+                cv2.imwrite(os.path.join(output_dir, f"imgs/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), img_imgs[j])
+                if not test:
+                    cv2.imwrite(os.path.join(output_dir, f"gts/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), gt_imgs[j])
+                    if add_dir:
+                        for k in range(len(add_data)):
+                            assert cv2.imwrite(os.path.join(output_dir, f"{os.path.split(add_dir[k])[-1]}/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), add_data[k][j])
+
+    for i in tqdm(range(len(imgs))):
+        if "DS" in imgs[i]: continue
+        img = cv2.imread(os.path.join(imgs_dir, imgs[i]), -1)
+        if not test: 
+            gt = cv2.imread(os.path.join(seg_dir, image_to_seg_name_map(imgs[i])), -1)
+
+            #make changes in the gt
+            for ig in seg_ignore:
+                gt[gt == ig] = 0
+
+            gt[gt!=0] = 255
+        else: gt = None
+
+        split_subroutine(img, gt)
+        
+        # make the test overlapping mode 
+        if create_overlap:
+            split_subroutine(img, gt, offset=img_size//2)
+            
+#Example Usage
+#gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
+#create_dataset_2d_from_full(args.imgs_dir, args.output_dir, seg_dir=args.seg_dir, img_size=args.img_size, image_to_seg_name_map= f, add_dir=args.add_dir, add_dir_maps=gs, seg_ignore=args.seg_ignore, create_overlap=args.create_overlap, test=args.test)
+            
+def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, depth_pattern=r's\d\d\d', test=False):
+    """
+    Function to create a 3d dataset from a 2d, aka flat, dataset
+    @param flat_dataset_dir: the directory of the flat dataset
+    @param output_dir: the directory to output the 3d dataset
+    @param window: the context window to use for the 3d dataset, only one dimension can be set to 1
+    @param image_to_seg_name_map: the mapping from image to segmentation name
+    @param add_dir: the additional directories to include in the dataset
+    @param add_dir_maps: the mapping from image to additional data directory
+    @param depth_pattern: the pattern to match the depth
+    @param test: whether to run in test mode - just an images dataset
+    @return: None (creates and saves your dataset to specified directory)
+    """
+    assert window.count(1) == 1, "Only one dimension can be set to 1"
+
+    imgs = os.listdir(os.path.join(flat_dataset_dir, "imgs"))
+
+    flat_imgs, flat_segs, flat_adds = [], [], []
+    seq_imgs, seq_segs, seq_adds = [], [], []
+
+    min_depth = min([int(re.findall(depth_pattern, img)[0][1:]) for img in imgs])
+    max_depth = max([int(re.findall(depth_pattern, img)[0][1:]) for img in imgs])
+
+    central_pos = window.index(1)
+
+    def helper_for_another(img, name_map):
+        temp_seq = []
+        for i in range(len(window)):
+            if i < central_pos:
+                temp_seq.append(get_another(name_map(img), i-central_pos))
+            elif i == central_pos:
+                temp_seq.append(name_map(img))
+            else:
+                temp_seq.append(get_another(name_map(img), i-central_pos))
+        return temp_seq
+
+    for img in tqdm(imgs):
+        depth = int(re.findall(depth_pattern, img)[0][1:])
+        if depth < min_depth + central_pos or depth > max_depth - len(window) + central_pos+1: continue
+                
+        # flat_masks += [get_mask(img)]
+        if not test: flat_segs += [image_to_seg_name_map(img)]
+
+        img = (os.path.join(flat_dataset_dir, "imgs", img))
+        flat_imgs += [img]
+
+        if not test: seq_segs.append(helper_for_another(img, image_to_seg_name_map))
+        seq_imgs.append(helper_for_another(img, lambda x: x))
+        
+        if not test:
+            for i in add_dir_maps:
+                flat_adds.append(add_dir_maps[i](img))
+                seq_adds.append(helper_for_another(img, add_dir_maps[i]))
+
+    for i in tqdm(range(len(seq_imgs))):
+        os.makedirs(os.path.join(output_dir, "imgs", os.path.split(seq_imgs[i][1])[-1][:-4]))
+        if not test:
+            os.makedirs(os.path.join(output_dir, "gts", os.path.split(seq_imgs[i][1])[-1][:-4]))
+            for j in add_dir_maps:
+                os.makedirs(os.path.join(output_dir, os.path.split(j)[-1], os.path.split(seq_imgs[i][1])[-1][:-4]))
+
+        for j in range(4):
+            shutil.copy(os.path.join(flat_dataset_dir, "imgs", seq_imgs[i][j]), os.path.join(output_dir, "imgs", os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_imgs[i][j])[-1]))
+            if not test:
+                shutil.copy(os.path.join(flat_dataset_dir, "gts", seq_segs[i][j]), os.path.join(output_dir, "gts", os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_segs[i][j])[-1]))
+                for k in add_dir:
+                    shutil.copy(os.path.join(flat_dataset_dir, os.path.split(k)[-1], seq_adds[i][j]), os.path.join(output_dir, os.path.split(k)[-1], os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_adds[i][j])[-1]))
+
+#Example Usage
+#gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
+#output_dir = args.output_dir if not args.make_twoD else args.output_dir+"_3d"
+#create_dataset_3d(args.flat_dataset_dir, output_dir, depth_pattern=r's\d\d\d', window=args.window, test=args.test, image_to_seg_name_map=f, add_dir_maps=gs, add_dir=args.add_dir)
+
+def filter_by_overlay(image_folder, mask_folder, output_folder):
+    """
+    Displays each image with its segmentation mask and overlay and allows the user to manually filter images.
+
+    For every image in the specified folder, this function overlays the corresponding mask (colored blue)
+    on the image and displays the result. The user is prompted to accept or reject each image.
+    Accepted images and their masks are copied to the output folder in separate directories.
+
+    Parameters:
+        image_folder (str): Path to the folder containing images.
+        mask_folder (str): Path to the folder containing segmentation masks.
+        output_folder (str): Path to the folder where accepted images and masks will be saved.
+
+    Returns:
+        None
+    """
+    #Get images
+    imgs = os.listdir(image_folder)
+    
+    #Check if output folder exists, if not create it
+    check_output_directory(output_folder, clear=False)
+    check_output_directory(Path(output_folder) / "img", clear=False)
+    check_output_directory(Path(output_folder) / "gts", clear=False)
+    
+    for img in imgs:
+        img_mask = re.sub(r'.png$', r'_label.png', str(img))
+        img_path = os.path.join(image_folder, img)
+        mask_path = os.path.join(mask_folder, img_mask)
+        
+        image = cv2.imread(img_path, cv2.IMREAD_COLOR_RGB)
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        
+        # Convert mask from (0 and 1) to (0 and 255)
+        mask[mask > 0] = 255
+        
+        # Create an overlay of the mask_copy on top of base image in blue
+        mask_rgb = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+        mask_rgb[mask_rgb[:, :, 0] == 255] = [0, 0, 255]
+        overlay = cv2.addWeighted(image, 1, mask_rgb, 0.5, 0)
+        
+        # Display the original image, mask, and overlay
+        plt.figure(figsize=(15,5))
+        plt.subplot(131)
+        plt.imshow(image, cmap='gray')
+        plt.title('Original Image')
+        plt.subplot(132)
+        plt.imshow(mask, cmap='gray')
+        plt.title('Truth')
+        plt.subplot(133)
+        plt.imshow(overlay, cmap='gray' )
+        plt.title('Overlay')
+        plt.show()
+        
+        user_input = input(f"Do you want to accept image {Path(img).name}? (Y/N): ")
+        
+        # Save the image and mask if user accepts
+        if user_input.lower() == 'y' or user_input.lower() == 'yes':
+            output_img_path = os.path.join(output_folder, "img", img)
+            output_mask_path = os.path.join(output_folder, "gts", img_mask)
+            subprocess.run(f"cp {img_path} {output_img_path}", shell=True)
+            subprocess.run(f"cp {mask_path} {output_mask_path}", shell=True)
+            print(f"Transferred image and mask for {img} to {output_folder}")
+
+def filter_pixels(img:np.ndarray, size_threshold:int=8) -> np.ndarray:
     """
     Removes small non-zero pixel islands from a grayscale image.
 

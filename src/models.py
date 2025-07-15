@@ -22,23 +22,19 @@ class TestDataset(torch.utils.data.Dataset):
             self, 
             dataset_dir,
             image_dim = (512, 512),
-            td=False,
-            membrane=False
+            three_dim=False,
     ):      
         self.image_paths = [str(Path(dataset_dir) / "imgs" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "imgs"))) if "DS" not in image_id]
         self.mask_paths = [str(Path(dataset_dir) / "gts" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "gts"))) if "DS" not in image_id]
-        if membrane:
-            self.membrane_paths = [str(Path(membrane) / image_id) for image_id in sorted(os.listdir(dataset_dir)) if "DS" not in image_id]
-        else: self.membrane_paths = None
-        self.td = td
-        
+        self.three_dim = three_dim
+
     def __len__(self):
         # return length of 
         return len(self.image_paths)
 
     def __getitem__(self, i):
         # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
-        if not self.td:
+        if not self.three_dim:
             try:
                 image0 = cv2.imread(self.image_paths[i])
                 #Padding and Cropping
@@ -46,51 +42,33 @@ class TestDataset(torch.utils.data.Dataset):
                     image0 = resize_image(image0, 512, 512, (0,0,0), channels=True)
                 image = cv2.cvtColor(np.array(image0), cv2.COLOR_BGR2GRAY) 
                 mask = np.zeros_like(image) #cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
-                if self.membrane_paths: memb = cv2.imread(self.membrane_paths[i].replace("sem_dauer_2_em_", "20240325_SEM_dauer_2_nr_vnc_neurons_head_muscles.vsseg_export_"), -1) == 0
             except Exception as e:
                 print(self.image_paths[i])
                 raise Exception(self.image_paths[i])
+    
         else:
             images = sorted(os.listdir(self.image_paths[i]))
-            img, mem = [], []
+            img = []
             for j in range(4):
                 im = cv2.cvtColor(cv2.imread(os.path.join(self.image_paths[i], images[j])), cv2.COLOR_BGR2GRAY)
-                if self.membrane_paths: 
-                    memb = cv2.cvtColor(cv2.imread(os.path.join(self.membrane_paths[i], images[j])), cv2.COLOR_BGR2GRAY)
-                    mem.append(memb)
                 img.append(im)
             
             image = np.stack(img, axis=0)
-            memb = np.stack(mem, axis=0)
-            
-        """ REVISIT FOR MASK AND MEMBRANE WHEN NEEDED
-        if image.shape[-1] != 512: 
-            image = torch.zeros(image.shape[:-1]+(512,))
-            mask = torch.zeros(image.shape[:-1]+(512,))
-            if self.membrane_paths: memb = torch.zeros(memb.shape[:-1]+(512,))
-        if image.shape[-2] != 512: 
-            image = torch.zeros(image.shape[:-2]+(512,512))
-            mask = torch.zeros(image.shape[:-1]+(512,))
-            if self.membrane_paths: memb = torch.zeros(memb.shape[:-2]+(512,512))
-        """
 
         #Transform to tensor
         _transform = []
-        _transform.append(transforms.ToTensor()) 
-        if self.membrane_paths: memb = transforms.Compose(_transform)(memb)
+        _transform.append(transforms.ToTensor()) #Normalize to [0, 1]
         _transform_img = _transform.copy()
         # _transform_img.append(transforms.Normalize(mean=[0.5], std=[0.5]))
         image = transforms.Compose(_transform_img)(image)
         mask = transforms.Compose(_transform_img)(mask)
-        if self.td: 
+        if self.three_dim: 
             image = torch.permute(image, (1, 2, 0)) 
-            if self.membrane_paths: memb = torch.permute(memb, (1, 2, 0)) 
         else: 
             image = image.squeeze(0) 
-            if self.membrane_paths: memb = memb.squeeze(0)
             mask = mask.squeeze(0)
         #Add batch dimension to image, mask
-        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) if not self.membrane_paths else memb.unsqueeze(0).float(), image.unsqueeze(0)
+        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
         
 #Models
 class DoubleConv(nn.Module):

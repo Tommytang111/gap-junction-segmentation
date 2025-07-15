@@ -1,18 +1,25 @@
 """
-Inference and other tools for Gap Junction Segmentation API.
+Inference for Gap Junction Segmentation API.
 Tommy Tang
 June 2, 2025
 """
 
 #LIBRARIES
-from src.utils import *
 from pathlib import Path
+import os
 import re
-import matplotlib.pyplot as plt
-import random
 import numpy as np
+import matplotlib.pyplot as plt
+import random as rd
+import cv2
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, jaccard_score, confusion_matrix
 import subprocess
+from scipy.ndimage import label
+from tqdm import tqdm
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision.transforms.functional import to_tensor
 import torchmetrics
 from torchmetrics.classification import (
     BinaryAccuracy,
@@ -21,111 +28,145 @@ from torchmetrics.classification import (
     BinaryF1Score,
     BinaryJaccardIndex
 )
-from torchvision.transforms.functional import to_tensor
-from scipy.ndimage import label
+
 #Custom libraries
-from unet import *
+from models import UNet, TestDataset
+from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d
 
 #FUNCTIONS
-def filter_pixels(img) -> np.ndarray:
-    """
-    Changes all non-zero pixel islands in an image to zero if they are less than 8 pixels in size. Designed for greyscale images.
-    """
-    # Create a copy to avoid modifying the original during iteration
-    filtered = img.copy()
-    # Label connected components (8-connectivity)
-    structure = np.ones((3, 3), dtype=int)
-    labeled, num_features = label(img > 0, structure=structure)
-    # For each pixel, check if its component has at least 8 pixels
-    for y in range(img.shape[0]):
-        for x in range(img.shape[1]):
-            if img[y, x] != 0:
-                component_label = labeled[y, x]
-                if component_label == 0:
-                    filtered[y, x] = 0
-                    continue
-                # Count pixels in this component
-                count = np.sum(labeled == component_label)
-                if count < 8:
-                    filtered[y, x] = 0
-    return filtered
-        
 #NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
 #NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER
 #NEED FUNCTION FOR RESIZING IMAGES
 
-def inference():
+def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5):
     """
-    Generates gap junction prediction masks for each batch, converting each tensor into a numpy array with cpu as uint8. 
-    Keeps track of the image number while going through batches, assuming the data is sorted by alphabetically ascending 
-    order when read from disk. 
+    Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
+
+    This function loads a trained UNet model, processes images from the specified input directory,
+    generates predicted segmentation masks, and saves the results to the output directory. The input
+    directory must contain 'imgs' and 'gts' subdirectories. The output masks are thresholded using
+    a sigmoid activation and saved as binary images.
+
+    Parameters:
+        model_path (str): Path to the trained model weights (.pt file).
+        input_dir (str): Path to the input directory containing 'imgs' and 'gts' subfolders.
+        output_dir (str): Path to the directory where predicted masks will be saved.
+        threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
+
+    Returns:
+        None
     """
-    #Important Paths
-    section_of_interest = "s200-209" #Section of interest, usually 10 slices
-    model_dir = "/home/tommytang111/models/modelv6.pk1" #Model 2d_gd_mem_run1
-    output_dir = Path("/home/tommytang111/inference_results/sem_adult") / section_of_interest #Output for inference
-    dataset_dir = Path("/home/tommytang111/data/sem_adult/SEM_split") / section_of_interest #Data
+    #Check if input directory has the required subdirectories
+    data = os.listdir(input_dir)
+    if not ("imgs" in data and "gts" in data):
+        raise ValueError("Input directory must contain 'imgs' and 'gts' subdirectories.")
 
     #Data and Labels (sorted because naming convention is typically dataset, section, coordinates. Example: SEM_Dauer_2_image_export_s000 -> 001)
-    imgs = [i for i in sorted(os.listdir(Path(dataset_dir) / "imgs"))] 
-    labels = [i for i in sorted(os.listdir(Path(dataset_dir) / "gts"))]
+    imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
+    labels = [i for i in sorted(os.listdir(Path(input_dir) / "gts"))]
 
     #Create TestDataset class (Note:There are other dataset types in datasets.py). This defines how images/data is read from disk.
-    dataset = TestDataset(dataset_dir, td=False, membrane=False)
+    dataset = TestDataset(input_dir, three_dim=False)
     #Load dataset class in Dataloader
-    dataloader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=8)
+    dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=8)
 
-    #Load model
-    model = joblib.load(model_dir)
+    #Load model and set to evaluation mode
+    #model = joblib.load(model_dir)
+    model = UNet()
+    model.load_state_dict(torch.load(model_path))
     model = model.to("cuda") #Send to gpu
-    model.eval() #Set evaluation mode
+    model.eval() 
 
-    #NOTE: I SHOULD NORMALIZE THE IMAGES BEFORE PASSING THEM TO THE MODEL
+    #Check if output directory exists, if not create it
+    check_output_directory(output_dir)
 
-    check_directory(output_dir)
-
-    img_num = 0 #References which image is being refered to in imgs:List
-
+    #Keeps track of the image number in the batch
+    img_num = 0 
+    
+    #Generates gap junction prediction masks per batch
     with torch.no_grad(): 
         for batch in tqdm(dataloader):
             image = batch[0].to("cuda")
             batch_pred = model(image)
             for i in range(batch_pred.shape[0]): #For each image in the batch
-                #Convert tensor to binary mask using Sigmoid activation first
-                gj_pred = (nn.Sigmoid()(batch_pred[i]) >= 0.5)
-                gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8")
+                #Convert tensor to binary mask using Sigmoid activation function
+                gj_pred = (nn.Sigmoid()(batch_pred[i]) >= threshold)
+                gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensory to numpy array
                 save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[img_num])
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
                 img_num += 1
-                
-def visualize_results():
+
+def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5)) -> plt.Figure:
     """
-    Visualizes the results of the segmentation model by overlaying the predicted masks on the original images.
+    Visualizes the segmentation model predictions through a variety of custom plots.
     """
-
-    #Test a random image from the dataset
-    random_path = random.choice(imgs)
-    random_img = Path(dataset_dir) / "imgs" / random_path
-    random_resized_img = np.array(resize_image(str(random_img), 512, 512, (0,0,0)))
-    random_pred = cv2.imread(str(Path(output_dir) / re.sub(r'.png$', r'_pred.png', str(random_path))), cv2.IMREAD_GRAYSCALE)
-
-    #Make overlay
-    random_pred2 = cv2.cvtColor(random_pred, cv2.COLOR_GRAY2RGB)
-    random_pred2[random_pred == 255] = [0, 0, 255] #Blue
-    overlay = cv2.addWeighted(random_resized_img, 1, random_pred2, 1, 0)
-
-    #Plot
-    fig, ax = plt.subplots(1,4, figsize=(15,5))
-    ax[0].imshow(cv2.imread(random_img), cmap="gray")
-    ax[0].set_title('Original')
-    ax[1].imshow(random_resized_img, cmap="gray")
-    ax[1].set_title('Cropped/Paded')
-    ax[2].imshow(random_pred, cmap="gray")
-    ax[2].set_title('Gap Junction')
-    ax[3].imshow(overlay)
-    ax[3].set_title('Overlay')
+    #Check if input directory has the required subdirectories
+    data = os.listdir(data_dir)
+    if not ("imgs" in data and "gts" in data):
+        raise ValueError("Input directory must contain 'imgs' and 'gts' subdirectories.")
     
-def evaluate_model():
+    #Plotting functions
+    def plot1(img, pred, gts, double_overlay, figsize=figsize):
+        fig, ax = plt.subplots(1,4, figsize=figsize)
+        ax[0].imshow(img, cmap="gray")
+        ax[0].set_title('Image')
+        #ax[1].imshow(random_resized_img, cmap="gray")
+        #ax[1].set_title('Cropped/Paded')
+        ax[1].imshow(pred, cmap="gray")
+        ax[1].set_title('Prediction')
+        ax[2].imshow(gts, cmap="gray")
+        ax[2].set_title('Truth')
+        ax[3].imshow(cv2.cvtColor(double_overlay, cv2.COLOR_BGR2RGB))
+        ax[3].set_title('Overlay')
+        
+    def plot2(img, pred_overlay, gts_overlay, figsize=figsize):
+        fig, ax = plt.subplots(1, 3, figsize=figsize)
+        ax[0].imshow(img, cmap="gray")
+        ax[0].set_title('Image')
+        ax[1].imshow(cv2.cvtColor(pred_overlay, cv2.COLOR_BGR2RGB))
+        ax[1].set_title('Prediction')
+        ax[2].imshow(cv2.cvtColor(gts_overlay, cv2.COLOR_BGR2RGB))
+        ax[2].set_title('Truth')
+        
+    if random:
+        #Data Source
+        imgs = [i for i in sorted(os.listdir(Path(data_dir) / "imgs"))] 
+
+        #Test a random image, prediction, and label from the dataset
+        random_path = rd.choice(imgs)
+        
+    else:
+        assert base_name is not None, "base_name must be provided if random is False."
+    
+    #Image of interest 
+    name = random_path if random else base_name
+    
+    #Image, ground truth, and prediction
+    img = cv2.imread(Path(data_dir) / "imgs" / name)
+    gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
+    gts[gts > 0] = 255 #Binarize to 0 and 255
+    pred = cv2.imread(str(Path(pred_dir) / re.sub(r'.png$', r'_pred.png', str(name))), cv2.IMREAD_GRAYSCALE)
+
+    #Resize image to (X, Y) if needed
+    resized_img = img.copy() if img.shape[:2] == (512, 512) else np.array(resize_image(Path(data_dir) / "imgs" / name, 512, 512, (0,0,0), channels=True))
+
+    #Make overlays
+    pred2 = cv2.cvtColor(pred, cv2.COLOR_GRAY2BGR)
+    pred2[pred == 255] = [255, 0, 0] #Blue
+    pred_overlay = cv2.addWeighted(resized_img, 1, pred2, 1, 0)
+    gts2 = cv2.cvtColor(gts, cv2.COLOR_GRAY2BGR)
+    gts2[gts == 255] = [0, 60, 255] #Orange
+    gts_overlay = cv2.addWeighted(resized_img, 1, gts2, 1, 0)
+    #Double overlay
+    double_overlay = cv2.addWeighted(pred_overlay, 1, gts2, 1, 0)
+    
+    #Generate plot
+    plot1(resized_img, pred, gts, double_overlay) if style == 1 else plot2(resized_img, pred_overlay, gts_overlay)
+    print(f"Showing: {name}")
+
+    return plt.gcf()
+    
+def evaluate():
     """
     Evaluates model performance on an example dataset.
     """
@@ -200,17 +241,22 @@ def evaluate_model():
     plt.show()
     
 def main():
-    """
-    Main function to run inference, visualize results, and evaluate the model.
-    """
+    #Process images if necessary
+    
     #Run inference
-    inference()
+    # inference(model_path="/home/tommytang111/gap-junction-segmentation/models/unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult_s1mdf621.pt",
+    #           input_dir="/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered",
+    #           output_dir="/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered"
+    #           )
     
     #Visualize results
-    visualize_results()
-    
+    fig = visualize(data_dir="/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered",
+                    pred_dir="/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered",
+                    style=1, random=False, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
+    plt.show()
+
     #Evaluate model performance
-    evaluate_model()
+    #evaluate()
 
 if __name__ == "__main__":
     main()
