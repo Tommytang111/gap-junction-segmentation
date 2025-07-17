@@ -12,11 +12,14 @@ from scipy.ndimage import label
 from typing import Union
 import torch
 import os
+import shutil
 import subprocess
 from pathlib import Path
 import cv2
+import tqdm
 from PIL import Image
 import re
+from sklearn.model_selection import train_test_split
 
 #DEPENDENCY FUNCTIONS
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
@@ -408,6 +411,76 @@ def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_t
 #gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
 #output_dir = args.output_dir if not args.make_twoD else args.output_dir+"_3d"
 #create_dataset_3d(args.flat_dataset_dir, output_dir, depth_pattern=r's\d\d\d', window=args.window, test=args.test, image_to_seg_name_map=f, add_dir_maps=gs, add_dir=args.add_dir)
+
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=None):
+    """
+    Split a dataset into train, validation, and test sets.
+
+    Args:
+        source_img_dir: Directory containing all source images
+        source_gt_dir: Directory containing all ground truth masks
+        output_base_dir: Base directory where train/val/test folders will be created
+        train_size, val_size, test_size: Proportions for the splits (should sum to 1)
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Dictionary with paths to the created datasets
+    """
+    # Create output directories
+    os.makedirs(output_base_dir, exist_ok=True)
+    train_dir = os.path.join(output_base_dir, 'train')
+    val_dir = os.path.join(output_base_dir, 'val')
+    test_dir = os.path.join(output_base_dir, 'test')
+
+    for directory in [train_dir, val_dir, test_dir]:
+        os.makedirs(os.path.join(directory, 'imgs'), exist_ok=True)
+        os.makedirs(os.path.join(directory, 'gts'), exist_ok=True)
+
+    # Get all image filenames
+    all_images = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))])
+
+    # First split: train vs (val+test)
+    train_images, remaining_images = train_test_split(
+        all_images, 
+        train_size=train_size, 
+        random_state=random_state
+    )
+
+    # Second split: val vs test (from the remaining)
+    val_ratio = val_size / (val_size + test_size)
+    val_images, test_images = train_test_split(
+        remaining_images, 
+        train_size=val_ratio, 
+        random_state=random_state
+    )
+
+    # Copy the files to their respective directories
+    for image_list, target_dir in [
+        (train_images, train_dir), 
+        (val_images, val_dir), 
+        (test_images, test_dir)
+    ]:
+        for img_name in image_list:
+            # Copy image
+            shutil.copy(
+                os.path.join(source_img_dir, img_name),
+                os.path.join(target_dir, 'imgs', img_name)
+            )
+            
+            # Copy ground truth 
+            gt_name = os.path.splitext(img_name)[0] + "_label.png"  
+            shutil.copy(
+                os.path.join(source_gt_dir, gt_name),
+                os.path.join(target_dir, 'gts', gt_name)
+            )
+
+    print(f"Dataset split completed: {len(train_images)} training, {len(val_images)} validation, {len(test_images)} test images")
+
+    return {
+        'train': {'imgs': os.path.join(train_dir, 'imgs'), 'gts': os.path.join(train_dir, 'gts')},
+        'val': {'imgs': os.path.join(val_dir, 'imgs'), 'gts': os.path.join(val_dir, 'gts')},
+        'test': {'imgs': os.path.join(test_dir, 'imgs'), 'gts': os.path.join(test_dir, 'gts')}
+    }
 
 def filter_by_overlay(image_folder, mask_folder, output_folder):
     """

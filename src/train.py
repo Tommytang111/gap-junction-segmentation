@@ -1,27 +1,22 @@
+#Training script for cloud use
+#July 2025
+#Tommy Tang
+
 #LIBRARIES
 import torch
-from torch import nn
-from utilities import UpBlock, DownBlock, DoubleConv, GenDLoss, FocalLoss
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
-from torchvision.transforms import ToTensor
 from torch.optim import AdamW, SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torchmetrics.classification import BinaryRecall, BinaryPrecision, BinaryF1Score
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-import numpy as np
-import os
-import cv2
+from pathlib import Path
 from tqdm import tqdm 
 import copy
 import wandb
-import random
-import shutil
-from sklearn.model_selection import train_test_split
 #Custom Libraries
-from utils import resize_image
-from models import TrainingDataset, UNet
+from utils import seed_everything, worker_init_fn, create_dataset_splits
+from models import TrainingDataset, UNet, GenDLoss
 
 #DATASET CLASS
 #TrainingDataset from src/models.py
@@ -30,104 +25,11 @@ from models import TrainingDataset, UNet
 #Unet from src/models.py
 
 #FUNCTIONS
-def seed_everything(seed: int = 40):
-    """
-    Set the random seed for reproducibility.
-    """
-    global GLOBAL_SEED
-    GLOBAL_SEED = seed
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    #torch.backends.cudnn.benchmark = False
-    
-def worker_init_fn(worker_id):
-    """
-    Initialize the worker with a unique seed based on the worker ID.
-    """
-    seed = GLOBAL_SEED + worker_id
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    
-def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=None):
-    """
-    Split a dataset into train, validation, and test sets.
-
-    Args:
-        source_img_dir: Directory containing all source images
-        source_gt_dir: Directory containing all ground truth masks
-        output_base_dir: Base directory where train/val/test folders will be created
-        train_size, val_size, test_size: Proportions for the splits (should sum to 1)
-        random_state: Random seed for reproducibility
-
-    Returns:
-        Dictionary with paths to the created datasets
-    """
-    # Create output directories
-    os.makedirs(output_base_dir, exist_ok=True)
-    train_dir = os.path.join(output_base_dir, 'train')
-    val_dir = os.path.join(output_base_dir, 'val')
-    test_dir = os.path.join(output_base_dir, 'test')
-
-    for directory in [train_dir, val_dir, test_dir]:
-        os.makedirs(os.path.join(directory, 'imgs'), exist_ok=True)
-        os.makedirs(os.path.join(directory, 'gts'), exist_ok=True)
-
-    # Get all image filenames
-    all_images = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))])
-
-    # First split: train vs (val+test)
-    train_images, remaining_images = train_test_split(
-        all_images, 
-        train_size=train_size, 
-        random_state=random_state
-    )
-
-    # Second split: val vs test (from the remaining)
-    val_ratio = val_size / (val_size + test_size)
-    val_images, test_images = train_test_split(
-        remaining_images, 
-        train_size=val_ratio, 
-        random_state=random_state
-    )
-
-    # Copy the files to their respective directories
-    for image_list, target_dir in [
-        (train_images, train_dir), 
-        (val_images, val_dir), 
-        (test_images, test_dir)
-    ]:
-        for img_name in image_list:
-            # Copy image
-            shutil.copy(
-                os.path.join(source_img_dir, img_name),
-                os.path.join(target_dir, 'imgs', img_name)
-            )
-            
-            # Copy ground truth 
-            gt_name = os.path.splitext(img_name)[0] + "_label.png"  
-            shutil.copy(
-                os.path.join(source_gt_dir, gt_name),
-                os.path.join(target_dir, 'gts', gt_name)
-            )
-
-    print(f"Dataset split completed: {len(train_images)} training, {len(val_images)} validation, {len(test_images)} test images")
-
-    return {
-        'train': {'imgs': os.path.join(train_dir, 'imgs'), 'gts': os.path.join(train_dir, 'gts')},
-        'val': {'imgs': os.path.join(val_dir, 'imgs'), 'gts': os.path.join(val_dir, 'gts')},
-        'test': {'imgs': os.path.join(test_dir, 'imgs'), 'gts': os.path.join(test_dir, 'gts')}
-    }
-    
-#Add augmentation functions
-# Custom augmentation
 def get_custom_augmentation():
     return A.Compose([
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.8,1.2), rotate=360, translate_percent=0.15, shear=(-45, 45), p=0.9),
+        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.GaussNoise(p=0.3),
         A.Normalize(mean=0.0, std=1.0),
@@ -135,87 +37,6 @@ def get_custom_augmentation():
         ToTensorV2()
     ])
 
-# Light augmentation for gap junction segmentation
-def get_light_augmentation():
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.Transpose(p=0.5),
-        A.GaussNoise(p=0.3),
-        A.Blur(blur_limit=3, p=0.2),
-        A.Normalize(mean=0.0, std=1.0),  # For grayscale
-        ToTensorV2()
-    ])
-
-# Medium augmentation
-def get_medium_augmentation():
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.Transpose(p=0.5),
-        A.ShiftScaleRotate(
-            shift_limit=0.1, 
-            scale_limit=0.2, 
-            rotate_limit=15, 
-            border_mode=cv2.BORDER_CONSTANT, 
-            value=0, 
-            p=0.5
-        ),
-        A.ElasticTransform(
-            alpha=1, 
-            sigma=50, 
-            alpha_affine=50, 
-            border_mode=cv2.BORDER_CONSTANT, 
-            value=0, 
-            p=0.3
-        ),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
-        A.Blur(blur_limit=3, p=0.2),
-        A.CLAHE(clip_limit=2.0, p=0.3),
-        A.Normalize(mean=0.0, std=1.0),
-        ToTensorV2()
-    ])
-    
-# Heavy augmentation
-def get_heavy_augmentation():
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.Transpose(p=0.5),
-        A.ShiftScaleRotate(
-            shift_limit=0.15, 
-            scale_limit=0.3, 
-            rotate_limit=25, 
-            border_mode=cv2.BORDER_CONSTANT, 
-            value=0, 
-            p=0.6
-        ),
-        A.ElasticTransform(
-            alpha=1, 
-            sigma=50, 
-            alpha_affine=50, 
-            border_mode=cv2.BORDER_CONSTANT, 
-            value=0, 
-            p=0.4
-        ),
-        A.GridDistortion(p=0.3),
-        A.OpticalDistortion(p=0.3),
-        A.GaussNoise(var_limit=(10.0, 80.0), p=0.4),
-        A.OneOf([
-            A.Blur(blur_limit=3),
-            A.GaussianBlur(blur_limit=3),
-            A.MedianBlur(blur_limit=3),
-        ], p=0.3),
-        A.CLAHE(clip_limit=2.0, p=0.4),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.3),
-        A.Normalize(mean=0.0, std=1.0),
-        ToTensorV2()
-    ])
-    
-#Define training function
 def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda'):
     """
     Training logic for the epoch.
@@ -346,56 +167,47 @@ def test(model, dataloader, loss_fn, device='cuda'):
     
     return test_metrics
 
-def wandb_init(run_name):
+def wandb_init(run_name, epochs, batch_size, data):
     """
     WandB Initialization
     """
-    #wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
+    wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
             dir="/home/tommytang111/gap-junction-segmentation/wandb",
             reinit=True,
             config={
+                "dataset": data,
                 "learning_rate": 0.01,
-                "batch_size": 16,
-                "epochs": 200,
+                "batch_size": batch_size,
+                "epochs": epochs,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
                 "optimizer": "SGD",
                 "scheduler": "ReduceLROnPlateau",
-                "augmentation": "Custom Augmentation"
+                "augmentation": "Custom Augmentation with (-15, 15) shear"
             }
     )
     return run
     
-def main():
+def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:int=200, seed:int=40):
     """
-    Main function to run training and validation loop.
+    Main function to run training, validation, and test loop.
     """
     #Initialize wandb
-    run = wandb_init("unet_base_pooled_2695imgs_sem_dauer_2_516imgs_sem_adult")
+    run = wandb_init(run_name, epochs, batch_size, Path(data_dir).stem)
 
     #Set seed for reproducibility
-    seed_everything(40)
+    seed_everything(seed)
 
     # Create dataset splits (uncomment and run once to create the splits)
-    source_img_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/imgs"
-    source_gt_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult/gts"
-    output_base_dir = "/home/tommy111/projects/def-mzhen/tommy111/data/pooled_2695imgs_sem_dauer_2_516imgs_sem_adult_split"
+    source_img_dir = f"{data_dir}/imgs"
+    source_gt_dir = f"{data_dir}/gts"
+    output_base_dir = f"{data_dir}_split"
 
     #Create the splits (comment out after first run)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=GLOBAL_SEED)
-    
-    #Alternatively, if splits already exist, define paths manually
-    # dataset_paths = {
-    #     'train': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/imgs', 
-    #               'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/train/gts'},
-    #     'val': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/imgs', 
-    #             'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/val/gts'},
-    #     'test': {'imgs': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/imgs', 
-    #              'gts': '/home/tommytang111/gap-junction-segmentation/data/pilot2_split/test/gts'}
-    # }
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed)
 
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
@@ -429,9 +241,9 @@ def main():
     )
 
     #Load datasets into DataLoader
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
-    test_dataloader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
     
     #Set device and model
     device = torch.device("cuda")    
@@ -439,7 +251,7 @@ def main():
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
-    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
     #Send evaluation metrics to device
@@ -451,8 +263,9 @@ def main():
     torch.cuda.empty_cache()
     
     #Initialize training variables
-    epochs = 200
-    best_f1 = 0.0
+    epochs = epochs
+    best_train_f1 = 0.0
+    best_val_f1 = 0.0
     best_val_loss = float('inf')
     best_epoch = 0
     best_model_state = copy.deepcopy(model.state_dict())
@@ -479,8 +292,12 @@ def main():
             best_val_loss = val_loss
         
         #Log best model state based on F1 score
-        if val_f1 > best_f1:
-            best_f1 = val_f1
+        if train_f1 > best_train_f1:
+            best_train_f1 = train_f1
+        
+        #Log best model state based on F1 score
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
             best_epoch = epoch
             best_model_state = copy.deepcopy(model.state_dict())
             
@@ -495,7 +312,8 @@ def main():
             "val_recall": val_recall,
             "val_precision": val_precision,
             "val_f1": val_f1,
-            "best_val_f1": best_f1,
+            "best_train_f1": best_train_f1,
+            "best_val_f1": best_val_f1,
             "best_val_loss": best_val_loss,
             "best_epoch": best_epoch,
             "lr": optimizer.param_groups[0]["lr"]
@@ -504,7 +322,7 @@ def main():
     print("Training Complete!")
     
     #Save the best logged model state
-    model_save_path = f"/home/tommytang111/gap-junction-segmentation/models/{run.name}_{run.id}.pt"
+    model_save_path = f"{output_path}/{run.name}_{run.id}.pt"
     torch.save(best_model_state, model_save_path)
     print(f"Saved PyTorch Model to {model_save_path}")
     
@@ -521,4 +339,9 @@ def main():
     wandb.finish()
         
 if __name__ == "__main__":
-    main()
+    main(run_name="516imgs_sem_adult_copy",
+         data_dir="/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult_copy",
+         seed=40,
+         epochs=200,
+         batch_size=16,
+         output_path="/home/tommytang111/gap-junction-segmentation/models")
