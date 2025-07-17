@@ -1,12 +1,17 @@
 .
 ├── legacy
+│   ├── datasets.py
+│   ├── main_processing.py
+│   ├── postprocessing.py
+│   ├── preprocessing.py
 │   ├── randomstuff.py
 │   ├── resnet.py
 │   ├── run_postprocessing.sh
 │   ├── run_unets.sh
 │   ├── run_unets1.sh
 │   ├── run_unets2.sh
-│   ├── temp_train.py
+│   ├── train.py
+│   ├── unet.py
 │   └── utilities.py
 ├── notebooks
 │   ├── wandb
@@ -15,21 +20,14 @@
 │   ├── train.ipynb
 │   └── utilities.ipynb
 ├── src
-│   ├── __pycache__
 │   ├── wandb
-│   ├── datasets.py
 │   ├── inference.py
-│   ├── main_processing.py
 │   ├── models.py
-│   ├── postprocessing.py
-│   ├── preprocessing.py
-│   ├── resnet.py
+│   ├── sweep.py
 │   ├── train.py
 │   ├── train_local.py
-│   ├── unet.py
-│   ├── utilities.py
 │   └── utils.py
 ├── README.md
 └── run_training.sh
 
-6 directories, 26 files
+6 directories, 25 files
