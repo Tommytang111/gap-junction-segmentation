@@ -21,116 +21,13 @@ import shutil
 from sklearn.model_selection import train_test_split
 #Custom Libraries
 from utils import resize_image
+from models import TrainingDataset, UNet
 
 #DATASET CLASS
-#Class can load any mask as long as the model corresponds to the mask type
-class TrainingDataset(Dataset):
-    def __init__(self, images, labels, masks=None, augmentation=None, data_size=(512, 512), train=True):
-        self.image_paths = sorted([os.path.join(images, img) for img in os.listdir(images)])
-        self.label_paths = sorted([os.path.join(labels, lbl) for lbl in os.listdir(labels)])
-        self.mask_paths = sorted([os.path.join(masks, mask) for mask in os.listdir(masks)]) if masks else None
-        self.augmentation = augmentation
-        self.data_size = data_size
-        self.train = train
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        #Read image, label, and mask
-        image = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
-        label = cv2.imread(self.label_paths[idx], cv2.IMREAD_GRAYSCALE)
-        mask = cv2.imread(self.mask_paths[idx], cv2.IMREAD_GRAYSCALE) if self.mask_paths else None
-        
-        #Apply resizing with padding if image is not expected size and then convert back to ndarray
-        if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
-            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
-            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
-            if mask is not None:
-                mask = np.array(resize_image(mask, self.data_size[0], self.data_size[1], (0,0,0)))
-
-        #Convert mask/label to binary for model classification
-        label[label > 0] = 1
-        if mask is not None:
-            mask[mask > 0] = 1
-        
-        #Apply augmentation if provided
-        if self.augmentation and self.train:
-            if mask is not None:
-                #Use mask in augmentation
-                augmented = self.augmentation(image=image, mask=label, label=mask)
-                image = augmented['image']
-                label = augmented['mask']
-                mask = augmented['label']
-            else:
-                #Without mask
-                augmented = self.augmentation(image=image, mask=label)
-                image = augmented['image']
-                label = augmented['mask']
-
-        #Add entity recognition clause later if needed
-        
-        # Convert to tensors if not already converted from augmentation
-        if not torch.is_tensor(image):
-            image = ToTensor()(image).float()
-        if not torch.is_tensor(label):
-            label = torch.from_numpy(label).long()
-        if mask is not None and not torch.is_tensor(mask):
-            mask = torch.from_numpy(mask).long()
-        elif mask is None:
-            mask = torch.zeros_like(label)
-
-        return image, label, mask
+#TrainingDataset from src/models.py
 
 #MODEL CLASS
-class UNet(nn.Module):
-    """UNet Architecture"""
-    def __init__(self, out_classes=2, up_sample_mode='conv_transpose', three=False, attend=False, residual=False, scale=False, spatial=False, dropout=0, classes=2):
-        """Initialize the UNet model"""
-        super(UNet, self).__init__()
-        self.three = three
-        self.up_sample_mode = up_sample_mode
-        self.dropout=dropout
-
-        # Downsampling Path
-        self.down_conv1 = DownBlock(1, 64, three=three, spatial=False, residual=residual) # 3 input channels --> 64 output channels
-        self.down_conv2 = DownBlock(64, 128, three=three, spatial=spatial, dropout=self.dropout, residual=residual) # 64 input channels --> 128 output channels
-        self.down_conv3 = DownBlock(128, 256, spatial=spatial, dropout=self.dropout, residual=residual) # 128 input channels --> 256 output channels
-        self.down_conv4 = DownBlock(256, 512, spatial=spatial, dropout=self.dropout, residual=residual) # 256 input channels --> 512 output channels
-        # Bottleneck
-        self.double_conv = DoubleConv(512, 1024,spatial=spatial, dropout=self.dropout, residual=residual)
-        # Upsampling Path
-        self.up_conv4 = UpBlock(512 + 1024, 512, self.up_sample_mode, dropout=self.dropout, residual=residual) # 512 + 1024 input channels --> 512 output channels
-        self.up_conv3 = UpBlock(256 + 512, 256, self.up_sample_mode, dropout=self.dropout, residual=residual)
-        self.up_conv2 = UpBlock(128+ 256, 128, self.up_sample_mode, dropout=self.dropout, residual=residual)
-        self.up_conv1 = UpBlock(128 + 64, 64, self.up_sample_mode)
-        # Final Convolution
-        self.conv_last = nn.Conv2d(64, 1 if classes == 2 else classes, kernel_size=1)
-        self.attend = attend
-        if scale:
-            self.s1, self.s2 = torch.nn.Parameter(torch.ones(1), requires_grad=True), torch.nn.Parameter(torch.ones(1), requires_grad=True) # learn scaling
-
-    def forward(self, x):
-        """Forward pass of the UNet model
-        x: (16, 1, 512, 512)
-        """
-        # print(x.shape)
-        x, skip1_out = self.down_conv1(x) # x: (16, 64, 256, 256), skip1_out: (16, 64, 512, 512) (batch_size, channels, height, width)    
-        x, skip2_out = self.down_conv2(x) # x: (16, 128, 128, 128), skip2_out: (16, 128, 256, 256)
-        if self.three: x = x.squeeze(-3)   
-        x, skip3_out = self.down_conv3(x) # x: (16, 256, 64, 64), skip3_out: (16, 256, 128, 128)
-        x, skip4_out = self.down_conv4(x) # x: (16, 512, 32, 32), skip4_out: (16, 512, 64, 64)
-        x = self.double_conv(x) # x: (16, 1024, 32, 32)
-        x = self.up_conv4(x, skip4_out) # x: (16, 512, 64, 64)
-        x = self.up_conv3(x, skip3_out) # x: (16, 256, 128, 128)
-        if self.three: 
-            #attention_mode???
-            skip1_out = torch.mean(skip1_out, dim=2)
-            skip2_out = torch.mean(skip2_out, dim=2)
-        x = self.up_conv2(x, skip2_out) # x: (16, 128, 256, 256)
-        x = self.up_conv1(x, skip1_out) # x: (16, 64, 512, 512)
-        x = self.conv_last(x) # x: (16, 1, 512, 512)
-        return x
+#Unet from src/models.py
 
 #FUNCTIONS
 def seed_everything(seed: int = 40):

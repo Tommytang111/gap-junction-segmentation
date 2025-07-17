@@ -13,9 +13,67 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+from torchvision.transforms import ToTensor
 from utils import resize_image
 
 #DATASETS
+class TrainingDataset(torch.utils.data.Dataset):
+    def __init__(self, images, labels, masks=None, augmentation=None, data_size=(512, 512), train=True):
+        self.image_paths = sorted([os.path.join(images, img) for img in os.listdir(images)])
+        self.label_paths = sorted([os.path.join(labels, lbl) for lbl in os.listdir(labels)])
+        self.mask_paths = sorted([os.path.join(masks, mask) for mask in os.listdir(masks)]) if masks else None
+        self.augmentation = augmentation
+        self.data_size = data_size
+        self.train = train
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        #Read image, label, and mask
+        image = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
+        label = cv2.imread(self.label_paths[idx], cv2.IMREAD_GRAYSCALE)
+        mask = cv2.imread(self.mask_paths[idx], cv2.IMREAD_GRAYSCALE) if self.mask_paths else None
+        
+        #Apply resizing with padding if image is not expected size and then convert back to ndarray
+        if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
+            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
+            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
+            if mask is not None:
+                mask = np.array(resize_image(mask, self.data_size[0], self.data_size[1], (0,0,0)))
+
+        #Convert mask/label to binary for model classification
+        label[label > 0] = 1
+        if mask is not None:
+            mask[mask > 0] = 1
+        
+        #Apply augmentation if provided
+        if self.augmentation and self.train:
+            if mask is not None:
+                #Use mask in augmentation
+                augmented = self.augmentation(image=image, mask=label, label=mask)
+                image = augmented['image']
+                label = augmented['mask']
+                mask = augmented['label']
+            else:
+                #Without mask
+                augmented = self.augmentation(image=image, mask=label)
+                image = augmented['image']
+                label = augmented['mask']
+
+        #Add entity recognition clause later if needed
+        
+        # Convert to tensors if not already converted from augmentation
+        if not torch.is_tensor(image):
+            image = ToTensor()(image).float()
+        if not torch.is_tensor(label):
+            label = torch.from_numpy(label).long()
+        if mask is not None and not torch.is_tensor(mask):
+            mask = torch.from_numpy(mask).long()
+        elif mask is None:
+            mask = torch.zeros_like(label)
+
+        return image, label, mask
 
 class TestDataset(torch.utils.data.Dataset):
     def __init__(

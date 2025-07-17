@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D 
 from scipy.ndimage import label
 from typing import Union
+import torch
 import os
 import subprocess
 from pathlib import Path
@@ -641,6 +642,19 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     
     return new_img
     
+def seed_everything(seed: int = 40):
+    """
+    Set the random seed for reproducibility.
+    """
+    global GLOBAL_SEED
+    GLOBAL_SEED = seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = False
+    
 def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
     """ 
     Splits an image into tiles of a specified size, with an optional offset to remove borders.
@@ -683,6 +697,14 @@ def view_label(file:str):
     plt.figure()
     plt.imshow(img, cmap='gray')
     plt.show()
+    
+def worker_init_fn(worker_id):
+    """
+    Initialize the worker with a unique seed based on the worker ID.
+    """
+    seed = GLOBAL_SEED + worker_id
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 def write_imgs(source_path:str, target_path:str, suffix:str="", index:int=1):
     """
