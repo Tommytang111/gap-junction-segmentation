@@ -1,5 +1,5 @@
 """
-Complete Models and Components for Gap Junction Segmentation.
+Models and Related Components Necessary for Gap Junction Segmentation.
 Tommy Tang
 June 1, 2025
 """
@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision.transforms import ToTensor
-from utils import resize_image
+from utils import *
 
 #DATASETS
 class TrainingDataset(torch.utils.data.Dataset):
@@ -46,6 +46,9 @@ class TrainingDataset(torch.utils.data.Dataset):
         label[label > 0] = 1
         if mask is not None:
             mask[mask > 0] = 1
+            
+        #Filter small out small groups of pixels (annotation mistakes)
+        label = filter_pixels(label, size_threshold=10)
         
         #Apply augmentation if provided
         if self.augmentation and self.train:
@@ -107,7 +110,7 @@ class TestDataset(torch.utils.data.Dataset):
         else:
             images = sorted(os.listdir(self.image_paths[i]))
             img = []
-            for j in range(4):
+            for j in range(9):
                 im = cv2.cvtColor(cv2.imread(os.path.join(self.image_paths[i], images[j])), cv2.COLOR_BGR2GRAY)
                 img.append(im)
             
@@ -125,6 +128,7 @@ class TestDataset(torch.utils.data.Dataset):
         else: 
             image = image.squeeze(0) 
             mask = mask.squeeze(0)
+            
         #Add batch dimension to image, mask
         return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
         

@@ -20,7 +20,6 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.transforms.functional import to_tensor
-import torchmetrics
 
 #Custom libraries
 from models import UNet, TestDataset

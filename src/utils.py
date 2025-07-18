@@ -36,7 +36,7 @@ def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=F
         threshold_blur (float): Mean gradient threshold below which the image is considered blurry.
         threshold_artifact (float): Standard deviation threshold below which the image is considered to have artifacts.
         verbose (bool): If True, prints the mean and standard deviation of the gradient magnitude.
-        apply_filter (bool): If True, returns the mean and standard deviation instead of classification.
+        apply_filter (bool): If True, returns the sobel filtered image instead of performing classification.
 
     Returns:
         str or tuple: If apply_filter is False, returns 'exclude' if the image is likely blurry or has artifacts,
@@ -412,7 +412,7 @@ def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_t
 #output_dir = args.output_dir if not args.make_twoD else args.output_dir+"_3d"
 #create_dataset_3d(args.flat_dataset_dir, output_dir, depth_pattern=r's\d\d\d', window=args.window, test=args.test, image_to_seg_name_map=f, add_dir_maps=gs, add_dir=args.add_dir)
 
-def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_size=0.8, val_size=0.1, test_size=0.1, random_state=None):
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40):
     """
     Split a dataset into train, validation, and test sets.
 
@@ -438,10 +438,22 @@ def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, train_
 
     # Get all image filenames
     all_images = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))])
+    all_images_copy = all_images
 
+    # If filtering is enabled, apply the sobel filter to each image  
+    if filter:
+        count = 0
+        for img_name in tqdm(all_images_copy, desc="Filtering images"):
+            img_path = os.path.join(source_img_dir, img_name)
+            if sobel_filter(img_path) == 'exclude':
+                all_images_copy.remove(img_name)
+                count += 1
+                
+        print(f"Filtered {count} images out of {len(all_images)} based on Sobel filter criteria.")
+    
     # First split: train vs (val+test)
     train_images, remaining_images = train_test_split(
-        all_images, 
+        all_images_copy, 
         train_size=train_size, 
         random_state=random_state
     )
@@ -565,8 +577,8 @@ def filter_pixels(img:np.ndarray, size_threshold:int=8) -> np.ndarray:
     filtered = img.copy()
     # Label connected components (8-connectivity)
     structure = np.ones((3, 3), dtype=int)
-    labeled, num_features = label(img > 0, structure=structure)
-    # For each pixel, check if its component has at least 8 pixels
+    labeled, _ = label(img > 0, structure=structure)
+    # For each pixel, check if its component has at least size_threshold pixels
     for y in range(img.shape[0]):
         for x in range(img.shape[1]):
             if img[y, x] != 0:
@@ -580,7 +592,7 @@ def filter_pixels(img:np.ndarray, size_threshold:int=8) -> np.ndarray:
                     filtered[y, x] = 0
     return filtered
 
-def overlay_img(img:str, pred:str):
+def overlay_img(img:str, pred:str, alpha:float=0.4) -> plt.figure:
     """
     Overlay a prediction mask on top of a grayscale image for visualization.
 
@@ -589,7 +601,8 @@ def overlay_img(img:str, pred:str):
 
     Parameters:
         img (str): Path to the grayscale image file.
-        pred (str): Path to the prediction mask file (should be same size as img).
+        pred (str): Path to the prediction mask file (should be same size as img)
+        alpha (float): Defines transparency of overlay.
 
     Returns:
         matplotlib.figure.Figure: The matplotlib figure object with the overlay plot.
@@ -607,7 +620,7 @@ def overlay_img(img:str, pred:str):
     #Plot overlaid images
     plot = plt.figure(dpi=300)
     plt.imshow(img, cmap="gray")
-    plt.imshow(pred, cmap="gray", alpha=0.4)
+    plt.imshow(pred, cmap="gray", alpha=alpha)
     return plot
 
 def plot_3D(file:str, title:str='Title', xlab:str='X', ylab:str='Y', zlab:str='Z', elev:int=20, azim:int=90, figx:int=10, figy:int=7, dpi:int=None):
