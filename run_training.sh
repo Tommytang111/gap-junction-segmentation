@@ -16,4 +16,4 @@ module load gcc cuda opencv
 source /home/tommy111/.gj_venv/bin/activate
 wandb offline
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-python3 /home/tommy111/projects/def-mzhen/tommy111/code/train.py 
+python3 /home/tommy111/projects/def-mzhen/tommy111/code/new/src/train.py 

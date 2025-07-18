@@ -1,4 +1,4 @@
-`#Training script for cloud use
+#Training script for cloud use
 #July 2025
 #Tommy Tang
 
@@ -175,7 +175,7 @@ def wandb_init(run_name, epochs, batch_size, data):
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
-            dir="/home/tommytang111/gap-junction-segmentation/wandb",
+            dir="/home/tommy111/projects/def-mzhen/tommy111/wandb",
             reinit=True,
             config={
                 "dataset": data,
@@ -340,9 +340,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="516imgs_sem_adult_copy",
-         data_dir="/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult_copy",
+    main(run_name="516imgs_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
          seed=40,
          epochs=200,
          batch_size=16,
-         output_path="/home/tommytang111/gap-junction-segmentation/models")
+         output_path="/home/tommy111/projects/def-mzhen/tommy111/models")
