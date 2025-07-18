@@ -207,7 +207,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     output_base_dir = f"{data_dir}_split"
 
     #Create the splits (comment out after first run)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True)
 
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
@@ -340,7 +340,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         
 if __name__ == "__main__":
     main(run_name="516imgs_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/code/new/src/data/516imgs_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
          seed=40,
          epochs=200,
          batch_size=16,

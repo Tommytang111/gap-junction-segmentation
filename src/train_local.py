@@ -209,7 +209,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     output_base_dir = f"{data_dir}_split"
     
     #Create the splits (comment out after first run)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True)
     
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
