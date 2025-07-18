@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D 
 from scipy.ndimage import label
 from typing import Union
+from torch import nn
 import torch
 import os
 import shutil
@@ -19,7 +20,9 @@ import cv2
 import tqdm
 from PIL import Image
 import re
+import random
 from sklearn.model_selection import train_test_split
+from models import UNet
 
 #DEPENDENCY FUNCTIONS
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
@@ -420,6 +423,7 @@ def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter
         source_img_dir: Directory containing all source images
         source_gt_dir: Directory containing all ground truth masks
         output_base_dir: Base directory where train/val/test folders will be created
+        filter: Applies sobel_filter to exclude poor images
         train_size, val_size, test_size: Proportions for the splits (should sum to 1)
         random_state: Random seed for reproducibility
 
@@ -623,7 +627,7 @@ def overlay_img(img:str, pred:str, alpha:float=0.4) -> plt.figure:
     plt.imshow(pred, cmap="gray", alpha=alpha)
     return plot
 
-def plot_3D(file:str, title:str='Title', xlab:str='X', ylab:str='Y', zlab:str='Z', elev:int=20, azim:int=90, figx:int=10, figy:int=7, dpi:int=None):
+def plot_3D_intensity_projection(file:str, title:str='Title', xlab:str='X', ylab:str='Y', zlab:str='Z', elev:int=20, azim:int=90, figx:int=10, figy:int=7, dpi:int=None):
     """
     Plots a grayscale image as a 3D surface, where the Z axis represents pixel intensity.
 
@@ -675,6 +679,100 @@ def plot_3D(file:str, title:str='Title', xlab:str='X', ylab:str='Y', zlab:str='Z
     #fig.colorbar(surface, cax=cbar_ax)
     plt.tight_layout()
     plt.show()
+
+def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
+    """
+    Compare predictions from three different UNet models on a randomly selected image.
+    
+    This function loads a random image from the specified dataset directory, runs inference
+    using three different trained UNet models, and creates comparison visualizations showing
+    the original image, individual predictions, ground truth, and overlay comparisons.
+    
+    Args:
+        model1_path (str): Path to the first trained model checkpoint (.pt file).
+                          Expected to be the 516imgs_sem_adult model.
+        model2_path (str): Path to the second trained model checkpoint (.pt file).
+                          Expected to be the 516imgs_sem_dauer_2 model.
+        model3_path (str): Path to the third trained model checkpoint (.pt file).
+                          Expected to be the 1032imgs_pooled model.
+        data_dir (str or Path): Path to the dataset directory containing 'imgs' and 'gts' 
+                               subdirectories with corresponding image and label files.
+    
+    Returns:
+        tuple: A tuple containing two matplotlib figure objects:
+            - fig1 (matplotlib.figure.Figure): Figure showing the original grayscale image.
+            - fig2 (matplotlib.figure.Figure): 2x4 subplot comparison figure containing:
+                - Top row: Individual predictions from each model and ground truth
+                - Bottom row: Overlay visualizations (predictions/truth over original image)
+    
+    Note:
+        - Requires CUDA-capable GPU for model inference.
+        - Label files are expected to follow the naming convention: 
+          original_name.png -> original_name_label.png
+        - All models should be UNet architectures with compatible input/output dimensions.
+        - Uses single_image_inference() function for individual model predictions.
+    
+    Example:
+        >>> fig1, fig2 = predict_multiple_models(
+        ...     model1_path='models/adult_model.pt',
+        ...     model2_path='models/dauer_model.pt', 
+        ...     model3_path='models/pooled_model.pt',
+        ...     data_dir='data/test_dataset'
+        ... )
+        >>> fig1.savefig('original_image.png')
+        >>> fig2.savefig('model_comparison.png')
+    """
+    imgs = os.listdir(Path(data_dir) / "imgs")
+    random_img = random.choice(imgs)
+    random_img_path = Path(data_dir) / "imgs" / random_img
+
+    img1 = cv2.imread(random_img_path, cv2.IMREAD_GRAYSCALE)
+    gts1 = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(random_img)), cv2.IMREAD_GRAYSCALE)
+
+    model1_pred = single_image_inference(image=img1,
+                    model_path=model1_path,
+                    model=UNet())
+    model2_pred = single_image_inference(image=img1,
+                    model_path=model2_path,
+                    model=UNet())
+    model3_pred = single_image_inference(image=img1,
+                    model_path=model3_path,
+                    model=UNet())
+
+    fig1 = plt.figure(1)
+    plt.imshow(img1, cmap='gray')
+    plt.axis('off')
+
+    #Plot
+    fig2 = plt.figure(2, figsize=(16, 12), dpi=300)
+    plt.subplot(241)
+    plt.imshow(model1_pred, cmap='gray')
+    plt.title('Model 516imgs_sem_adult', fontsize=10)
+    plt.subplot(242)
+    plt.imshow(model2_pred, cmap='gray')
+    plt.title('Model 516imgs_sem_dauer_2', fontsize=10)
+    plt.subplot(243)
+    plt.imshow(model3_pred, cmap='gray')
+    plt.title('Model 1032imgs_pooled', fontsize=10)
+    plt.subplot(244)
+    plt.imshow(gts1, cmap='gray')
+    plt.title('Truth', fontsize=10)
+    plt.subplot(245)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model1_pred, cmap='gray', alpha=0.5)
+    plt.subplot(246)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model2_pred, cmap='gray', alpha=0.5)
+    plt.subplot(247)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model3_pred, cmap='gray', alpha=0.5)
+    plt.subplot(248)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(gts1, cmap='gray', alpha=0.5)
+    #plt.tight_layout
+    plt.subplots_adjust(wspace=0.2, hspace=-0.5)
+
+    return fig1, fig2
 
 def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad_clr:tuple, channels=True) -> Image.Image:
     """
@@ -740,6 +838,62 @@ def seed_everything(seed: int = 40):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = False
+    
+def single_image_inference(image:np.ndarray, model_path:str, model):
+    """
+    Performs inference on a single grayscale image using a trained PyTorch model.
+    
+    This function loads a trained model from a checkpoint, preprocesses the input image,
+    runs inference, and returns a binary segmentation mask.
+    
+    Args:
+        image (np.ndarray): Input grayscale image as a NumPy array with shape (H, W).
+                           Expected to have pixel values in range [0, 255].
+        model_path (str): Path to the saved PyTorch model checkpoint (.pt file).
+        model: PyTorch model instance (e.g., UNet) to load the state dict into.
+               The model architecture should match the saved checkpoint.
+    
+    Returns:
+        np.ndarray: Binary segmentation mask as uint8 NumPy array with shape (H, W).
+                   Values are 0 (background) or 1 (foreground/gap junction).
+    
+    Note:
+        - Input image is automatically normalized to [0, 1] range.
+        - Uses sigmoid activation with 0.5 threshold for binarization.
+        - Model is automatically set to evaluation mode.
+    
+    Example:
+        >>> import cv2
+        >>> from models import UNet
+        >>> 
+        >>> # Load image and model
+        >>> image = cv2.imread('input.png', cv2.IMREAD_GRAYSCALE)
+        >>> model = UNet()
+        >>> 
+        >>> # Run inference
+        >>> mask = single_image_inference(image, 'model.pt', model)
+        >>> 
+        >>> # Save result
+        >>> cv2.imwrite('mask.png', mask * 255)
+    """
+    #Setup model
+    model = model
+    model.load_state_dict(torch.load(model_path))
+    model = model.to("cuda"if torch.cuda.is_available else 'cpu') #Send to gpu
+    model.eval() 
+   
+    
+    #Prepare image
+    image = torch.from_numpy(image).float() / 255.0  # Convert to float tensor, normalize if needed
+    image = image.unsqueeze(0).unsqueeze(0)          # Add shape: (1, 1, H, W) for batch and channel
+    
+    #Inference
+    with torch.no_grad():
+        pred = model(image.to('cuda')) 
+        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
+        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
+    
+    return pred
     
 def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
     """ 
@@ -833,3 +987,32 @@ def write_imgs(source_path:str, target_path:str, suffix:str="", index:int=1):
         split_imgs = split_img(read_img, offset=0, tile_size=512)
         for i, split in enumerate(split_imgs):
             cv2.imwrite(f"{target_path}/{Path(img).stem}{suffix}{i+index}{Path(img).suffix}", split)
+            
+def zoom_out_and_pad(image: np.ndarray) -> np.ndarray:
+    """
+    Downsamples a 512x512 image by a factor of 2 (to 256x256), 
+    pastes it centered onto a black 512x512 image, and returns the result.
+
+    Parameters:
+        image (np.ndarray): Input 512x512 image (grayscale or RGB).
+
+    Returns:
+        np.ndarray: 512x512 image with the downsampled image centered and black padding.
+    """
+    # Downsample image to 256x256
+    downsampled = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
+    
+    # Create a black 512x512 background
+    if len(image.shape) == 2:  # Grayscale
+        padded = np.zeros((512, 512), dtype=image.dtype)
+    else:  # Color
+        padded = np.zeros((512, 512, image.shape[2]), dtype=image.dtype)
+    
+    # Compute top-left corner for centering
+    y_offset = (512 - 256) // 2
+    x_offset = (512 - 256) // 2
+    
+    # Paste downsampled image onto black background
+    padded[y_offset:y_offset+256, x_offset:x_offset+256] = downsampled
+    
+    return padded

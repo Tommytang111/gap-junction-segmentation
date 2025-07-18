@@ -29,7 +29,29 @@ from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_o
 #NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
 #NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER
 
-def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5):
+def single_image_inference(image:np.ndarray, model_path:str, model):
+    """
+    Makes a mask by predicting on a single image
+    """
+    #Setup model
+    model = model
+    model.load_state_dict(torch.load(model_path))
+    model = model.to("cuda") #Send to gpu
+    model.eval() 
+    
+    #Prepare image
+    image = torch.from_numpy(image).float() / 255.0       # Convert to float tensor, normalize if needed
+    image = image.unsqueeze(0).unsqueeze(0)               # Add shape: (1, 1, H, W) for batch and channel
+    
+    #Inference
+    with torch.no_grad():
+        pred = model(image.to('cuda')) 
+        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
+        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
+    
+    return pred
+
+def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5, filter:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
@@ -43,6 +65,7 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
         input_dir (str): Path to the input directory containing 'imgs' and 'gts' subfolders.
         output_dir (str): Path to the directory where predicted masks will be saved.
         threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
+        filter (bool): Applies a pixel filter if true. Default is false.
 
     Returns:
         None
@@ -76,14 +99,16 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
     
     #Generates gap junction prediction masks per batch
     with torch.no_grad(): 
-        for batch in tqdm(dataloader):
+        for batch in tqdm(dataloader, desc="Predicting"):
             image = batch[0].to("cuda")
             batch_pred = model(image)
             for i in range(batch_pred.shape[0]): #For each image in the batch
                 #Convert tensor to binary mask using Sigmoid activation function
                 gj_pred = (nn.Sigmoid()(batch_pred[i]) >= threshold)
-                gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensory to numpy array
-                save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[img_num])
+                gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensor to numpy array
+                if filter:
+                    gj_pred = filter_pixels(gj_pred, size_threshold=10) #Apply filter_pixels 
+                save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[img_num]) 
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
                 img_num += 1
 
@@ -243,7 +268,7 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     }
     
     #We have a list of all the input image file names in imgs
-    for img in tqdm(imgs):
+    for img in tqdm(imgs, desc="Evaluating"):
         #Load Predictions
         gj_pred = Path(pred_dir) / re.sub(r'.png$', r'_pred.png', img)
         gj_pred = cv2.imread(gj_pred, cv2.IMREAD_GRAYSCALE)
@@ -252,7 +277,6 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
         gj_label = Path(data_dir) / 'gts' / re.sub(r'.png$', r'_label.png', img)
         gj_label = cv2.imread(gj_label, cv2.IMREAD_GRAYSCALE)
         gj_label[gj_label != 0] = 255  # Convert 1s to 255 if they aren't already 255
-        gj_label = filter_pixels(gj_label)  # Filter out potential errors
         
         #Ensure same dimensions
         if gj_pred.shape != gj_label.shape:
@@ -305,20 +329,21 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult_s1mdf621.pt"
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/unet_base_516imgs_sem_adult_ak5v2m7m.pt"
     data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/sem_dauer_2/s000-050_filtered"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_ak5v2m7m/s000-050_filtered"
     
     #Process images if necessary
     
     #Run inference
-    inference(model_path=model_path,
-              input_dir=data_dir,
-              output_dir=pred_dir
-              )
+    # inference(model_path=model_path,
+    #           input_dir=data_dir,
+    #           output_dir=pred_dir,
+    #           filter=True
+    #           )
     
     #Visualize results
-    for i in range(5):
+    for i in range(1):
         fig = visualize(data_dir=data_dir,
                         pred_dir=pred_dir,
                         style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
@@ -327,7 +352,7 @@ def main():
     #Evaluate model performance
     performance_plot = evaluate(data_dir=data_dir,
                                 pred_dir=pred_dir,
-                                title="Model Unet_s1mdf621 Performance on sem_dauer_2_s000-050_filtered",
+                                title="Model Unet_ak5v2m7m Performance on sem_dauer_2_s000-050_filtered",
                                 )
     plt.show()
 
