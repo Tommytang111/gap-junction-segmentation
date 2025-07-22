@@ -134,39 +134,34 @@ class TestDataset(torch.utils.data.Dataset):
         
 #Models and Building Blocks
 class DoubleConv(nn.Module):
-    """(Conv2d -> BN -> ReLU) * 2"""
-    def __init__(self, in_channels, out_channels, three=False, dropout=0):
-        super(DoubleConv, self).__init__()
-        
-        self.dropout = torch.nn.Dropout(p=dropout)
-        
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=False),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=False)
-        )
-        
-        self.final = nn.Sequential(
-            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=False),
-            self.dropout
-        )
-  
-
-    def forward(self, x_in):
-        x = self.double_conv(x_in)
-        con_shape = x.shape
-        return x
+    """Double convolution block used in UNet"""
     
+    def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
+        super().__init__()
+        if not mid_channels:
+            mid_channels = out_channels
+            
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=False),
+            nn.Dropout(p=dropout)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
 class DownBlock(nn.Module):
-    """Double Convolution followed by Max Pooling"""
+    """Double convolution followed by max pooling"""
+
     def __init__(self, in_channels, out_channels, three=False, dropout=0):
-        super(DownBlock, self).__init__()
-        self.double_conv = DoubleConv(in_channels, out_channels, three=three, dropout=dropout, residual=residual)
-        self.down_sample = nn.MaxPool2d(2, stride=2) if not three else nn.MaxPool3d(2, stride=2)
+        super().__init__()
+        self.double_conv = DoubleConv(in_channels, out_channels, three=three, dropout=dropout)
+        self.down_sample = nn.MaxPool2d(2) if not three else nn.MaxPool3d(kernel_size=(1,2,2), stride=(1,2,2))
+        
 
     def forward(self, x):
         skip_out = self.double_conv(x)
@@ -174,78 +169,224 @@ class DownBlock(nn.Module):
         return (down_out, skip_out)
 
 class UpBlock(nn.Module):
-    """Up Convolution (Upsampling followed by Double Convolution)"""
-    def __init__(self, in_channels, out_channels, up_sample_mode, kernel_size=2, three=False, dropout=0):
-        super(UpBlock, self).__init__()
-        if up_sample_mode == 'conv_transpose':
-            if three: self.up_sample = nn.Sequential(
-                nn.ConvTranspose3d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
-                nn.Batchnorm3d(in_channels-out_channels),
-                nn.ReLU())       
-            else: self.up_sample = nn.Sequential(
-                nn.ConvTranspose2d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
-                nn.BatchNorm2d(in_channels-out_channels),
-                nn.ReLU())
+    """Upsampling followed by double convolution"""
+
+    def __init__(self, in_channels, out_channels, up_sample_mode, three=False, dropout=0):
+        super().__init__()
+
+        if up_sample_mode =='conv_transpose':
+            if three: 
+                self.up_sample = nn.Sequential(
+                nn.ConvTranspose3d(in_channels, out_channels, kernel_size=(1,2,2), stride=(1,2,2), bias=False),
+                nn.BatchNorm3d(out_channels),
+                nn.ReLU()
+            )
+            else: 
+                self.up_sample = nn.Sequential(
+                nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU()
+            )
         elif up_sample_mode == 'bilinear':
-            self.up_sample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True, three=three)
+            if three:
+                self.up_sample = nn.Upsample(scale_factor=(1,2,2), mode='trilinear', align_corners=False)
+            else:
+                self.up_sample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         else:
-            raise ValueError("Unsupported `up_sample_mode` (can take one of `conv_transpose` or `bilinear`)")
-        self.double_conv = DoubleConv(in_channels, out_channels, three=three, residual=residual)
-        self.dropout = torch.nn.Dropout(p=dropout)
+            raise ValueError(f"Unsupported up_sample_mode: {up_sample_mode}, choose from 'conv_transpose' or 'bilinear'.")
+        
+        self.double_conv=DoubleConv(in_channels, out_channels, three=three, dropout=dropout)
 
-    def forward(self, down_input, skip_input):
-        x = self.up_sample(down_input)
-        x = torch.cat([x, skip_input], dim=1)
+    def forward(self, up_input, skip_input):
+        """
+        Concatenate the upsampled input with skip_input along the channel dimension and apply double convolution. Since padding
+        is set to 1 in the convolution layers, up_input and skip_input should be the same size before concatenation.
+        """
+        x = self.up_sample(up_input)
+        x = torch.cat([skip_input, x], dim=1)
         return self.double_conv(x)
-    
-class UNet(nn.Module):
-    """UNet Architecture"""
-    def __init__(self, out_classes=2, up_sample_mode='conv_transpose', three=False, attend=False, scale=False, dropout=0, classes=2):
-        """Initialize the UNet model"""
-        super(UNet, self).__init__()
-        self.three = three
-        self.up_sample_mode = up_sample_mode
-        self.dropout=dropout
 
-        # Downsampling Path
-        self.down_conv1 = DownBlock(1, 64, three=three) # 1 input channels --> 64 output channels
-        self.down_conv2 = DownBlock(64, 128, three=three, dropout=self.dropout) # 64 input channels --> 128 output channels
-        self.down_conv3 = DownBlock(128, 256, dropout=self.dropout) # 128 input channels --> 256 output channels
-        self.down_conv4 = DownBlock(256, 512, dropout=self.dropout) # 256 input channels --> 512 output channels
-        # Bottleneck
-        self.double_conv = DoubleConv(512, 1024, dropout=self.dropout)
-        # Upsampling Path
-        self.up_conv4 = UpBlock(512 + 1024, 512, self.up_sample_mode, dropout=self.dropout) # 512 + 1024 input channels --> 512 output channels
-        self.up_conv3 = UpBlock(256 + 512, 256, self.up_sample_mode, dropout=self.dropout)
-        self.up_conv2 = UpBlock(128 + 256, 128, self.up_sample_mode, dropout=self.dropout)
-        self.up_conv1 = UpBlock(64 + 128, 64, self.up_sample_mode, dropout=self.dropout)
-        # Final Convolution
-        self.conv_last = nn.Conv2d(64, 1 if classes == 2 else classes, kernel_size=1)
-        self.attend = attend
-        if scale:
-            self.s1, self.s2 = torch.nn.Parameter(torch.ones(1), requires_grad=True), torch.nn.Parameter(torch.ones(1), requires_grad=True) # learn scaling
+class OutConv(nn.Module):
+    """
+    Output convolution layer. If 3D-2D Unet, uses a 3D convolution with kernel size (classes, 1, 1), where classes is 
+    depth, to have an output that retains image dimensions with as many channels as classes.
+    """
 
+    def __init__(self, in_channels, classes=2, three=False):
+        super(OutConv, self).__init__()
+        self.conv = nn.Conv2d(in_channels, classes, kernel_size=1) if not three else nn.Conv3d(in_channels, classes, kernel_size=(9,1,1))
 
     def forward(self, x):
-        """Forward pass of the UNet model
-        x: (16, 1, 512, 512)
+        return self.conv(x)
+
+class UNet(nn.Module):
+    """
+    UNet model for image segmentation
+    
+    Args:
+        n_channels (int): Number of input channels
+        classes (int): Number of output classes
+        up_sample_mode (str): Upsampling mode, either 'conv_transpose' or 'bilinear'
+        three (bool): If True, uses 3D convolutions; otherwise, uses 2D convolutions
+        dropout (float): Dropout rate for regularization
+    """
+
+    def __init__(self, n_channels=1, classes=2, up_sample_mode='conv_transpose', three=False, dropout=0):
+        super(UNet, self).__init__()
+
+        # Encoder (Contracting Path)
+        self.down1 = DownBlock(n_channels, 64, three=three)
+        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
+        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
+        self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
+        
+        # Bottleneck
+        self.bottleneck = DoubleConv(512, 1024, three=three, dropout=dropout)
+        
+        # Decoder (Expansive Path)
+        self.up1 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up4 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
+
+        # Output Layer
+        self.output = OutConv(64, classes=classes, three=three)
+
+    def forward(self, x):
         """
-        # print(x.shape)
-        x, skip1_out = self.down_conv1(x) # x: (16, 64, 256, 256), skip1_out: (16, 64, 512, 512) (batch_size, channels, height, width)    
-        x, skip2_out = self.down_conv2(x) # x: (16, 128, 128, 128), skip2_out: (16, 128, 256, 256)
-        if self.three: x = x.squeeze(-3)   
-        x, skip3_out = self.down_conv3(x) # x: (16, 256, 64, 64), skip3_out: (16, 256, 128, 128)
-        x, skip4_out = self.down_conv4(x) # x: (16, 512, 32, 32), skip4_out: (16, 512, 64, 64)
-        x = self.double_conv(x) # x: (16, 1024, 32, 32)
-        x = self.up_conv4(x, skip4_out) # x: (16, 512, 64, 64)
-        x = self.up_conv3(x, skip3_out) # x: (16, 256, 128, 128)
-        if self.three: 
-            skip1_out = torch.mean(skip1_out, dim=2)
-            skip2_out = torch.mean(skip2_out, dim=2)
-        x = self.up_conv2(x, skip2_out) # x: (16, 128, 256, 256)
-        x = self.up_conv1(x, skip1_out) # x: (16, 64, 512, 512)
-        x = self.conv_last(x) # x: (16, 1, 512, 512)
-        return x
+        Forward pass through the UNet model.
+        x has dimensions (batch_size, n_channels, height, width) for 2D or (batch_size, n_channels, depth, height, width) for 3D.
+        """
+        # Encoder
+        x1, skip_x = self.down1(x)
+        print("x1:", x1.shape, "skip_x:", skip_x.shape)
+        x2, skip_x1 = self.down2(x1)
+        print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
+        x3, skip_x2 = self.down3(x2)
+        print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
+        x4, skip_x3 = self.down4(x3)
+        print("x4:", x4.shape, "skip_x3:", skip_x3.shape)
+        # Bottleneck
+        x5 = self.bottleneck(x4)
+        print("x5 (bottleneck):", x5.shape)
+        # Decoder with skip connections
+        x6 = self.up1(x5, skip_x3)
+        print("x6:", x6.shape)
+        x7 = self.up2(x6, skip_x2)
+        print("x7:", x7.shape)
+        x8 = self.up3(x7, skip_x1)
+        print("x8:", x8.shape)
+        x9 = self.up4(x8, skip_x)
+        print("x9:", x9.shape)
+        logits = self.output(x9)
+        print("logits:", logits.shape)
+        return logits
+
+#Previous Unet model definition for reference
+# class DoubleConv(nn.Module):
+#     """(Conv2d -> BN -> ReLU) * 2"""
+#     def __init__(self, in_channels, out_channels, three=False, dropout=0):
+#         super(DoubleConv, self).__init__()
+        
+#         self.double_conv = nn.Sequential(
+#             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1),
+#             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+#             nn.ReLU(inplace=False),
+#             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1) if not three else nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
+#             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+#             nn.ReLU(inplace=False),
+#             nn.Dropout(p=dropout)
+#         )
+  
+#     def forward(self, x_in):
+#         x = self.double_conv(x_in)
+#         con_shape = x.shape
+#         return x
+    
+# class DownBlock(nn.Module):
+#     """Double Convolution followed by Max Pooling"""
+#     def __init__(self, in_channels, out_channels, three=False, dropout=0):
+#         super(DownBlock, self).__init__()
+#         self.double_conv = DoubleConv(in_channels, out_channels, three=three, dropout=dropout)
+#         self.down_sample = nn.MaxPool2d(2, stride=2) if not three else nn.MaxPool3d(2, stride=2)
+
+#     def forward(self, x):
+#         skip_out = self.double_conv(x)
+#         down_out = self.down_sample(skip_out)
+#         return (down_out, skip_out)
+
+# class UpBlock(nn.Module):
+#     """Up Convolution (Upsampling followed by Double Convolution)"""
+#     def __init__(self, in_channels, out_channels, up_sample_mode, kernel_size=2, three=False, dropout=0):
+#         super(UpBlock, self).__init__()
+#         if up_sample_mode == 'conv_transpose':
+#             if three: self.up_sample = nn.Sequential(
+#                 nn.ConvTranspose3d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+#                 nn.BatchNorm3d(in_channels-out_channels),
+#                 nn.ReLU())       
+#             else: self.up_sample = nn.Sequential(
+#                 nn.ConvTranspose2d(in_channels-out_channels, in_channels-out_channels, kernel_size=kernel_size, stride=2),
+#                 nn.BatchNorm2d(in_channels-out_channels),
+#                 nn.ReLU())
+#         elif up_sample_mode == 'bilinear':
+#             self.up_sample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True, three=three)
+#         else:
+#             raise ValueError("Unsupported `up_sample_mode` (can take one of `conv_transpose` or `bilinear`)")
+#         self.double_conv = DoubleConv(in_channels, out_channels, three=three)
+
+#     def forward(self, down_input, skip_input):
+#         x = self.up_sample(down_input)
+#         x = torch.cat([x, skip_input], dim=1)
+#         return self.double_conv(x)
+    
+# class UNet(nn.Module):
+#     """UNet Architecture"""
+#     def __init__(self, out_classes=2, up_sample_mode='conv_transpose', three=False, attend=False, scale=False, dropout=0, classes=2):
+#         """Initialize the UNet model"""
+#         super(UNet, self).__init__()
+#         self.three = three
+#         self.up_sample_mode = up_sample_mode
+#         self.dropout=dropout
+
+#         # Downsampling Path
+#         self.down_conv1 = DownBlock(1, 64, three=three) # 1 input channels --> 64 output channels
+#         self.down_conv2 = DownBlock(64, 128, three=three, dropout=self.dropout) # 64 input channels --> 128 output channels
+#         self.down_conv3 = DownBlock(128, 256, three=three, dropout=self.dropout) # 128 input channels --> 256 output channels
+#         self.down_conv4 = DownBlock(256, 512, three=three, dropout=self.dropout) # 256 input channels --> 512 output channels
+#         # Bottleneck
+#         self.double_conv = DoubleConv(512, 1024, three=three, dropout=self.dropout)
+#         # Upsampling Path
+#         self.up_conv4 = UpBlock(512 + 1024, 512, three=three, up_sample_mode=self.up_sample_mode, dropout=self.dropout) # 512 + 1024 input channels --> 512 output channels
+#         self.up_conv3 = UpBlock(256 + 512, 256, three=three, up_sample_mode=self.up_sample_mode, dropout=self.dropout)
+#         self.up_conv2 = UpBlock(128 + 256, 128, three=three, up_sample_mode=self.up_sample_mode, dropout=self.dropout)
+#         self.up_conv1 = UpBlock(64 + 128, 64, three=three, up_sample_mode=self.up_sample_mode, dropout=self.dropout)
+#         # Final Convolution
+#         self.conv_last = nn.Conv2d(64, 1 if classes == 2 else classes, kernel_size=1)
+#         self.attend = attend
+#         if scale:
+#             self.s1, self.s2 = torch.nn.Parameter(torch.ones(1), requires_grad=True), torch.nn.Parameter(torch.ones(1), requires_grad=True) # learn scaling
+
+
+#     def forward(self, x):
+#         """Forward pass of the UNet model
+#         x: (16, 1, 512, 512)
+#         """
+#         # print(x.shape)
+#         x, skip1_out = self.down_conv1(x) # x: (16, 64, 256, 256), skip1_out: (16, 64, 512, 512) (batch_size, channels, height, width)    
+#         x, skip2_out = self.down_conv2(x) # x: (16, 128, 128, 128), skip2_out: (16, 128, 256, 256)
+#         if self.three: x = x.squeeze(-3)   
+#         x, skip3_out = self.down_conv3(x) # x: (16, 256, 64, 64), skip3_out: (16, 256, 128, 128)
+#         x, skip4_out = self.down_conv4(x) # x: (16, 512, 32, 32), skip4_out: (16, 512, 64, 64)
+#         x = self.double_conv(x) # x: (16, 1024, 32, 32)
+#         x = self.up_conv4(x, skip4_out) # x: (16, 512, 64, 64)
+#         x = self.up_conv3(x, skip3_out) # x: (16, 256, 128, 128)
+#         if self.three: 
+#             skip1_out = torch.mean(skip1_out, dim=2)
+#             skip2_out = torch.mean(skip2_out, dim=2)
+#         x = self.up_conv2(x, skip2_out) # x: (16, 128, 256, 256)
+#         x = self.up_conv1(x, skip1_out) # x: (16, 64, 512, 512)
+#         x = self.conv_last(x) # x: (16, 1, 512, 512)
+#         return x
         
 #LOSS FUNCTIONS
 class FocalLoss(nn.Module):
@@ -323,3 +464,31 @@ class MultiGenDLoss(nn.Module):
         # print(weights.shape, torch.nansum(targets * inputs, dim=-1).shape)
         return torch.nanmean(1 - 2 * torch.nansum(weights * torch.nansum(targets * inputs, dim=-1))/\
                           torch.nansum(weights * torch.nansum(targets + inputs, dim=-1)))
+        
+# Example usage and testing
+if __name__ == "__main__":
+    # Create model instance
+    model = UNet(three=False, n_channels=1, classes=2, up_sample_mode='conv_transpose')  # 1 input channel (grayscale), 2 classes (background, gap junction)
+
+    # Print model summary
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+    
+    # Test with dummy input
+    x = torch.randn(1, 1, 512, 512)  # Batch size 1, 1 channel, 512x512 image
+    
+    with torch.no_grad():
+        output = model(x)
+        print(f"Input shape: {x.shape}")
+        print(f"Output shape: {output.shape}")
+        
+    # Example training setup
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    
+    print("\nModel created successfully!")
+    print("Key features:")
+    print("- Encoder-decoder architecture with skip connections")
+    print("- Batch normalization for stable training")
+    print("- ReLU activations")
+    print("- Configurable input/output channels")
+    print("- Option for bilinear upsampling or transposed convolutions")
