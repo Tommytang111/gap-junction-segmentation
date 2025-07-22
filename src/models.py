@@ -132,7 +132,7 @@ class TestDataset(torch.utils.data.Dataset):
         #Add batch dimension to image, mask
         return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
         
-#Models
+#Models and Building Blocks
 class DoubleConv(nn.Module):
     """(Conv2d -> BN -> ReLU) * 2"""
     def __init__(self, in_channels, out_channels, three=False, spatial=False, residual=False, dropout=0):
