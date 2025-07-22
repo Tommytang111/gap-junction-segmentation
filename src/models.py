@@ -8,13 +8,103 @@ June 1, 2025
 import os
 import cv2
 import numpy as np
+from typing import Union
+from PIL import Image
 from pathlib import Path
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision.transforms import ToTensor
-from utils import *
+from scipy.ndimage import label
+
+#Functions
+def filter_pixels(img:np.ndarray, size_threshold:int=8) -> np.ndarray:
+    """
+    Removes small non-zero pixel islands from a grayscale image.
+
+    For each connected component (island) of non-zero pixels in the input image,
+    this function sets all pixels in that component to zero if the component contains
+    fewer than the number of pixels defined by size_threshold. Designed for use with grayscale images to filter out small
+    annotation errors or noise.
+
+    Parameters:
+        img (np.ndarray): Input grayscale image as a NumPy array.
+        size_threshold (int): Minimum size of pixel islands to keep (default: 8).
+
+    Returns:
+        np.ndarray: The filtered image with small pixel islands removed.
+    """
+    # Create a copy to avoid modifying the original during iteration
+    filtered = img.copy()
+    # Label connected components (8-connectivity)
+    structure = np.ones((3, 3), dtype=int)
+    labeled, _ = label(img > 0, structure=structure)
+    # For each pixel, check if its component has at least size_threshold pixels
+    for y in range(img.shape[0]):
+        for x in range(img.shape[1]):
+            if img[y, x] != 0:
+                component_label = labeled[y, x]
+                if component_label == 0:
+                    filtered[y, x] = 0
+                    continue
+                # Count pixels in this component
+                count = np.sum(labeled == component_label)
+                if count < size_threshold:
+                    filtered[y, x] = 0
+    return filtered
+
+def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad_clr:tuple, channels=True) -> Image.Image:
+    """
+    Resize an image to fit within a specified width and length, maintaining the aspect ratio.
+    If the image does not fit within the specified dimensions, it will be padded with a specified color.
+    This is not the same as just padding an image, because the old image will always try to maximize its area 
+    in the new image.
+    
+    image: Image to be resized
+    new_width: New width of the image
+    new_length: New length of the image
+    pad_clr: Color to pad the image with if it does not fit within the specified dimensions
+    channels: If False, a grayscale image will be returned as grayscale (1 channel dim) after resizing.
+    
+    Returns: Resized image as a PIL image.
+    """
+    #Open Image as either string or numpy array
+    if isinstance(image, str):
+        img = Image.open(image) 
+    elif isinstance(image, np.ndarray):
+        img = Image.fromarray(image)
+    else:
+        raise ValueError("Unsupported image type")
+    
+    orig_width, orig_height = img.size
+
+    # Compute scaling factor to fit within target box
+    scale = min(new_width / orig_width, new_length / orig_height)
+    resized_width = int(orig_width * scale)
+    resized_height = int(orig_height * scale)
+
+    img = img.resize((resized_width, resized_height), Image.LANCZOS)
+
+    # Determine mode and pad color
+    mode = img.mode
+    if mode == 'L' and not channels:
+        pad_color = pad_clr[0] if isinstance(pad_clr, (tuple, list)) else pad_clr
+    elif mode == 'L' and channels:
+        # If channels=True, convert to RGB
+        img = img.convert('RGB')
+        mode = 'RGB'
+        pad_color = pad_clr
+    else:
+        pad_color = pad_clr
+        
+    # Create new image and paste resized image onto center
+    new_img = Image.new(mode, (new_width, new_length), pad_color)
+    paste_x = (new_width - resized_width) // 2
+    paste_y = (new_length - resized_height) // 2
+    new_img.paste(img, (paste_x, paste_y))
+    
+    return new_img
 
 #DATASETS
 class TrainingDataset(torch.utils.data.Dataset):
@@ -259,27 +349,29 @@ class UNet(nn.Module):
         """
         # Encoder
         x1, skip_x = self.down1(x)
-        print("x1:", x1.shape, "skip_x:", skip_x.shape)
+        #print("x1:", x1.shape, "skip_x:", skip_x.shape)
         x2, skip_x1 = self.down2(x1)
-        print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
+        #print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
         x3, skip_x2 = self.down3(x2)
-        print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
+        #print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
         x4, skip_x3 = self.down4(x3)
-        print("x4:", x4.shape, "skip_x3:", skip_x3.shape)
+        #print("x4:", x4.shape, "skip_x3:", skip_x3.shape)
+        
         # Bottleneck
         x5 = self.bottleneck(x4)
-        print("x5 (bottleneck):", x5.shape)
+        #print("x5 (bottleneck):", x5.shape)
+        
         # Decoder with skip connections
         x6 = self.up1(x5, skip_x3)
-        print("x6:", x6.shape)
+        #print("x6:", x6.shape)
         x7 = self.up2(x6, skip_x2)
-        print("x7:", x7.shape)
+        #print("x7:", x7.shape)
         x8 = self.up3(x7, skip_x1)
-        print("x8:", x8.shape)
+        #print("x8:", x8.shape)
         x9 = self.up4(x8, skip_x)
-        print("x9:", x9.shape)
+        #print("x9:", x9.shape)
         logits = self.output(x9)
-        print("logits:", logits.shape)
+        #print("logits:", logits.shape)
         return logits
 
 #Previous Unet model definition for reference
@@ -429,6 +521,11 @@ class GenDLoss(nn.Module):
     
     def forward(self, inputs, targets, loss_mask=[], mito_mask=[], loss_fn=None, fn_reweight=None):
         inputs = nn.Sigmoid()(inputs)
+        
+        # Handle 2-channel outputs (select the foreground channel)
+        if inputs.shape[1] == 2:
+            inputs = inputs[:, 1:2, :, :]  # Take only the foreground probability
+        
         targets, inputs = targets.view(targets.shape[0], -1), inputs.view(inputs.shape[0], -1)
 
         inputs = torch.stack([inputs, 1-inputs], dim=-1)
@@ -441,13 +538,10 @@ class GenDLoss(nn.Module):
             if len(targets.shape) > len(loss_mask.shape): loss_mask.unsqueeze(-1)
             loss_mask = loss_mask.view(loss_mask.shape[0], -1)
             targets *= loss_mask.unsqueeze(-1)
-            inputs *= loss_mask.unsqueeze(-1)#0 them out in both masks
+            inputs *= loss_mask.unsqueeze(-1) #0 them out in both masks
 
         weights = 1 / (torch.sum(torch.permute(targets, (0, 2, 1)), dim=-1).pow(2)+1e-6)
         targets, inputs = torch.permute(targets, (0, 2, 1)), torch.permute(inputs, (0, 2, 1))
-
-        # print(torch.nansum(weights * torch.nansum(targets * inputs, dim=-1), dim=-1))
-        # print(weights)
 
         return torch.nanmean(1 - 2 * torch.nansum(weights * torch.nansum(targets * inputs, dim=-1), dim=-1)/\
                           torch.nansum(weights * torch.nansum(targets + inputs, dim=-1), dim=-1))

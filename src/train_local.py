@@ -213,7 +213,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True)
     
     #Set data augmentation type
-    train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
+    train_augmentation = get_custom_augmentation()  
 
     #For validation/test without augmentation
     valid_augmentation = A.Compose([
@@ -250,7 +250,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     
     #Set device and model
     device = torch.device("cuda")    
-    model = UNet().to(device)
+    model = UNet(three=False, n_channels=1, classes=1, up_sample_mode='bilinear').to(device)
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
@@ -342,9 +342,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="516imgs_sem_adult_copy",
-         data_dir="/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult_copy",
+    main(run_name="516imgs_sem_adult_test",
+         data_dir="/home/tommytang111/gap-junction-segmentation/data/516imgs_sem_adult",
          seed=40,
-         epochs=100,
+         epochs=50,
          batch_size=8,
          output_path="/home/tommytang111/gap-junction-segmentation/models")

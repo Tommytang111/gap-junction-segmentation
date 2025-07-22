@@ -8,7 +8,6 @@ June 2, 2025
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D 
-from scipy.ndimage import label
 from typing import Union
 from torch import nn
 import torch
@@ -17,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 import cv2
-import tqdm
+from tqdm import tqdm
 from PIL import Image
 import re
 import random
