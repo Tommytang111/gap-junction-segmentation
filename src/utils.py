@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 import cv2
-import tqdm
+from tqdm import tqdm
 from PIL import Image
 import re
 from sklearn.model_selection import train_test_split

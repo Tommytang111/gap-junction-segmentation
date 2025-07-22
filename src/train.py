@@ -175,7 +175,7 @@ def wandb_init(run_name, epochs, batch_size, data):
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
-            dir="/home/tommy111/projects/def-mzhen/tommy111/wandb",
+            dir="/home/tommy111/projects/def-mzhen/tommy111",
             reinit=True,
             config={
                 "dataset": data,
@@ -185,6 +185,7 @@ def wandb_init(run_name, epochs, batch_size, data):
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
                 "optimizer": "SGD",
+                "momentum": 0.9,
                 "scheduler": "ReduceLROnPlateau",
                 "augmentation": "Custom Augmentation with (-15, 15) shear"
             }
@@ -339,8 +340,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="516imgs_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
+    main(run_name="unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
          seed=40,
          epochs=200,
          batch_size=16,
