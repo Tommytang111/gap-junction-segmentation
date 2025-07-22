@@ -340,7 +340,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="516imgs_sem_adult",
+    main(run_name="516imgs_sem_adult_test",
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
          seed=40,
          epochs=200,
