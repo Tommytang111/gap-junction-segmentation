@@ -21,7 +21,6 @@ from PIL import Image
 import re
 import random
 from sklearn.model_selection import train_test_split
-from models import UNet
 
 #DEPENDENCY FUNCTIONS
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):

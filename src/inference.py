@@ -26,8 +26,103 @@ from models import UNet, TestDataset
 from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d
 
 #FUNCTIONS
+
 #NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
 #NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER
+
+def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
+    """
+    Compare predictions from three different UNet models on a randomly selected image.
+    
+    This function loads a random image from the specified dataset directory, runs inference
+    using three different trained UNet models, and creates comparison visualizations showing
+    the original image, individual predictions, ground truth, and overlay comparisons.
+    
+    Args:
+        model1_path (str): Path to the first trained model checkpoint (.pt file).
+                          Expected to be the 516imgs_sem_adult model.
+        model2_path (str): Path to the second trained model checkpoint (.pt file).
+                          Expected to be the 516imgs_sem_dauer_2 model.
+        model3_path (str): Path to the third trained model checkpoint (.pt file).
+                          Expected to be the 1032imgs_pooled model.
+        data_dir (str or Path): Path to the dataset directory containing 'imgs' and 'gts' 
+                               subdirectories with corresponding image and label files.
+    
+    Returns:
+        tuple: A tuple containing two matplotlib figure objects:
+            - fig1 (matplotlib.figure.Figure): Figure showing the original grayscale image.
+            - fig2 (matplotlib.figure.Figure): 2x4 subplot comparison figure containing:
+                - Top row: Individual predictions from each model and ground truth
+                - Bottom row: Overlay visualizations (predictions/truth over original image)
+    
+    Note:
+        - Requires CUDA-capable GPU for model inference.
+        - Label files are expected to follow the naming convention: 
+          original_name.png -> original_name_label.png
+        - All models should be UNet architectures with compatible input/output dimensions.
+        - Uses single_image_inference() function for individual model predictions.
+    
+    Example:
+        >>> fig1, fig2 = predict_multiple_models(
+        ...     model1_path='models/adult_model.pt',
+        ...     model2_path='models/dauer_model.pt', 
+        ...     model3_path='models/pooled_model.pt',
+        ...     data_dir='data/test_dataset'
+        ... )
+        >>> fig1.savefig('original_image.png')
+        >>> fig2.savefig('model_comparison.png')
+    """
+    imgs = os.listdir(Path(data_dir) / "imgs")
+    random_img = random.choice(imgs)
+    random_img_path = Path(data_dir) / "imgs" / random_img
+
+    img1 = cv2.imread(random_img_path, cv2.IMREAD_GRAYSCALE)
+    gts1 = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(random_img)), cv2.IMREAD_GRAYSCALE)
+
+    model1_pred = single_image_inference(image=img1,
+                    model_path=model1_path,
+                    model=UNet())
+    model2_pred = single_image_inference(image=img1,
+                    model_path=model2_path,
+                    model=UNet())
+    model3_pred = single_image_inference(image=img1,
+                    model_path=model3_path,
+                    model=UNet())
+
+    fig1 = plt.figure(1)
+    plt.imshow(img1, cmap='gray')
+    plt.axis('off')
+
+    #Plot
+    fig2 = plt.figure(2, figsize=(16, 12), dpi=300)
+    plt.subplot(241)
+    plt.imshow(model1_pred, cmap='gray')
+    plt.title('Model 516imgs_sem_adult', fontsize=10)
+    plt.subplot(242)
+    plt.imshow(model2_pred, cmap='gray')
+    plt.title('Model 516imgs_sem_dauer_2', fontsize=10)
+    plt.subplot(243)
+    plt.imshow(model3_pred, cmap='gray')
+    plt.title('Model 1032imgs_pooled', fontsize=10)
+    plt.subplot(244)
+    plt.imshow(gts1, cmap='gray')
+    plt.title('Truth', fontsize=10)
+    plt.subplot(245)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model1_pred, cmap='gray', alpha=0.5)
+    plt.subplot(246)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model2_pred, cmap='gray', alpha=0.5)
+    plt.subplot(247)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(model3_pred, cmap='gray', alpha=0.5)
+    plt.subplot(248)
+    plt.imshow(img1, cmap='gray')
+    plt.imshow(gts1, cmap='gray', alpha=0.5)
+    #plt.tight_layout
+    plt.subplots_adjust(wspace=0.2, hspace=-0.5)
+
+    return fig1, fig2
 
 def single_image_inference(image:np.ndarray, model_path:str, model):
     """
