@@ -276,10 +276,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         )
 
     #Load datasets into DataLoader
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
-    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=False, worker_init_fn=worker_init_fn)
-    
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, worker_init_fn=worker_init_fn)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, worker_init_fn=worker_init_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, worker_init_fn=worker_init_fn)
+
     #Set device and model
     device = torch.device("cuda")    
     model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose').to(device)
@@ -377,7 +377,7 @@ if __name__ == "__main__":
     main(run_name="unet_base_516vols_sem_adult_test",
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
-         epochs=200,
-         batch_size=6,
+         epochs=100,
+         batch_size=2,
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
          three=True) # Set to True for 3D-2D U-Net, False for 2D U-Net

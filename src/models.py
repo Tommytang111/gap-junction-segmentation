@@ -270,7 +270,7 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
 
         # Encoder (Contracting Path)
-        self.down1 = DownBlock(n_channels, 64, three=three)
+        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
         self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
         self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
         self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
