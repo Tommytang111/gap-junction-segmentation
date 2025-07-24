@@ -21,10 +21,9 @@ from utils import filter_pixels, resize_image
 
 #DATASETS
 class TrainingDataset(torch.utils.data.Dataset):
-    def __init__(self, images, labels, masks=None, augmentation=None, data_size=(512, 512), train=True):
+    def __init__(self, images, labels, augmentation=None, data_size=(512, 512), train=True):
         self.image_paths = sorted([os.path.join(images, img) for img in os.listdir(images)])
         self.label_paths = sorted([os.path.join(labels, lbl) for lbl in os.listdir(labels)])
-        self.mask_paths = sorted([os.path.join(masks, mask) for mask in os.listdir(masks)]) if masks else None
         self.augmentation = augmentation
         self.data_size = data_size
         self.train = train
@@ -33,36 +32,23 @@ class TrainingDataset(torch.utils.data.Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        #Read image, label, and mask
+        #Read image, label
         image = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
         label = cv2.imread(self.label_paths[idx], cv2.IMREAD_GRAYSCALE)
-        mask = cv2.imread(self.mask_paths[idx], cv2.IMREAD_GRAYSCALE) if self.mask_paths else None
         
         #Apply resizing with padding if image is not expected size and then convert back to ndarray
         if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
             image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
             label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
-            if mask is not None:
-                mask = np.array(resize_image(mask, self.data_size[0], self.data_size[1], (0,0,0)))
 
-        #Convert mask/label to binary for model classification
+        #Convert label to binary for model classification
         label[label > 0] = 1
-        if mask is not None:
-            mask[mask > 0] = 1
             
         #Filter small out small groups of pixels (annotation mistakes)
         label = filter_pixels(label, size_threshold=10)
         
         #Apply augmentation if provided
         if self.augmentation and self.train:
-            if mask is not None:
-                #Use mask in augmentation
-                augmented = self.augmentation(image=image, mask=label, label=mask)
-                image = augmented['image']
-                label = augmented['mask']
-                mask = augmented['label']
-            else:
-                #Without mask
                 augmented = self.augmentation(image=image, mask=label)
                 image = augmented['image']
                 label = augmented['mask']
@@ -74,12 +60,58 @@ class TrainingDataset(torch.utils.data.Dataset):
             image = ToTensor()(image).float()
         if not torch.is_tensor(label):
             label = torch.from_numpy(label).long()
-        if mask is not None and not torch.is_tensor(mask):
-            mask = torch.from_numpy(mask).long()
-        elif mask is None:
-            mask = torch.zeros_like(label)
 
-        return image, label, mask
+        return image, label
+    
+class TrainingDataset3D(torch.utils.data.Dataset):
+    def __init__(self, volumes, labels, augmentation=None, data_size=(9, 512, 512), train=True):
+        self.volume_paths = sorted([os.path.join(volumes, vol) for vol in os.listdir(volumes)])
+        self.label_paths = sorted([os.path.join(labels, lbl) for lbl in os.listdir(labels)])
+        self.augmentation = augmentation
+        self.data_size = data_size
+        self.train = train
+
+    def __len__(self):
+        return len(self.volume_paths)
+
+    def __getitem__(self, idx):
+        #Read volume, label
+        volume = np.load(self.volume_paths[idx])
+        label = cv2.imread(self.label_paths[idx], cv2.IMREAD_GRAYSCALE)
+        
+        # #Apply resizing with padding if image is not expected size and then convert back to ndarray
+        # if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
+        #     image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
+        #     label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
+
+        #Convert label to binary for model classification
+        label[label > 0] = 1
+            
+        #Filter small out small groups of pixels (annotation mistakes)
+        #label = filter_pixels(label, size_threshold=10)
+        
+        # #Apply augmentation if provided (ADD LATER)
+        # if self.augmentation and self.train:
+        #         augmented = self.augmentation(image=image, mask=label)
+        #         image = augmented['image']
+        #         label = augmented['mask']
+
+        #Add entity recognition clause later if needed
+        
+        # Convert to tensors if not already converted from augmentation
+        if not torch.is_tensor(volume):
+            # Ensure volume shape is (depth, height, width)
+            if volume.ndim == 3:
+                volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
+            elif volume.ndim == 4 and volume.shape[0] == 1:
+                pass  # Already correct
+            else:
+                raise ValueError(f"Unexpected volume shape: {volume.shape}")
+            volume = torch.from_numpy(volume).float()
+        if not torch.is_tensor(label):
+            label = torch.from_numpy(label).long()
+            
+        return volume, label
 
 class TestDataset(torch.utils.data.Dataset):
     def __init__(

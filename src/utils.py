@@ -413,7 +413,7 @@ def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_t
 #output_dir = args.output_dir if not args.make_twoD else args.output_dir+"_3d"
 #create_dataset_3d(args.flat_dataset_dir, output_dir, depth_pattern=r's\d\d\d', window=args.window, test=args.test, image_to_seg_name_map=f, add_dir_maps=gs, add_dir=args.add_dir)
 
-def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40):
+def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40, three=False):
     """
     Split a dataset into train, validation, and test sets.
 
@@ -435,27 +435,27 @@ def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter
     test_dir = os.path.join(output_base_dir, 'test')
 
     for directory in [train_dir, val_dir, test_dir]:
-        os.makedirs(os.path.join(directory, 'imgs'), exist_ok=True)
+        os.makedirs(os.path.join(directory, 'imgs'), exist_ok=True) if not three else os.makedirs(os.path.join(directory, 'vols'), exist_ok=True)
         os.makedirs(os.path.join(directory, 'gts'), exist_ok=True)
 
     # Get all image filenames
-    all_images = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))])
-    all_images_copy = all_images
+    all_images_or_vols = sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.png', '.jpg', '.jpeg'))]) if not three else sorted([f for f in os.listdir(source_img_dir) if f.endswith(('.npy', '.npz'))])
+    all_images_or_vols_copy = all_images_or_vols.copy()
 
     # If filtering is enabled, apply the sobel filter to each image  
-    if filter:
+    if filter and not three:
         count = 0
-        for img_name in tqdm(all_images_copy, desc="Filtering images"):
+        for img_name in tqdm(all_images_or_vols_copy, desc="Filtering images"):
             img_path = os.path.join(source_img_dir, img_name)
             if sobel_filter(img_path) == 'exclude':
-                all_images_copy.remove(img_name)
+                all_images_or_vols_copy.remove(img_name)
                 count += 1
                 
-        print(f"Filtered {count} images out of {len(all_images)} based on Sobel filter criteria.")
+        print(f"Filtered {count} images out of {len(all_images_or_vols)} based on Sobel filter criteria.")
     
     # First split: train vs (val+test)
     train_images, remaining_images = train_test_split(
-        all_images_copy, 
+        all_images_or_vols_copy, 
         train_size=train_size, 
         random_state=random_state
     )
@@ -478,7 +478,7 @@ def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter
             # Copy image
             shutil.copy(
                 os.path.join(source_img_dir, img_name),
-                os.path.join(target_dir, 'imgs', img_name)
+                os.path.join(target_dir, 'imgs', img_name) if not three else os.path.join(target_dir, 'vols', img_name)
             )
             
             # Copy ground truth 
@@ -490,12 +490,13 @@ def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter
 
     print(f"Dataset split completed: {len(train_images)} training, {len(val_images)} validation, {len(test_images)} test images")
 
+    key = 'imgs' if not three else 'vols'
     return {
-        'train': {'imgs': os.path.join(train_dir, 'imgs'), 'gts': os.path.join(train_dir, 'gts')},
-        'val': {'imgs': os.path.join(val_dir, 'imgs'), 'gts': os.path.join(val_dir, 'gts')},
-        'test': {'imgs': os.path.join(test_dir, 'imgs'), 'gts': os.path.join(test_dir, 'gts')}
+        'train': {key: os.path.join(train_dir, key), 'gts': os.path.join(train_dir, 'gts')},
+        'val': {key: os.path.join(val_dir, key), 'gts': os.path.join(val_dir, 'gts')},
+        'test': {key: os.path.join(test_dir, key), 'gts': os.path.join(test_dir, 'gts')}
     }
-
+    
 def filter_by_overlay(image_folder, mask_folder, output_folder):
     """
     Displays each image with its segmentation mask and overlay and allows the user to manually filter images.

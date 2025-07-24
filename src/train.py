@@ -37,7 +37,7 @@ def get_custom_augmentation():
         ToTensorV2()
     ])
 
-def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda'):
+def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False):
     """
     Training logic for the epoch.
     """
@@ -50,7 +50,7 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     precision.reset()
     f1.reset()
     
-    for batch, (X, y, _) in tqdm(enumerate(dataloader), total=num_batches, desc="Training Batches"):
+    for batch, (X, y) in tqdm(enumerate(dataloader), total=num_batches, desc="Training Batches"):
         X, y = X.to(device), y.to(device)
         
         # Compute prediction and loss
@@ -63,7 +63,10 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         optimizer.zero_grad()
         
         #Calculate metrics after converting predictions to binary
-        pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
+        if three:
+            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1).squeeze(1) #Remove channel dimension and depth dimension to match y
+        else:
+            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
         
         #Update metrics
         recall.update(pred_binary, y)
@@ -80,7 +83,7 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     
     return train_loss_per_epoch, train_recall, train_precision, train_f1
     
-def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
+def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', three=False):
     """
     Validation logic for the epoch.
     """
@@ -94,13 +97,16 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
     f1.reset()
     
     with torch.no_grad():
-        for X, y, _ in tqdm(dataloader, desc="Validation Batches"):
+        for X, y in tqdm(dataloader, desc="Validation Batches"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             
             #Calculate metrics
-            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
+            if three:
+                pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1).squeeze(1) #Remove channel dimension and depth dimension to match y
+            else:
+                pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
             
             #Update metrics
             recall.update(pred_binary, y)
@@ -116,7 +122,7 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda'):
     return val_loss_per_epoch, val_recall, val_precision, val_f1
     print(f"Avg loss: {test_loss:>7f}\n")
 
-def test(model, dataloader, loss_fn, device='cuda'):
+def test(model, dataloader, loss_fn, device='cuda', three=False):
     """
     Evaluate the model on the test dataset
     
@@ -139,13 +145,16 @@ def test(model, dataloader, loss_fn, device='cuda'):
     f1 = BinaryF1Score().to(device)
     
     with torch.no_grad():
-        for X, y, _ in tqdm(dataloader, desc="Test Evaluation"):
+        for X, y in tqdm(dataloader, desc="Test Evaluation"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             
             # Calculate metrics
-            pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1)
+            if three:
+                pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1).squeeze(1) #Remove channel dimension and depth dimension to match y
+            else:
+                pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
             
             # Update metrics
             recall.update(pred_binary, y)
@@ -179,6 +188,7 @@ def wandb_init(run_name, epochs, batch_size, data):
             reinit=True,
             config={
                 "dataset": data,
+                "model": "UNet3D-2D",
                 "learning_rate": 0.01,
                 "batch_size": batch_size,
                 "epochs": epochs,
@@ -193,7 +203,7 @@ def wandb_init(run_name, epochs, batch_size, data):
     )
     return run
     
-def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:int=200, seed:int=40):
+def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:int=200, seed:int=40, three=False):
     """
     Main function to run training, validation, and test loop.
     """
@@ -204,12 +214,12 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     seed_everything(seed)
 
     # Create dataset splits (uncomment and run once to create the splits)
-    source_img_dir = f"{data_dir}/imgs"
+    source_img_dir = f"{data_dir}/vols"
     source_gt_dir = f"{data_dir}/gts"
     output_base_dir = f"{data_dir}_split"
 
     #Create the splits (does not overwrite existing splits)
-    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True)
+    dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
 
     #Set data augmentation type
     train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
@@ -222,23 +232,23 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Initialize datasets
     train_dataset = TrainingDataset(
-        images=dataset_paths['train']['imgs'],
+        images=dataset_paths['train']['vols'],
         labels=dataset_paths['train']['gts'],
-        augmentation=train_augmentation,
+        augmentation=None,
         train=True,
     )
 
     valid_dataset = TrainingDataset(
-        images=dataset_paths['val']['imgs'],
+        images=dataset_paths['val']['vols'],
         labels=dataset_paths['val']['gts'],
-        augmentation=valid_augmentation,
+        augmentation=None,
         train=False
     )
     
     test_dataset = TrainingDataset(
-        images=dataset_paths['test']['imgs'],
+        images=dataset_paths['test']['vols'],
         labels=dataset_paths['test']['gts'],
-        augmentation=valid_augmentation,
+        augmentation=None,
         train=False
     )
 
@@ -249,7 +259,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Set device and model
     device = torch.device("cuda")    
-    model = UNet(three=False, n_channels=1, classes=1, up_sample_mode='conv_transpose').to(device)
+    model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose').to(device)
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
@@ -276,10 +286,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         print(f"Epoch {epoch+1}")
         
         #Training
-        train_loss, train_recall, train_precision, train_f1 = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1)
+        train_loss, train_recall, train_precision, train_f1 = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1, three=three)
 
         #Validation
-        val_loss, val_recall, val_precision, val_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1)
+        val_loss, val_recall, val_precision, val_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1, three=three)
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
@@ -333,7 +343,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     # Evaluate on test set
     print("\nEvaluating on test set...")
-    test_metrics = test(model, test_dataloader, loss_fn, device)
+    test_metrics = test(model, test_dataloader, loss_fn, device, three=three)
     
     # Log test metrics to wandb
     wandb.log(test_metrics)
@@ -341,9 +351,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_base_516imgs_sem_adult_test",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
+    main(run_name="unet_base_516vols_sem_adult_test",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
          epochs=200,
-         batch_size=16,
-         output_path="/home/tommy111/projects/def-mzhen/tommy111/models")
+         batch_size=6,
+         output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
+         three=True) # Set to True for 3D-2D U-Net, False for 2D U-Net
