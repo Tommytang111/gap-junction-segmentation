@@ -233,21 +233,21 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     #Initialize datasets
     if three:
         train_dataset = TrainingDataset3D(
-            images=dataset_paths['train']['vols'],
+            volumes=dataset_paths['train']['vols'],
             labels=dataset_paths['train']['gts'],
             augmentation=None,
             train=True,
         )
 
         valid_dataset = TrainingDataset3D(
-            images=dataset_paths['val']['vols'],
+            volumes=dataset_paths['val']['vols'],
             labels=dataset_paths['val']['gts'],
             augmentation=None,
             train=False
         )
         
         test_dataset = TrainingDataset3D(
-            images=dataset_paths['test']['vols'],
+            volumes=dataset_paths['test']['vols'],
             labels=dataset_paths['test']['gts'],
             augmentation=None,
             train=False
