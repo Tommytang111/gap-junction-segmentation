@@ -233,26 +233,49 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     ])
     
     #Initialize datasets
-    train_dataset = TrainingDataset3D(
-        volumes=dataset_paths['train']['vols'],
-        labels=dataset_paths['train']['gts'],
-        augmentation=None,
-        train=True,
-    )
+    if three:
+        train_dataset = TrainingDataset3D(
+            images=dataset_paths['train']['vols'],
+            labels=dataset_paths['train']['gts'],
+            augmentation=None,
+            train=True,
+        )
 
-    valid_dataset = TrainingDataset3D(
-        volumes=dataset_paths['val']['vols'],
-        labels=dataset_paths['val']['gts'],
-        augmentation=None,
-        train=False
-    )
+        valid_dataset = TrainingDataset3D(
+            images=dataset_paths['val']['vols'],
+            labels=dataset_paths['val']['gts'],
+            augmentation=None,
+            train=False
+        )
+        
+        test_dataset = TrainingDataset3D(
+            images=dataset_paths['test']['vols'],
+            labels=dataset_paths['test']['gts'],
+            augmentation=None,
+            train=False
+        )
+        
+    else:
+        train_dataset = TrainingDataset(
+            images=dataset_paths['train']['imgs'],
+            labels=dataset_paths['train']['gts'],
+            augmentation=train_augmentation,
+            train=True,
+        )
 
-    test_dataset = TrainingDataset3D(
-        volumes=dataset_paths['test']['vols'],
-        labels=dataset_paths['test']['gts'],
-        augmentation=None,
-        train=False
-    )
+        valid_dataset = TrainingDataset(
+            images=dataset_paths['val']['imgs'],
+            labels=dataset_paths['val']['gts'],
+            augmentation=valid_augmentation,
+            train=False
+        )
+        
+        test_dataset = TrainingDataset(
+            images=dataset_paths['test']['imgs'],
+            labels=dataset_paths['test']['gts'],
+            augmentation=valid_augmentation,
+            train=False
+        )
 
     #Load datasets into DataLoader
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=False, worker_init_fn=worker_init_fn)
