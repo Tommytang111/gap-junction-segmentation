@@ -203,7 +203,7 @@ def wandb_init(run_name, epochs, batch_size, data):
     )
     return run
     
-def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:int=200, seed:int=40, three=False):
+def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:int=200, seed:int=40, three=False, dropout=0):
     """
     Main function to run training, validation, and test loop.
     """
@@ -282,7 +282,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
 
     #Set device and model
     device = torch.device("cuda")    
-    model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose').to(device)
+    model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose', dropout=dropout).to(device)
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
@@ -380,4 +380,5 @@ if __name__ == "__main__":
          epochs=100,
          batch_size=2,
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
-         three=True) # Set to True for 3D-2D U-Net, False for 2D U-Net
+         three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
+         dropout=0.1) 
