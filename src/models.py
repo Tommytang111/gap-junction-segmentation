@@ -90,12 +90,33 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         #Filter small out small groups of pixels (annotation mistakes)
         #label = filter_pixels(label, size_threshold=10)
         
-        # #Apply augmentation if provided (ADD LATER)
-        # if self.augmentation and self.train:
-        #         augmented = self.augmentation(image=image, mask=label)
-        #         image = augmented['image']
-        #         label = augmented['mask']
+        #Apply augmentation if provided
+        if self.augmentation and self.train:
+            additional_targets = {}
+            
+            for i in range(1, volume.shape[0]):
+                target_key = f'image{i}'
+                additional_targets[target_key] = 'image'
+            # Add additional targets for all slices
+            self.augmentation.add_targets(additional_targets)
+            
+            # Prepare data dictionary with all slices
+            aug_data = {'image': volume[0], 'mask': label}  # First slice as main image
+            for i in range(1, volume.shape[0]):
+                target_key = f'image{i}'
+                aug_data[target_key] = volume[i]
+            
+            # Apply augmentation once to all slices
+            augmented = self.augmentation(**aug_data)
 
+            # Reconstruct volume from augmented slices
+            augmented_slices = [augmented['image']]  # First slice
+            for i in range(1, volume.shape[0]):
+                augmented_slices.append(augmented[f'image{i}'])
+            
+            volume = np.stack(augmented_slices, axis=1)
+            label = augmented['mask']
+        
         #Add entity recognition clause later if needed
         
         # Convert to tensors if not already converted from augmentation

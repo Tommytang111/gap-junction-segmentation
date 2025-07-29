@@ -18,6 +18,9 @@ import wandb
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
 
+#Set Global Seed
+GLOBAL_SEED = 40
+
 #DATASET CLASS
 #TrainingDataset from src/models.py
 
@@ -25,18 +28,6 @@ from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
 #Unet from src/models.py
 
 #FUNCTIONS
-def get_custom_augmentation():
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.GaussNoise(p=0.3),
-        A.Normalize(mean=0.0, std=1.0),
-        A.Resize(512, 512),
-        ToTensorV2()
-    ])
-
 def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False):
     """
     Training logic for the epoch.
@@ -222,7 +213,16 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
 
     #Set data augmentation type
-    train_augmentation = get_custom_augmentation()  # Change to get_medium_augmentation() or get_heavy_augmentation() as needed
+    train_augmentation = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.GaussNoise(p=0.3),
+        A.Normalize(mean=0.0, std=1.0),
+        A.Resize(512, 512),
+        ToTensorV2()
+    ], seed=GLOBAL_SEED)
 
     #For validation without augmentation
     valid_augmentation = A.Compose([
@@ -235,7 +235,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         train_dataset = TrainingDataset3D(
             volumes=dataset_paths['train']['vols'],
             labels=dataset_paths['train']['gts'],
-            augmentation=None,
+            augmentation=train_augmentation,
             train=True,
         )
 

@@ -18,6 +18,9 @@ import wandb
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
 
+#Initialize global seed
+GLOBAL_SEED = 40
+
 #DATASET CLASS
 #TrainingDataset from src/models.py
 
@@ -26,19 +29,6 @@ from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
 
 #FUNCTIONS
 
-def get_custom_augmentation():
-    return A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.8,1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.GaussNoise(p=0.3),
-        A.Normalize(mean=0.0, std=1.0),
-        A.Resize(512, 512),
-        ToTensorV2()
-    ])
-
-#Define training function
 def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False):
     """
     Training logic for the epoch.
@@ -224,9 +214,18 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
     
     #Set data augmentation type
-    train_augmentation = get_custom_augmentation()  
+    train_augmentation = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.Affine(scale=(0.8,1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.GaussNoise(p=0.3),
+        A.Normalize(mean=0.0, std=1.0),
+        A.Resize(512, 512),
+        ToTensorV2()
+    ], seed=GLOBAL_SEED)
 
-    #For validation/test without augmentation
+    #For validation/test without augmentation (Use for 2D only)
     valid_augmentation = A.Compose([
         A.Normalize(mean=0.0, std=1.0),
         ToTensorV2()
@@ -237,7 +236,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
         train_dataset = TrainingDataset3D(
             volumes=dataset_paths['train']['vols'],
             labels=dataset_paths['train']['gts'],
-            augmentation=None,
+            augmentation=train_augmentation,
             train=True,
         )
 
@@ -363,14 +362,14 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
     torch.save(best_model_state, model_save_path)
     print(f"Saved PyTorch Model to {model_save_path}")
     
-    # Load the best model for evaluation
+    #Load the best model for evaluation
     model.load_state_dict(best_model_state)
     
-    # Evaluate on test set
+    #Evaluate on test set
     print("\nEvaluating on test set...")
     test_metrics = test(model, test_dataloader, loss_fn, device, three=three)
 
-    # Log test metrics to wandb
+    #Log test metrics to wandb
     wandb.log(test_metrics)
     
     wandb.finish()
@@ -380,6 +379,6 @@ if __name__ == "__main__":
          data_dir="/home/tommytang111/gap-junction-segmentation/data/516vols_sem_adult",
          seed=40,
          epochs=50,
-         batch_size=4,
+         batch_size=1,
          output_path="/home/tommytang111/gap-junction-segmentation/models",
          three=True)
