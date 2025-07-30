@@ -220,10 +220,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=8, epochs:i
         A.Affine(scale=(0.8,1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
         A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
         A.GaussNoise(p=0.3),
-        A.Normalize(mean=0.0, std=1.0),
-        A.Resize(512, 512),
-        ToTensorV2()
-    ], seed=GLOBAL_SEED)
+        A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
+        A.Resize(512, 512) if not three else A.NoOp(),
+        A.ToTensorV2() if not three else A.NoOp()
+    ], seed=GLOBAL_SEED, p=0.9)
 
     #For validation/test without augmentation (Use for 2D only)
     valid_augmentation = A.Compose([

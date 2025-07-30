@@ -92,43 +92,47 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         
         #Apply augmentation if provided
         if self.augmentation and self.train:
+            #Make additional targets dict
             additional_targets = {}
-            
             for i in range(1, volume.shape[0]):
                 target_key = f'image{i}'
                 additional_targets[target_key] = 'image'
-            # Add additional targets for all slices
+                
+            #Update albumentations pipeline with additional targets for all slices in volume
             self.augmentation.add_targets(additional_targets)
-            
-            # Prepare data dictionary with all slices
-            aug_data = {'image': volume[0], 'mask': label}  # First slice as main image
+
+            #Prepare data dictionary with all slices, adding an extra channel dimension at the end
+            #Note: albumentations Compose is supposed to add a channel dimension automatically and then remove it after 
+            #augmentation, but it keeps crashing the script so I do it manually here.
+            aug_data = {'image': volume[0][..., None], 'mask': label[..., None]}  # First slice as main image
             for i in range(1, volume.shape[0]):
                 target_key = f'image{i}'
-                aug_data[target_key] = volume[i]
-            
+                aug_data[target_key] = volume[i][..., None]
+
             # Apply augmentation once to all slices
             augmented = self.augmentation(**aug_data)
 
             # Reconstruct volume from augmented slices
-            augmented_slices = [augmented['image']]  # First slice
+            augmented_slices = [np.squeeze(augmented['image'], -1)]  # First slice, remove channel dimension
             for i in range(1, volume.shape[0]):
-                augmented_slices.append(augmented[f'image{i}'])
-            
-            volume = np.stack(augmented_slices, axis=1)
-            label = augmented['mask']
-        
-        #Add entity recognition clause later if needed
-        
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'],-1))
+
+            volume = np.stack(augmented_slices, axis=0)
+            label = np.squeeze(augmented['mask'], -1)
+
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(volume):
             # Ensure volume shape is (depth, height, width)
             if volume.ndim == 3:
                 volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
-            elif volume.ndim == 4 and volume.shape[0] == 1:
-                pass  # Already correct
+            elif volume.ndim == 4 and volume.shape[1] == 1:
+                volume = volume[None, ...]
             else:
                 raise ValueError(f"Unexpected volume shape: {volume.shape}")
-            volume = torch.from_numpy(volume).float()
+            volume = torch.from_numpy(volume.astype(np.float32))
+        else:
+            volume = volume.float()
+        #Label
         if not torch.is_tensor(label):
             label = torch.from_numpy(label).long()
             
