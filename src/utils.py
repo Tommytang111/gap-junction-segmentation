@@ -104,8 +104,6 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
     Returns:
         None
     """
-    from tqdm import tqdm
-    import shutil
     
     # Create save directory if it doesn't exist
     if not os.path.exists(save_dir):

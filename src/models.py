@@ -193,29 +193,8 @@ class TestDataset(torch.utils.data.Dataset):
         return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
         
 #Models and Building Blocks
-# class DoubleConv(nn.Module):
-#     """Double convolution block used in UNet"""
-    
-#     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
-#         super().__init__()
-#         if not mid_channels:
-#             mid_channels = out_channels
-            
-#         self.double_conv = nn.Sequential(
-#             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
-#             nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
-#             nn.ReLU(inplace=False),
-#             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
-#             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-#             nn.ReLU(inplace=False),
-#             nn.Dropout(p=dropout)
-#         )
-
-#     def forward(self, x):
-#         return self.double_conv(x)
-    
 class DoubleConv(nn.Module):
-    """Double convolution block used in UNet. CHANGE TO TRIPLECONV AND REFERENCE TRIPLECONV ASAP"""
+    """Double convolution block used in UNet"""
     
     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
         super().__init__()
@@ -229,14 +208,35 @@ class DoubleConv(nn.Module):
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
-            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=False),
             nn.Dropout(p=dropout)
         )
 
     def forward(self, x):
         return self.double_conv(x)
+
+class TripleConv(nn.Module):
+    """Triple convolution block used in UNet."""
+
+    def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
+        super().__init__()
+        if not mid_channels:
+            mid_channels = out_channels
+
+        self.triple_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout)
+        )
+
+    def forward(self, x):
+        return self.triple_conv(x)
 
 class DownBlock(nn.Module):
     """Double convolution followed by max pooling"""
@@ -319,22 +319,22 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
 
         # Encoder (Contracting Path)
-        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
-        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
-        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
-        self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
-        
+        self.down1 = DownBlock(n_channels, 128, three=three, dropout=dropout)
+        self.down2 = DownBlock(128, 256, three=three, dropout=dropout)
+        self.down3 = DownBlock(256, 512, three=three, dropout=dropout)
+        self.down4 = DownBlock(512, 1024, three=three, dropout=dropout)
+
         # Bottleneck
-        self.bottleneck = DoubleConv(512, 1024, three=three, dropout=dropout)
+        self.bottleneck = DoubleConv(1024, 2048, three=three, dropout=dropout)
         
         # Decoder (Expansive Path)
-        self.up1 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
-        self.up2 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
-        self.up3 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
-        self.up4 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
+        self.up1 = UpBlock((1024 if up_sample_mode == 'conv_transpose' else 2048) + 1024, 1024, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up4 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
 
         # Output Layer
-        self.output = OutConv(64, classes=classes, three=three)
+        self.output = OutConv(128, classes=classes, three=three)
 
     def forward(self, x):
         """
