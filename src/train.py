@@ -44,11 +44,11 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     for batch, (X, y) in tqdm(enumerate(dataloader), total=num_batches, desc="Training Batches"):
         X, y = X.to(device), y.to(device)
         
-        # Compute prediction and loss
+        #Compute prediction and loss
         pred = model(X)
         loss = loss_fn(pred, y)
         
-        # Backpropagation
+        #Backpropagation
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -180,13 +180,13 @@ def wandb_init(run_name, epochs, batch_size, data):
             config={
                 "dataset": data,
                 "model": "UNet3D-2D",
-                "learning_rate": 0.01,
+                "learning_rate": 0.0001,
                 "batch_size": batch_size,
                 "epochs": epochs,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
-                "optimizer": "SGD",
-                "momentum": 0.9,
+                "optimizer": "AdamW",
+                "momentum": None,
                 "scheduler": "ReduceLROnPlateau",
                 "augmentation": "Custom Augmentation with (-15, 15) shear",
                 "Unet upsample mode": "conv_transpose"
@@ -286,7 +286,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
-    optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
+    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
     #Send evaluation metrics to device
@@ -374,7 +374,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_base_516vols_sem_adult",
+    main(run_name="unet_tripleconv_516vols_sem_adult",
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
          epochs=100,

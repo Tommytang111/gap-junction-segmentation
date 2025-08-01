@@ -193,29 +193,29 @@ class TestDataset(torch.utils.data.Dataset):
         return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
         
 #Models and Building Blocks
-class DoubleConv(nn.Module):
-    """Double convolution block used in UNet"""
+# class DoubleConv(nn.Module):
+#     """Double convolution block used in UNet"""
     
-    def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
-        super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
+#     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
+#         super().__init__()
+#         if not mid_channels:
+#             mid_channels = out_channels
             
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
-            nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
-            nn.ReLU(inplace=False),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=False),
-            nn.Dropout(p=dropout)
-        )
+#         self.double_conv = nn.Sequential(
+#             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+#             nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
+#             nn.ReLU(inplace=False),
+#             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+#             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+#             nn.ReLU(inplace=False),
+#             nn.Dropout(p=dropout)
+#         )
 
-    def forward(self, x):
-        return self.double_conv(x)
+#     def forward(self, x):
+#         return self.double_conv(x)
     
-class DoubleConv2(nn.Module):
-    """Second version of double convolution block used in UNet. Needs to be edited. Maybe TripleConv?"""
+class DoubleConv(nn.Module):
+    """Double convolution block used in UNet. CHANGE TO TRIPLECONV AND REFERENCE TRIPLECONV ASAP"""
     
     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
         super().__init__()
@@ -226,7 +226,10 @@ class DoubleConv2(nn.Module):
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
             nn.ReLU(inplace=False),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+            nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=False),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False),
             nn.Dropout(p=dropout)
@@ -510,7 +513,7 @@ class GenDLoss(nn.Module):
     def __init__(self):
         super(GenDLoss, self).__init__()
     
-    def forward(self, inputs, targets, loss_mask=[], mito_mask=[], loss_fn=None, fn_reweight=None):
+    def forward(self, inputs, targets, loss_fn=None, fn_reweight=None):
         inputs = nn.Sigmoid()(inputs)
         
         # Handle 2-channel outputs (select the foreground channel)
@@ -521,15 +524,6 @@ class GenDLoss(nn.Module):
 
         inputs = torch.stack([inputs, 1-inputs], dim=-1)
         targets = torch.stack([targets, 1-targets], dim=-1)
-
-        if mito_mask != []:
-            loss_mask = loss_mask | mito_mask 
-        
-        if loss_mask != []:
-            if len(targets.shape) > len(loss_mask.shape): loss_mask.unsqueeze(-1)
-            loss_mask = loss_mask.view(loss_mask.shape[0], -1)
-            targets *= loss_mask.unsqueeze(-1)
-            inputs *= loss_mask.unsqueeze(-1) #0 them out in both masks
 
         weights = 1 / (torch.sum(torch.permute(targets, (0, 2, 1)), dim=-1).pow(2)+1e-6)
         targets, inputs = torch.permute(targets, (0, 2, 1)), torch.permute(inputs, (0, 2, 1))
