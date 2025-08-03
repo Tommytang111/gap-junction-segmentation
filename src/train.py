@@ -14,6 +14,7 @@ from pathlib import Path
 from tqdm import tqdm 
 import copy
 import wandb
+import cv2
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
@@ -180,15 +181,15 @@ def wandb_init(run_name, epochs, batch_size, data):
             config={
                 "dataset": data,
                 "model": "UNet3D-2D",
-                "learning_rate": 0.0001,
+                "learning_rate": 0.01,
                 "batch_size": batch_size,
                 "epochs": epochs,
                 "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
-                "optimizer": "AdamW",
-                "momentum": None,
+                "optimizer": "SGD",
+                "momentum": 0.9,
                 "scheduler": "ReduceLROnPlateau",
-                "augmentation": "Custom Augmentation with (-15, 15) shear",
+                "augmentation": "Reduced custom augmentation",
                 "Unet upsample mode": "conv_transpose"
             }
     )
@@ -213,6 +214,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
 
     #Set data augmentation type
+    #ORIGINAL AUGMENTATION
     # train_augmentation = A.Compose([
     #     A.HorizontalFlip(p=0.5),
     #     A.VerticalFlip(p=0.5),
@@ -224,22 +226,36 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     #     A.ToTensorV2() if not three else A.NoOp()
     # ], seed=GLOBAL_SEED, p=0.9)
     
-    #Slightly less photometric augmentation than before
+    #AUGMENTATION THAT PRODUCES OVERFITTING
+    # train_augmentation = A.Compose([
+    #     A.Affine(scale=(0.9, 1.1), rotate=0, translate_percent=0.15, p=0.9),
+    #     A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
+    #     A.GaussNoise(var_limit=(1.0, 5.0), p=0.5),
+    #     A.Normalize(mean=0.0, std=1.0),
+    #     A.Resize(512, 512) if not three else A.NoOp(),
+    #     A.ToTensorV2() if not three else A.NoOp()
+    # ], seed=GLOBAL_SEED, p=0.9)
+    
+    #mean=137.0, std=46.2
+    #NEW AUGMENTATION TESTING
     train_augmentation = A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-5, 5), p=0.9),
-        A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.5),
-        A.GaussNoise(var_limit=(1.0, 5.0), p=0.5),
-        A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
-        A.Resize(512, 512) if not three else A.NoOp(),
+        A.Normalize(),
         A.ToTensorV2() if not three else A.NoOp()
-    ], seed=GLOBAL_SEED, p=0.9)
+    ], seed=GLOBAL_SEED)
 
     #For validation without augmentation
     valid_augmentation = A.Compose([
-        A.Normalize(mean=0.0, std=1.0),
+        A.CenterCrop(height=256, width=256),
+        A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
+        A.Normalize(), #Specific to the dataset
         A.ToTensorV2()
+    ])
+    
+     #For validation without augmentation
+    valid_augmentation3D = A.Compose([
+        A.CenterCrop(height=256, width=256),
+        A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
+        A.Normalize() #Specific to the dataset
     ])
     
     #Initialize datasets
@@ -254,14 +270,14 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         valid_dataset = TrainingDataset3D(
             volumes=dataset_paths['val']['vols'],
             labels=dataset_paths['val']['gts'],
-            augmentation=None,
+            augmentation=valid_augmentation3D,
             train=False
         )
         
         test_dataset = TrainingDataset3D(
             volumes=dataset_paths['test']['vols'],
             labels=dataset_paths['test']['gts'],
-            augmentation=None,
+            augmentation=valid_augmentation3D,
             train=False
         )
         
@@ -298,7 +314,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
-    optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
+    optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
     #Send evaluation metrics to device
@@ -386,11 +402,11 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_doublefeatures_516vols_sem_adult",
+    main(run_name="unet_3D2D_516vols_sem_adult",
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
          epochs=100,
-         batch_size=1,
+         batch_size=4,
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
          three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 

@@ -319,22 +319,22 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
 
         # Encoder (Contracting Path)
-        self.down1 = DownBlock(n_channels, 128, three=three, dropout=dropout)
-        self.down2 = DownBlock(128, 256, three=three, dropout=dropout)
-        self.down3 = DownBlock(256, 512, three=three, dropout=dropout)
-        self.down4 = DownBlock(512, 1024, three=three, dropout=dropout)
+        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
+        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
+        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
+        self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
 
         # Bottleneck
-        self.bottleneck = DoubleConv(1024, 2048, three=three, dropout=dropout)
+        self.bottleneck = DoubleConv(512, 1024, three=three, dropout=dropout)
         
         # Decoder (Expansive Path)
-        self.up1 = UpBlock((1024 if up_sample_mode == 'conv_transpose' else 2048) + 1024, 1024, up_sample_mode, three=three, dropout=dropout)
-        self.up2 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
-        self.up3 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
-        self.up4 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up1 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up4 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
 
         # Output Layer
-        self.output = OutConv(128, classes=classes, three=three)
+        self.output = OutConv(64, classes=classes, three=three)
 
     def forward(self, x):
         """
