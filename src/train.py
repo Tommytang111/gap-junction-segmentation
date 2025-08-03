@@ -236,7 +236,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     #     A.ToTensorV2() if not three else A.NoOp()
     # ], seed=GLOBAL_SEED, p=0.9)
     
-    #mean=137.0, std=46.2
+    #mean=137.0, std=46.2 for 516imgs_sem_adult
+    
     #NEW AUGMENTATION TESTING
     train_augmentation = A.Compose([
         A.Normalize(),
@@ -253,8 +254,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
      #For validation without augmentation
     valid_augmentation3D = A.Compose([
-        A.CenterCrop(height=256, width=256),
-        A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
+        # A.CenterCrop(height=256, width=256),
+        # A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
         A.Normalize() #Specific to the dataset
     ])
     

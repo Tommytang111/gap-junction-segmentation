@@ -125,8 +125,8 @@ class TrainingDataset3D(torch.utils.data.Dataset):
             # Ensure volume shape is (depth, height, width)
             if volume.ndim == 3:
                 volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
-            elif volume.ndim == 4 and volume.shape[1] == 1:
-                volume = volume[None, ...]
+            elif volume.ndim == 4 and volume.shape[0] == 1:
+                pass
             else:
                 raise ValueError(f"Unexpected volume shape: {volume.shape}")
             volume = torch.from_numpy(volume.astype(np.float32))
