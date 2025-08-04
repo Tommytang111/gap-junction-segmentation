@@ -168,11 +168,22 @@ def test(model, dataloader, loss_fn, device='cuda', three=False):
     
     return test_metrics
 
-def wandb_init(run_name, epochs, batch_size, data):
+def wandb_init(run_name, epochs, batch_size, data, augmentations):
     """
     WandB Initialization
     """
+    def extract_augmentations(augmentations):
+        """Extract augmentation details from A.Compose."""
+        aug_list = []
+        for aug in augmentations.transforms:
+            aug_list.append({aug.__class__.__name__ : aug.get_params})
+        return aug_list
+
+    # Extract augmentations
+    train_aug_details = extract_augmentations(augmentations)
+    
     wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
+    
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
@@ -189,7 +200,7 @@ def wandb_init(run_name, epochs, batch_size, data):
                 "optimizer": "SGD",
                 "momentum": 0.9,
                 "scheduler": "ReduceLROnPlateau",
-                "augmentation": "Reduced custom augmentation",
+                "augmentation": train_aug_details,
                 "Unet upsample mode": "conv_transpose"
             }
     )
@@ -199,9 +210,6 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     """
     Main function to run training, validation, and test loop.
     """
-    #Initialize wandb
-    run = wandb_init(run_name, epochs, batch_size, Path(data_dir).stem)
-
     #Set seed for reproducibility
     seed_everything(seed)
 
@@ -215,16 +223,16 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
 
     #Set data augmentation type
     #ORIGINAL AUGMENTATION
-    # train_augmentation = A.Compose([
-    #     A.HorizontalFlip(p=0.5),
-    #     A.VerticalFlip(p=0.5),
-    #     A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
-    #     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-    #     A.GaussNoise(p=0.3),
-    #     A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
-    #     A.Resize(512, 512) if not three else A.NoOp(),
-    #     A.ToTensorV2() if not three else A.NoOp()
-    # ], seed=GLOBAL_SEED, p=0.9)
+    train_augmentation = A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+        A.GaussNoise(p=0.3),
+        A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
+        A.Resize(512, 512) if not three else A.NoOp(),
+        A.ToTensorV2() if not three else A.NoOp()
+    ], seed=GLOBAL_SEED, p=0.9)
     
     #AUGMENTATION THAT PRODUCES OVERFITTING
     # train_augmentation = A.Compose([
@@ -236,28 +244,35 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     #     A.ToTensorV2() if not three else A.NoOp()
     # ], seed=GLOBAL_SEED, p=0.9)
     
-    #mean=137.0, std=46.2 for 516imgs_sem_adult
+    #mean=137.0 (0.54 normalized), std=46.2 (0.18 normalized) for 516imgs_sem_adult
     
     #NEW AUGMENTATION TESTING
-    train_augmentation = A.Compose([
-        A.Normalize(),
-        A.ToTensorV2() if not three else A.NoOp()
-    ], seed=GLOBAL_SEED)
+    # train_augmentation = A.Compose([
+    #     #A.HorizontalFlip(p=0.5),
+    #     A.SquareSymmetry(p=0.5),
+    #     A.CoarseDropout(num_holes_range=[1,8], hole_height_range=[0.1, 0.2], hole_width_range=[0.1, 0.2], fill=0, fill_mask=0, p=0.5), 
+    #     #Try A.ElasticTransform last for domain specific augmentation
+    #     A.Normalize(),
+    #     A.ToTensorV2() if not three else A.NoOp()
+    # ], seed=GLOBAL_SEED)
 
     #For validation without augmentation
     valid_augmentation = A.Compose([
-        A.CenterCrop(height=256, width=256),
-        A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
+        #A.CenterCrop(height=256, width=256),
+        #A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
         A.Normalize(), #Specific to the dataset
         A.ToTensorV2()
     ])
     
-     #For validation without augmentation
+    #For validation without augmentation
     valid_augmentation3D = A.Compose([
-        # A.CenterCrop(height=256, width=256),
-        # A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
+        #A.CenterCrop(height=256, width=256), CURRENTLY UNNECESSARY, IS NOT THE SAME AS POSTPROCESSING CROP AND STITCH
+        #A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
         A.Normalize() #Specific to the dataset
     ])
+    
+    #Initialize wandb
+    run = wandb_init(run_name, epochs, batch_size, Path(data_dir).stem, train_augmentation)
     
     #Initialize datasets
     if three:
@@ -403,11 +418,11 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_3D2D_516vols_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
+    main(run_name="unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
          seed=40,
-         epochs=100,
-         batch_size=4,
+         epochs=200,
+         batch_size=16,
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
-         three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
+         three=False,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 

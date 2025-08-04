@@ -91,7 +91,7 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         #label = filter_pixels(label, size_threshold=10)
         
         #Apply augmentation if provided
-        if self.augmentation and self.train:
+        if self.augmentation:
             #Make additional targets dict
             additional_targets = {}
             for i in range(1, volume.shape[0]):
@@ -122,11 +122,11 @@ class TrainingDataset3D(torch.utils.data.Dataset):
 
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(volume):
-            # Ensure volume shape is (depth, height, width)
+            # Ensure volume shape is (channels=1, depth, height, width)
             if volume.ndim == 3:
                 volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
             elif volume.ndim == 4 and volume.shape[0] == 1:
-                pass
+                pass # Already in correct format
             else:
                 raise ValueError(f"Unexpected volume shape: {volume.shape}")
             volume = torch.from_numpy(volume.astype(np.float32))
