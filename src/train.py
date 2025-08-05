@@ -214,7 +214,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     seed_everything(seed)
 
     # Create dataset splits (uncomment and run once to create the splits)
-    source_img_dir = f"{data_dir}/vols"
+    if three:
+        source_img_dir = f"{data_dir}/vols"
+    else:
+        source_img_dir = f"{data_dir}/imgs"
     source_gt_dir = f"{data_dir}/gts"
     output_base_dir = f"{data_dir}_split"
 
@@ -418,8 +421,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_base_pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/pooled_516imgs_sem_dauer_2_516imgs_sem_adult",
+    main(run_name="unet_base_516imgs_sem_dauer_2",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_dauer_2",
          seed=40,
          epochs=200,
          batch_size=16,

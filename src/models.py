@@ -16,7 +16,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision.transforms import ToTensor
-from scipy.ndimage import label
 from utils import filter_pixels, resize_image
 
 #DATASETS
