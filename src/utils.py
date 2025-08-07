@@ -255,7 +255,7 @@ def check_output_directory(path:str, clear:bool=True) -> None:
     else:
         os.makedirs(path)
         
-def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, create_overlap=False, seg_ignore=(2, 15), test=False):
+def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, create_overlap=False, seg_ignore=None, test=False):
     """
     Function to create a 2d dataset from a dataset of full EM images
     @param imgs_dir: the directory of the full EM images

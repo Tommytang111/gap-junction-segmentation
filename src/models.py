@@ -138,58 +138,31 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         return volume, label
 
 class TestDataset(torch.utils.data.Dataset):
-    def __init__(
-            self, 
-            dataset_dir,
-            image_dim = (512, 512),
-            three_dim=False,
-    ):      
+    def __init__(self, dataset_dir):      
         self.image_paths = [str(Path(dataset_dir) / "imgs" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "imgs"))) if "DS" not in image_id]
-        self.mask_paths = [str(Path(dataset_dir) / "gts" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "gts"))) if "DS" not in image_id]
-        self.three_dim = three_dim
-
+        
     def __len__(self):
         # return length of 
         return len(self.image_paths)
 
     def __getitem__(self, i):
         # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
-        if not self.three_dim:
-            try:
-                image0 = cv2.imread(self.image_paths[i])
-                #Padding and Cropping
-                if (image0.shape[0] != 512) or (image0.shape[1] != 512): #Current image should be 2D: (lxw)
-                    image0 = resize_image(image0, 512, 512, (0,0,0), channels=True)
-                image = cv2.cvtColor(np.array(image0), cv2.COLOR_BGR2GRAY) 
-                mask = np.zeros_like(image) #cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
-            except Exception as e:
-                print(self.image_paths[i])
-                raise Exception(self.image_paths[i])
-    
-        else:
-            images = sorted(os.listdir(self.image_paths[i]))
-            img = []
-            for j in range(9):
-                im = cv2.cvtColor(cv2.imread(os.path.join(self.image_paths[i], images[j])), cv2.COLOR_BGR2GRAY)
-                img.append(im)
-            
-            image = np.stack(img, axis=0)
+        try:
+            image = cv2.imread(self.image_paths[i])
+            #Padding and Cropping
+            if (image.shape[0] != 512) or (image.shape[1] != 512): #Current image should be 2D: (lxw)
+                image = resize_image(image, 512, 512, (0,0,0), channels=True)
+            image = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2GRAY) 
+        except Exception as e:
+            print(self.image_paths[i])
+            raise Exception(self.image_paths[i])
 
-        #Transform to tensor
-        _transform = []
-        _transform.append(transforms.ToTensor()) #Normalize to [0, 1]
-        _transform_img = _transform.copy()
-        # _transform_img.append(transforms.Normalize(mean=[0.5], std=[0.5]))
-        image = transforms.Compose(_transform_img)(image)
-        mask = transforms.Compose(_transform_img)(mask)
-        if self.three_dim: 
-            image = torch.permute(image, (1, 2, 0)) 
-        else: 
-            image = image.squeeze(0) 
-            mask = mask.squeeze(0)
+        #Convert to tensors if not already converted from augmentation
+        if not torch.is_tensor(image):
+            image = ToTensor()(image).float() 
             
-        #Add batch dimension to image, mask
-        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
+        #Add batch dimension to image
+        return image.unsqueeze(0) 
         
 #Models and Building Blocks
 class DoubleConv(nn.Module):
@@ -201,10 +174,11 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
             
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=(3,3,3), padding=(1,1,1), bias=False),
             nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
             nn.ReLU(inplace=False),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+            
             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False),
             nn.Dropout(p=dropout)

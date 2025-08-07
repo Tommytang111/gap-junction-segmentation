@@ -226,16 +226,16 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
 
     #Set data augmentation type
     #ORIGINAL AUGMENTATION
-    train_augmentation = A.Compose([
-        A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
-        A.GaussNoise(p=0.3),
-        A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
-        A.Resize(512, 512) if not three else A.NoOp(),
-        A.ToTensorV2() if not three else A.NoOp()
-    ], seed=GLOBAL_SEED, p=0.9)
+    # train_augmentation = A.Compose([
+    #     A.HorizontalFlip(p=0.5),
+    #     A.VerticalFlip(p=0.5),
+    #     A.Affine(scale=(0.8, 1.2), rotate=360, translate_percent=0.15, shear=(-15, 15), p=0.9),
+    #     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
+    #     A.GaussNoise(p=0.3),
+    #     A.Normalize(mean=0.0, std=1.0) if not three else A.NoOp(),
+    #     A.Resize(512, 512) if not three else A.NoOp(),
+    #     A.ToTensorV2() if not three else A.NoOp()
+    # ], seed=GLOBAL_SEED, p=0.9)
     
     #AUGMENTATION THAT PRODUCES OVERFITTING
     # train_augmentation = A.Compose([
@@ -250,14 +250,14 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     #mean=137.0 (0.54 normalized), std=46.2 (0.18 normalized) for 516imgs_sem_adult
     
     #NEW AUGMENTATION TESTING
-    # train_augmentation = A.Compose([
-    #     #A.HorizontalFlip(p=0.5),
-    #     A.SquareSymmetry(p=0.5),
-    #     A.CoarseDropout(num_holes_range=[1,8], hole_height_range=[0.1, 0.2], hole_width_range=[0.1, 0.2], fill=0, fill_mask=0, p=0.5), 
-    #     #Try A.ElasticTransform last for domain specific augmentation
-    #     A.Normalize(),
-    #     A.ToTensorV2() if not three else A.NoOp()
-    # ], seed=GLOBAL_SEED)
+    train_augmentation = A.Compose([
+        #A.HorizontalFlip(p=0.5),
+        A.SquareSymmetry(p=0.5),
+        A.CoarseDropout(num_holes_range=[1,8], hole_height_range=[0.1, 0.2], hole_width_range=[0.1, 0.2], fill=0, fill_mask=0, p=0.5), 
+        #Try A.ElasticTransform last for domain specific augmentation
+        A.Normalize(),
+        A.ToTensorV2() if not three else A.NoOp()
+    ], seed=GLOBAL_SEED)
 
     #For validation without augmentation
     valid_augmentation = A.Compose([
