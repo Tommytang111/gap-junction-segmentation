@@ -680,7 +680,8 @@ def plot_3D_intensity_projection(file:str, title:str='Title', xlab:str='X', ylab
 
 def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
     """
-    Compare predictions from three different UNet models on a randomly selected image.
+    Compare predictions from three different UNet models on a randomly selected image. 
+    Use as a base template and edit to suit your visualization needs.
     
     This function loads a random image from the specified dataset directory, runs inference
     using three different trained UNet models, and creates comparison visualizations showing
@@ -837,7 +838,7 @@ def seed_everything(seed: int = 40):
     torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = False
     
-def single_image_inference(image:np.ndarray, model_path:str, model):
+def single_image_inference(image:np.ndarray, model_path:str, model, augmentation=None):
     """
     Performs inference on a single grayscale image using a trained PyTorch model.
     
@@ -850,6 +851,7 @@ def single_image_inference(image:np.ndarray, model_path:str, model):
         model_path (str): Path to the saved PyTorch model checkpoint (.pt file).
         model: PyTorch model instance (e.g., UNet) to load the state dict into.
                The model architecture should match the saved checkpoint.
+        augmentation (callable, optional): Optional augmentation function to apply to the image.
     
     Returns:
         np.ndarray: Binary segmentation mask as uint8 NumPy array with shape (H, W).
@@ -869,7 +871,7 @@ def single_image_inference(image:np.ndarray, model_path:str, model):
         >>> model = UNet()
         >>> 
         >>> # Run inference
-        >>> mask = single_image_inference(image, 'model.pt', model)
+        >>> mask = single_image_inference(image, 'model.pt', model, valid_augmentation)
         >>> 
         >>> # Save result
         >>> cv2.imwrite('mask.png', mask * 255)
@@ -880,11 +882,15 @@ def single_image_inference(image:np.ndarray, model_path:str, model):
     model = model.to("cuda"if torch.cuda.is_available else 'cpu') #Send to gpu
     model.eval() 
    
-    
     #Prepare image
-    image = torch.from_numpy(image).float() / 255.0  # Convert to float tensor, normalize if needed
-    image = image.unsqueeze(0).unsqueeze(0)          # Add shape: (1, 1, H, W) for batch and channel
-    
+    if augmentation:
+        augmented = augmentation(image=image) # Augmentation does normalization + standardization and converts to tensor
+        image = augmented['image']
+        image = image.unsqueeze(0) # Add shape: (1, 1, H, W) for batch and channel
+    else:
+        image = torch.ToTensor()
+        image = image.unsqueeze(0).unsqueeze(0)
+
     #Inference
     with torch.no_grad():
         pred = model(image.to('cuda')) 
@@ -893,6 +899,91 @@ def single_image_inference(image:np.ndarray, model_path:str, model):
     
     return pred
     
+def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentation=None):
+    """
+    Performs inference on a single volume using a trained PyTorch model.
+    
+    This function loads a trained model from a checkpoint, preprocesses the input volume,
+    runs inference, and returns a binary segmentation mask.
+    
+    Args:
+        image (np.ndarray): Input grayscale image as a NumPy array with shape (H, W).
+                           Expected to have pixel values in range [0, 255].
+        model_path (str): Path to the saved PyTorch model checkpoint (.pt file).
+        model: PyTorch model instance (e.g., UNet) to load the state dict into.
+               The model architecture should match the saved checkpoint.
+        augmentation (callable, optional): Optional augmentation function to apply to the image.
+    
+    Returns:
+        np.ndarray: Binary segmentation mask as uint8 NumPy array with shape (H, W).
+                   Values are 0 (background) or 1 (foreground/gap junction).
+    
+    Note:
+        - Input image is automatically normalized to [0, 1] range.
+        - Uses sigmoid activation with 0.5 threshold for binarization.
+        - Model is automatically set to evaluation mode.
+    
+    Example:
+        >>> import cv2
+        >>> from models import UNet
+        >>> 
+        >>> # Load image and model
+        >>> image = cv2.imread('input.png', cv2.IMREAD_GRAYSCALE)
+        >>> model = UNet()
+        >>> 
+        >>> # Run inference
+        >>> mask = single_image_inference(image, 'model.pt', model, valid_augmentation)
+        >>> 
+        >>> # Save result
+        >>> cv2.imwrite('mask.png', mask * 255)
+    """
+    #Setup model
+    model = model
+    model.load_state_dict(torch.load(model_path))
+    model = model.to("cuda"if torch.cuda.is_available else 'cpu') #Send to gpu
+    model.eval() 
+   
+    #Prepare volume
+    if augmentation:
+        #Make additional targets dict
+        additional_targets = {}
+        for i in range(1, volume.shape[0]):
+            target_key = f'image{i}'
+            additional_targets[target_key] = 'image'
+            
+        #Update albumentations pipeline with additional targets for all slices in volume
+        augmentation.add_targets(additional_targets)
+
+        #Prepare data dictionary with all slices, adding an extra channel dimension at the end
+        #Note: albumentations Compose is supposed to add a channel dimension automatically and then remove it after 
+        #augmentation, but it keeps crashing the script so I do it manually here.
+        aug_data = {'image': volume[0][..., None]}  # First slice as main image
+        for i in range(1, volume.shape[0]):
+            target_key = f'image{i}'
+            aug_data[target_key] = volume[i][..., None]
+
+        # Apply augmentation once to all slices
+        augmented = augmentation(**aug_data)
+
+        # Reconstruct volume from augmented slices
+        augmented_slices = [torch.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+        for i in range(1, volume.shape[0]):
+            augmented_slices.append(torch.squeeze(augmented[f'image{i}'], 0))
+
+        volume = torch.stack(augmented_slices, dim=0)
+        volume = volume.unsqueeze(0).unsqueeze(0)          # Add channel and batch dimension: (1, 1, D, H, W)
+    else:
+        volume = torch.ToTensor()
+        volume = volume.unsqueeze(0).unsqueeze(0)
+    
+    #Inference
+    with torch.no_grad():
+        pred = model(volume.to('cuda')) 
+        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
+        pred = pred.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
+    
+    return pred
+
 def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
     """ 
     Splits an image into tiles of a specified size, with an optional offset to remove borders.

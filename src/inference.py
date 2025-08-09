@@ -19,11 +19,10 @@ from tqdm import tqdm
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.transforms.functional import to_tensor
 
 #Custom libraries
-from models import UNet, TestDataset
-from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d
+from models import UNet, TestDataset, TestDataset3D
+from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d, single_image_inference, single_volume_inference
 
 #FUNCTIONS
 
@@ -81,13 +80,16 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     model1_pred = single_image_inference(image=img1,
                     model_path=model1_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
     model2_pred = single_image_inference(image=img1,
                     model_path=model2_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
     model3_pred = single_image_inference(image=img1,
                     model_path=model3_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
 
     fig1 = plt.figure(1)
     plt.imshow(img1, cmap='gray')
@@ -124,29 +126,7 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
-def single_image_inference(image:np.ndarray, model_path:str, model):
-    """
-    Makes a mask by predicting on a single image
-    """
-    #Setup model
-    model = model
-    model.load_state_dict(torch.load(model_path))
-    model = model.to("cuda") #Send to gpu
-    model.eval() 
-    
-    #Prepare image
-    image = torch.from_numpy(image).float() / 255.0       # Convert to float tensor, normalize if needed
-    image = image.unsqueeze(0).unsqueeze(0)               # Add shape: (1, 1, H, W) for batch and channel
-    
-    #Inference
-    with torch.no_grad():
-        pred = model(image.to('cuda')) 
-        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
-        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
-    
-    return pred
-
-def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5, filter:bool=False):
+def inference(model_path:str, dataset:torch.utils.data.Dataset,input_dir:str, output_dir:str, threshold:float=0.5, filter:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
@@ -173,8 +153,8 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
     #Data and Labels (sorted because naming convention is typically dataset, section, coordinates. Example: SEM_Dauer_2_image_export_s000 -> 001)
     imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
 
-    #Create TestDataset class 
-    dataset = TestDataset(input_dir)
+    #Instantiate dataset class 
+    dataset = dataset(input_dir)
     #Load dataset class in Dataloader
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=8)
 
@@ -435,6 +415,7 @@ def main():
     
     #Run inference
     inference(model_path=model_path,
+              dataset=TestDataset,
               input_dir=data_dir,
               output_dir=pred_dir,
               filter=True
