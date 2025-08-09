@@ -103,16 +103,17 @@ class TrainingDataset3D(torch.utils.data.Dataset):
                 target_key = f'image{i}'
                 aug_data[target_key] = volume[i][..., None]
 
-            # Apply augmentation once to all slices
+            #Apply augmentation once to all slices
             augmented = self.augmentation(**aug_data)
 
-            # Reconstruct volume from augmented slices
-            augmented_slices = [torch.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+            #Reconstruct volume from augmented slices
+            #Note: When mask is provided, extra channel dimension is at end (dim = -1), when it's not provided, it is first (dim=0).
+            augmented_slices = [np.squeeze(augmented['image'], -1)]  # First slice, remove channel dimension
             for i in range(1, volume.shape[0]):
-                augmented_slices.append(torch.squeeze(augmented[f'image{i}'], 0))
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'], -1))
 
-            volume = torch.stack(augmented_slices, dim=0)
-            label = torch.squeeze(augmented['mask'], 0)
+            volume = np.stack(augmented_slices, axis=0)
+            label = np.squeeze(augmented['mask'], -1)
 
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(volume):
@@ -169,25 +170,6 @@ class TestDataset3D(torch.utils.data.Dataset):
     def __len__(self):
         # return length of 
         return len(self.image_paths)
-
-    def __getitem__(self, i):
-        # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
-        try:
-            image = cv2.imread(self.image_paths[i])
-            #Padding and Cropping
-            if (image.shape[0] != 512) or (image.shape[1] != 512): #Current image should be 2D: (lxw)
-                image = resize_image(image, 512, 512, (0,0,0), channels=True)
-            image = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2GRAY) 
-        except Exception as e:
-            print(self.image_paths[i])
-            raise Exception(self.image_paths[i])
-
-        #Convert to tensors if not already converted from augmentation
-        if not torch.is_tensor(image):
-            image = ToTensor()(image).float() 
-            
-        #Add batch dimension to image
-        return image.unsqueeze(0) 
     
     def __getitem__(self, idx):
         #Read volume, label
@@ -206,21 +188,22 @@ class TestDataset3D(torch.utils.data.Dataset):
 
             #Prepare data dictionary with all slices, adding an extra channel dimension at the end
             #Note: albumentations Compose is supposed to add a channel dimension automatically and then remove it after 
-            #augmentation, but it keeps crashing the script so I do it manually here.
+            #augmentation, but the removal doesn't work so I do it manually here.
             aug_data = {'image': volume[0][..., None]}  # First slice as main image
             for i in range(1, volume.shape[0]):
                 target_key = f'image{i}'
                 aug_data[target_key] = volume[i][..., None]
 
-            # Apply augmentation once to all slices
+            #Apply augmentation once to all slices
             augmented = self.augmentation(**aug_data)
 
-            # Reconstruct volume from augmented slices
-            augmented_slices = [torch.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+            #Reconstruct volume from augmented slices
+            #Note: When mask is provided, extra channel dimension is at end (dim = -1), when it's not provided, it is first (dim=0).
+            augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
             for i in range(1, volume.shape[0]):
-                augmented_slices.append(torch.squeeze(augmented[f'image{i}'], 0))
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
 
-            volume = torch.stack(augmented_slices, dim=0)
+            volume = np.stack(augmented_slices, axis=0)
 
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(volume):

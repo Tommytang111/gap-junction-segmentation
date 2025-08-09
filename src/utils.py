@@ -965,19 +965,23 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
         # Apply augmentation once to all slices
         augmented = augmentation(**aug_data)
 
-        # Reconstruct volume from augmented slices
-        augmented_slices = [torch.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
-        for i in range(1, volume.shape[0]):
-            augmented_slices.append(torch.squeeze(augmented[f'image{i}'], 0))
+        print("Shape of augmented image:", augmented['image'].shape)
 
-        volume = torch.stack(augmented_slices, dim=0)
+        # Reconstruct volume from augmented slices
+        augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+        for i in range(1, volume.shape[0]):
+            augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
+
+        volume = np.stack(augmented_slices, axis=0)
+        volume = torch.from_numpy(volume.astype(np.float32))
         volume = volume.unsqueeze(0).unsqueeze(0)          # Add channel and batch dimension: (1, 1, D, H, W)
     else:
         volume = torch.ToTensor()
         volume = volume.unsqueeze(0).unsqueeze(0)
-    
+
     #Inference
     with torch.no_grad():
+        print("Shape of volume before model:", volume.shape)
         pred = model(volume.to('cuda')) 
         pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
         pred = pred.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
