@@ -37,8 +37,8 @@ class TrainingDataset(torch.utils.data.Dataset):
         
         #Apply resizing with padding if image is not expected size and then convert back to ndarray
         if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
-            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
-            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
+            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
+            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
 
         #Convert label to binary for model classification
         label[label > 0] = 1
@@ -138,7 +138,7 @@ class TestDataset(torch.utils.data.Dataset):
         self.image_paths = sorted([os.path.join(images, img) for img in os.listdir(images)])
         self.augmentation = augmentation
         self.data_size = data_size
-        
+
     def __len__(self):
         # return length of 
         return len(self.image_paths)
@@ -146,10 +146,12 @@ class TestDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         #Read image, label
         image = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
-        
+        if image is None:
+            raise ValueError(f"Failed to read image: {self.image_paths[idx]}")
+
         #Apply resizing with padding if image is not expected size and then convert back to ndarray
         if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
-            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
+            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
         
         #Apply augmentation if provided
         if self.augmentation:
@@ -158,22 +160,26 @@ class TestDataset(torch.utils.data.Dataset):
         
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(image):
-            image = ToTensor()(image).float()
+            image = torch.from_numpy(image.astype(np.float32))
 
         #Add batch dimension to image
-        return image.unsqueeze(0) 
-    
+        return image
+
 class TestDataset3D(torch.utils.data.Dataset):
-    def __init__(self, dataset_dir):      
-        self.image_paths = [str(Path(dataset_dir) / "imgs" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "imgs"))) if "DS" not in image_id]
+    def __init__(self, volumes, augmentation=None, data_size=(9, 512, 512)):
+        self.volume_paths = sorted([os.path.join(volumes, vol) for vol in os.listdir(volumes)])
+        self.augmentation = augmentation
+        self.data_size = data_size
         
     def __len__(self):
         # return length of 
-        return len(self.image_paths)
+        return len(self.volume_paths)
     
     def __getitem__(self, idx):
         #Read volume, label
         volume = np.load(self.volume_paths[idx])
+        if volume is None:
+            raise ValueError(f"Failed to read volume: {self.volume_paths[idx]}")
 
         #Apply augmentation if provided
         if self.augmentation:

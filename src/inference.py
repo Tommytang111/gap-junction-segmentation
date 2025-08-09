@@ -12,8 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random as rd
 import cv2
+import albumentations as A
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, jaccard_score, confusion_matrix
-import subprocess
 from scipy.ndimage import label
 from tqdm import tqdm
 import torch
@@ -126,7 +126,7 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
-def inference(model_path:str, dataset:torch.utils.data.Dataset,input_dir:str, output_dir:str, threshold:float=0.5, filter:bool=False):
+def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, threshold:float=0.5, augmentation=None, filter:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
@@ -154,7 +154,7 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset,input_dir:str, ou
     imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
 
     #Instantiate dataset class 
-    dataset = dataset(input_dir)
+    dataset = dataset(Path(input_dir) / "imgs", augmentation=augmentation)
     #Load dataset class in Dataloader
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=8)
 
@@ -174,8 +174,8 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset,input_dir:str, ou
     #Generates gap junction prediction masks per batch
     with torch.no_grad(): 
         for batch in tqdm(dataloader, desc="Predicting"):
-            image = batch[0].to("cuda")
-            batch_pred = model(image)
+            batch = batch.to("cuda")
+            batch_pred = model(batch)
             for i in range(batch_pred.shape[0]): #For each image in the batch
                 #Convert tensor to binary mask using Sigmoid activation function
                 gj_pred = (nn.Sigmoid()(batch_pred[i]) >= threshold)
@@ -408,16 +408,21 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
 def main():
     #Data and Model
     model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt"
-    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_dauer_2_s000-050"
+    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s000-699"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699"
     
-    #Process images if necessary
+    #Augmentation
+    valid_augmentation = A.Compose([
+        A.Normalize(mean=0, std=1), #Specific to the dataset
+        A.ToTensorV2()
+    ])
     
     #Run inference
     inference(model_path=model_path,
               dataset=TestDataset,
               input_dir=data_dir,
               output_dir=pred_dir,
+              augmentation=valid_augmentation,
               filter=True
               )
     
