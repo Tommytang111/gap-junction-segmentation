@@ -12,18 +12,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random as rd
 import cv2
+import albumentations as A
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, jaccard_score, confusion_matrix
-import subprocess
 from scipy.ndimage import label
 from tqdm import tqdm
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.transforms.functional import to_tensor
 
 #Custom libraries
-from models import UNet, TestDataset
-from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d
+from models import UNet, TestDataset, TestDataset3D
+from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d, single_image_inference, single_volume_inference
 
 #FUNCTIONS
 
@@ -81,13 +80,16 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     model1_pred = single_image_inference(image=img1,
                     model_path=model1_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
     model2_pred = single_image_inference(image=img1,
                     model_path=model2_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
     model3_pred = single_image_inference(image=img1,
                     model_path=model3_path,
-                    model=UNet())
+                    model=UNet(),
+                    augmentation=None)
 
     fig1 = plt.figure(1)
     plt.imshow(img1, cmap='gray')
@@ -124,40 +126,18 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
-def single_image_inference(image:np.ndarray, model_path:str, model):
-    """
-    Makes a mask by predicting on a single image
-    """
-    #Setup model
-    model = model
-    model.load_state_dict(torch.load(model_path))
-    model = model.to("cuda") #Send to gpu
-    model.eval() 
-    
-    #Prepare image
-    image = torch.from_numpy(image).float() / 255.0       # Convert to float tensor, normalize if needed
-    image = image.unsqueeze(0).unsqueeze(0)               # Add shape: (1, 1, H, W) for batch and channel
-    
-    #Inference
-    with torch.no_grad():
-        pred = model(image.to('cuda')) 
-        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
-        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
-    
-    return pred
-
-def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5, filter:bool=False):
+def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, threshold:float=0.5, augmentation=None, filter:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
     This function loads a trained UNet model, processes images from the specified input directory,
     generates predicted segmentation masks, and saves the results to the output directory. The input
-    directory must contain 'imgs' and 'gts' subdirectories. The output masks are thresholded using
+    directory must contain the 'imgs' subdirectory. The output masks are thresholded using
     a sigmoid activation and saved as binary images.
 
     Parameters:
         model_path (str): Path to the trained model weights (.pt file).
-        input_dir (str): Path to the input directory containing 'imgs' and 'gts' subfolders.
+        input_dir (str): Path to the input directory containing 'imgs' subfolder.
         output_dir (str): Path to the directory where predicted masks will be saved.
         threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
         filter (bool): Applies a pixel filter if true. Default is false.
@@ -167,21 +147,20 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
     """
     #Check if input directory has the required subdirectories
     data = os.listdir(input_dir)
-    if not ("imgs" in data and "gts" in data):
-        raise ValueError("Input directory must contain 'imgs' and 'gts' subdirectories.")
+    if not ("imgs" in data):
+        raise ValueError("Input directory must contain 'imgs' subdirectory.")
 
     #Data and Labels (sorted because naming convention is typically dataset, section, coordinates. Example: SEM_Dauer_2_image_export_s000 -> 001)
     imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
-    labels = [i for i in sorted(os.listdir(Path(input_dir) / "gts"))]
 
-    #Create TestDataset class (Note:There are other dataset types in datasets.py). This defines how images/data is read from disk.
-    dataset = TestDataset(input_dir, three_dim=False)
+    #Instantiate dataset class 
+    dataset = dataset(Path(input_dir) / "imgs", augmentation=augmentation)
     #Load dataset class in Dataloader
     dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=8)
 
     #Load model and set to evaluation mode
     #model = joblib.load(model_dir)
-    model = UNet()
+    model = UNet(classes=1)
     model.load_state_dict(torch.load(model_path))
     model = model.to("cuda") #Send to gpu
     model.eval() 
@@ -195,8 +174,8 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
     #Generates gap junction prediction masks per batch
     with torch.no_grad(): 
         for batch in tqdm(dataloader, desc="Predicting"):
-            image = batch[0].to("cuda")
-            batch_pred = model(image)
+            batch = batch.to("cuda")
+            batch_pred = model(batch)
             for i in range(batch_pred.shape[0]): #For each image in the batch
                 #Convert tensor to binary mask using Sigmoid activation function
                 gj_pred = (nn.Sigmoid()(batch_pred[i]) >= threshold)
@@ -207,7 +186,7 @@ def inference(model_path:str, input_dir:str, output_dir:str, threshold:float=0.5
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
                 img_num += 1
 
-def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5)) -> plt.Figure:
+def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True) -> plt.Figure:
     """
     Visualizes segmentation model predictions through custom plots comparing original images, predictions, and ground truth.
 
@@ -217,18 +196,19 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
     (blue for predictions, orange for ground truth) for easy comparison.
 
     Parameters:
-        data_dir (str): Path to the directory containing 'imgs' and 'gts' subdirectories with original images and ground truth masks.
+        data_dir (str): Path to the directory containing 'imgs' with original images and optional ground truth masks.
         pred_dir (str): Path to the directory containing predicted segmentation masks (with '_pred.png' suffix).
         base_name (str, optional): Specific image filename to visualize. Required if random=False. Default is None.
         style (int, optional): Plotting style. 1 for 4-panel view (grayscale + overlay), 2 for 3-panel view (colored overlays). Default is 1.
         random (bool, optional): If True, randomly selects an image from the dataset. If False, uses base_name. Default is True.
         figsize (tuple, optional): Figure size as (width, height) in inches. Default is (15, 5).
+        gt (bool, optional): If True, expects ground truth masks to be available in 'gts' subdirectory. Default is True.
 
     Returns:
         plt.Figure: The matplotlib figure object containing the visualization.
 
     Raises:
-        ValueError: If data_dir does not contain required 'imgs' and 'gts' subdirectories.
+        ValueError: If data_dir does not contain required 'imgs' subdirectory.
         AssertionError: If random=False but base_name is None.
 
     Examples:
@@ -241,9 +221,9 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
     """
     #Check if input directory has the required subdirectories
     data = os.listdir(data_dir)
-    if not ("imgs" in data and "gts" in data):
-        raise ValueError("Input directory must contain 'imgs' and 'gts' subdirectories.")
-    
+    if not ("imgs" in data):
+        raise ValueError("Input directory must contain 'imgs' subdirectory.")
+
     #Plotting functions
     def plot1(img, pred, gts, double_overlay, figsize=figsize):
         fig, ax = plt.subplots(1,4, figsize=figsize)
@@ -280,10 +260,13 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
     #Image of interest 
     name = random_path if random else base_name
     
-    #Image, ground truth, and prediction
+    #Image, ground truth (optional), and prediction
     img = cv2.imread(Path(data_dir) / "imgs" / name)
-    gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
-    gts[gts > 0] = 255 #Binarize to 0 and 255
+    if gt:
+        gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
+        gts[gts > 0] = 255 #Binarize to 0 and 255
+    else:
+        gts = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8) #Empty ground truth
     pred = cv2.imread(str(Path(pred_dir) / re.sub(r'.png$', r'_pred.png', str(name))), cv2.IMREAD_GRAYSCALE)
 
     #Resize image to (X, Y) if needed
@@ -424,32 +407,38 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/unet_base_516imgs_sem_adult_ak5v2m7m.pt"
-    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050_filtered"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_ak5v2m7m/s000-050_filtered"
-    
-    #Process images if necessary
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_dauer_2_h1qrqboc.pt"
+    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_h1qrqboc/sem_dauer_2_s000-050"
+
+    #Augmentation
+    valid_augmentation = A.Compose([
+        A.Normalize(mean=0, std=1), #Specific to the dataset
+        A.ToTensorV2()
+    ])
     
     #Run inference
-    # inference(model_path=model_path,
-    #           input_dir=data_dir,
-    #           output_dir=pred_dir,
-    #           filter=True
-    #           )
+    inference(model_path=model_path,
+              dataset=TestDataset,
+              input_dir=data_dir,
+              output_dir=pred_dir,
+              augmentation=valid_augmentation,
+              filter=True
+              )
     
-    #Visualize results
-    for i in range(1):
-        fig = visualize(data_dir=data_dir,
-                        pred_dir=pred_dir,
-                        style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
-        plt.show()
+    # #Visualize results
+    # for i in range(1):
+    #     fig = visualize(data_dir=data_dir,
+    #                     pred_dir=pred_dir,
+    #                     style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
+    #     plt.show()
 
-    #Evaluate model performance
-    performance_plot = evaluate(data_dir=data_dir,
-                                pred_dir=pred_dir,
-                                title="Model Unet_ak5v2m7m Performance on sem_dauer_2_s000-050_filtered",
-                                )
-    plt.show()
+    # #Evaluate model performance
+    # performance_plot = evaluate(data_dir=data_dir,
+    #                             pred_dir=pred_dir,
+    #                             title="Model Unet_ak5v2m7m Performance on sem_dauer_2_s000-050_filtered",
+    #                             )
+    # plt.show()
 
 if __name__ == "__main__":
     main()

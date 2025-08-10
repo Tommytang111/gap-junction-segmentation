@@ -16,7 +16,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision.transforms import ToTensor
-from scipy.ndimage import label
 from utils import filter_pixels, resize_image
 
 #DATASETS
@@ -38,8 +37,8 @@ class TrainingDataset(torch.utils.data.Dataset):
         
         #Apply resizing with padding if image is not expected size and then convert back to ndarray
         if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
-            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
-            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
+            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
+            label = np.array(resize_image(label, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
 
         #Convert label to binary for model classification
         label[label > 0] = 1
@@ -78,20 +77,15 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         #Read volume, label
         volume = np.load(self.volume_paths[idx])
         label = cv2.imread(self.label_paths[idx], cv2.IMREAD_GRAYSCALE)
-        
-        # #Apply resizing with padding if image is not expected size and then convert back to ndarray
-        # if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
-        #     image = np.array(resize_image(image, self.data_size[0], self.data_size[1], (0,0,0)))
-        #     label = np.array(resize_image(label, self.data_size[0], self.data_size[1], (0,0,0)))
 
         #Convert label to binary for model classification
         label[label > 0] = 1
             
         #Filter small out small groups of pixels (annotation mistakes)
-        #label = filter_pixels(label, size_threshold=10)
+        label = filter_pixels(label, size_threshold=10)
         
         #Apply augmentation if provided
-        if self.augmentation and self.train:
+        if self.augmentation:
             #Make additional targets dict
             additional_targets = {}
             for i in range(1, volume.shape[0]):
@@ -109,24 +103,25 @@ class TrainingDataset3D(torch.utils.data.Dataset):
                 target_key = f'image{i}'
                 aug_data[target_key] = volume[i][..., None]
 
-            # Apply augmentation once to all slices
+            #Apply augmentation once to all slices
             augmented = self.augmentation(**aug_data)
 
-            # Reconstruct volume from augmented slices
+            #Reconstruct volume from augmented slices
+            #Note: When mask is provided, extra channel dimension is at end (dim = -1), when it's not provided, it is first (dim=0).
             augmented_slices = [np.squeeze(augmented['image'], -1)]  # First slice, remove channel dimension
             for i in range(1, volume.shape[0]):
-                augmented_slices.append(np.squeeze(augmented[f'image{i}'],-1))
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'], -1))
 
             volume = np.stack(augmented_slices, axis=0)
             label = np.squeeze(augmented['mask'], -1)
 
         # Convert to tensors if not already converted from augmentation
         if not torch.is_tensor(volume):
-            # Ensure volume shape is (depth, height, width)
+            # Ensure volume shape is (channels=1, depth, height, width)
             if volume.ndim == 3:
                 volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
-            elif volume.ndim == 4 and volume.shape[1] == 1:
-                volume = volume[None, ...]
+            elif volume.ndim == 4 and volume.shape[0] == 1:
+                pass # Already in correct format
             else:
                 raise ValueError(f"Unexpected volume shape: {volume.shape}")
             volume = torch.from_numpy(volume.astype(np.float32))
@@ -139,58 +134,97 @@ class TrainingDataset3D(torch.utils.data.Dataset):
         return volume, label
 
 class TestDataset(torch.utils.data.Dataset):
-    def __init__(
-            self, 
-            dataset_dir,
-            image_dim = (512, 512),
-            three_dim=False,
-    ):      
-        self.image_paths = [str(Path(dataset_dir) / "imgs" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "imgs"))) if "DS" not in image_id]
-        self.mask_paths = [str(Path(dataset_dir) / "gts" / image_id) for image_id in sorted(os.listdir(str(Path(dataset_dir) / "gts"))) if "DS" not in image_id]
-        self.three_dim = three_dim
+    def __init__(self, images, augmentation=None, data_size=(512, 512)):      
+        self.image_paths = sorted([os.path.join(images, img) for img in os.listdir(images)])
+        self.augmentation = augmentation
+        self.data_size = data_size
 
     def __len__(self):
         # return length of 
         return len(self.image_paths)
-
-    def __getitem__(self, i):
-        # read images and masks # they have 3 values (BGR) --> read as 2 channel grayscale (H, W)
-        if not self.three_dim:
-            try:
-                image0 = cv2.imread(self.image_paths[i])
-                #Padding and Cropping
-                if (image0.shape[0] != 512) or (image0.shape[1] != 512): #Current image should be 2D: (lxw)
-                    image0 = resize_image(image0, 512, 512, (0,0,0), channels=True)
-                image = cv2.cvtColor(np.array(image0), cv2.COLOR_BGR2GRAY) 
-                mask = np.zeros_like(image) #cv2.cvtColor(cv2.imread(self.mask_paths[i]), cv2.COLOR_BGR2GRAY)
-            except Exception as e:
-                print(self.image_paths[i])
-                raise Exception(self.image_paths[i])
     
-        else:
-            images = sorted(os.listdir(self.image_paths[i]))
-            img = []
-            for j in range(9):
-                im = cv2.cvtColor(cv2.imread(os.path.join(self.image_paths[i], images[j])), cv2.COLOR_BGR2GRAY)
-                img.append(im)
-            
-            image = np.stack(img, axis=0)
+    def __getitem__(self, idx):
+        #Read image, label
+        image = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            raise ValueError(f"Failed to read image: {self.image_paths[idx]}")
 
-        #Transform to tensor
-        _transform = []
-        _transform.append(transforms.ToTensor()) #Normalize to [0, 1]
-        _transform_img = _transform.copy()
-        # _transform_img.append(transforms.Normalize(mean=[0.5], std=[0.5]))
-        image = transforms.Compose(_transform_img)(image)
-        mask = transforms.Compose(_transform_img)(mask)
-        if self.three_dim: 
-            image = torch.permute(image, (1, 2, 0)) 
-        else: 
-            image = image.squeeze(0) 
-            mask = mask.squeeze(0)
+        #Apply resizing with padding if image is not expected size and then convert back to ndarray
+        if (image.shape[0] != self.data_size[0]) or (image.shape[1] != self.data_size[1]): 
+            image = np.array(resize_image(image, self.data_size[0], self.data_size[1], pad_clr=(0,0,0), channels=False))
+        
+        #Apply augmentation if provided
+        if self.augmentation:
+                augmented = self.augmentation(image=image)
+                image = augmented['image']
+        
+        # Convert to tensors if not already converted from augmentation
+        if not torch.is_tensor(image):
+            image = torch.from_numpy(image.astype(np.float32))
+
+        #Add batch dimension to image
+        return image
+
+class TestDataset3D(torch.utils.data.Dataset):
+    def __init__(self, volumes, augmentation=None, data_size=(9, 512, 512)):
+        self.volume_paths = sorted([os.path.join(volumes, vol) for vol in os.listdir(volumes)])
+        self.augmentation = augmentation
+        self.data_size = data_size
+        
+    def __len__(self):
+        # return length of 
+        return len(self.volume_paths)
+    
+    def __getitem__(self, idx):
+        #Read volume, label
+        volume = np.load(self.volume_paths[idx])
+        if volume is None:
+            raise ValueError(f"Failed to read volume: {self.volume_paths[idx]}")
+
+        #Apply augmentation if provided
+        if self.augmentation:
+            #Make additional targets dict
+            additional_targets = {}
+            for i in range(1, volume.shape[0]):
+                target_key = f'image{i}'
+                additional_targets[target_key] = 'image'
+                
+            #Update albumentations pipeline with additional targets for all slices in volume
+            self.augmentation.add_targets(additional_targets)
+
+            #Prepare data dictionary with all slices, adding an extra channel dimension at the end
+            #Note: albumentations Compose is supposed to add a channel dimension automatically and then remove it after 
+            #augmentation, but the removal doesn't work so I do it manually here.
+            aug_data = {'image': volume[0][..., None]}  # First slice as main image
+            for i in range(1, volume.shape[0]):
+                target_key = f'image{i}'
+                aug_data[target_key] = volume[i][..., None]
+
+            #Apply augmentation once to all slices
+            augmented = self.augmentation(**aug_data)
+
+            #Reconstruct volume from augmented slices
+            #Note: When mask is provided, extra channel dimension is at end (dim = -1), when it's not provided, it is first (dim=0).
+            augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+            for i in range(1, volume.shape[0]):
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
+
+            volume = np.stack(augmented_slices, axis=0)
+
+        # Convert to tensors if not already converted from augmentation
+        if not torch.is_tensor(volume):
+            # Ensure volume shape is (channels=1, depth, height, width)
+            if volume.ndim == 3:
+                volume = volume[None, ...]  # Add channel dimension: (1, D, H, W)
+            elif volume.ndim == 4 and volume.shape[0] == 1:
+                pass # Already in correct format
+            else:
+                raise ValueError(f"Unexpected volume shape: {volume.shape}")
+            volume = torch.from_numpy(volume.astype(np.float32))
+        else:
+            volume = volume.float()
             
-        #Add batch dimension to image, mask
-        return image.unsqueeze(0), mask.unsqueeze(0), image.unsqueeze(0) 
+        return volume
         
 #Models and Building Blocks
 class DoubleConv(nn.Module):
@@ -202,10 +236,11 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
             
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(in_channels, mid_channels, kernel_size=(3,3,3), padding=(1,1,1), bias=False),
             nn.BatchNorm2d(mid_channels) if not three else nn.BatchNorm3d(mid_channels),
             nn.ReLU(inplace=False),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1, bias=False) if not three else nn.Conv3d(mid_channels, out_channels, kernel_size=(1,3,3), padding=(0,1,1), bias=False),
+            
             nn.BatchNorm2d(out_channels) if not three else nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False),
             nn.Dropout(p=dropout)
@@ -319,22 +354,22 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
 
         # Encoder (Contracting Path)
-        self.down1 = DownBlock(n_channels, 128, three=three, dropout=dropout)
-        self.down2 = DownBlock(128, 256, three=three, dropout=dropout)
-        self.down3 = DownBlock(256, 512, three=three, dropout=dropout)
-        self.down4 = DownBlock(512, 1024, three=three, dropout=dropout)
+        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
+        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
+        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
+        self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
 
         # Bottleneck
-        self.bottleneck = DoubleConv(1024, 2048, three=three, dropout=dropout)
+        self.bottleneck = DoubleConv(512, 1024, three=three, dropout=dropout)
         
         # Decoder (Expansive Path)
-        self.up1 = UpBlock((1024 if up_sample_mode == 'conv_transpose' else 2048) + 1024, 1024, up_sample_mode, three=three, dropout=dropout)
-        self.up2 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
-        self.up3 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
-        self.up4 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up1 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up4 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
 
         # Output Layer
-        self.output = OutConv(128, classes=classes, three=three)
+        self.output = OutConv(64, classes=classes, three=three)
 
     def forward(self, x):
         """
