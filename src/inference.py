@@ -407,9 +407,9 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_dauer_2_h1qrqboc.pt"
-    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_dauer_2/SEM_split/s000-050"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_h1qrqboc/sem_dauer_2_s000-050"
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt"
+    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s000-699"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699"
 
     #Augmentation
     valid_augmentation = A.Compose([

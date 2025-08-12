@@ -296,31 +296,36 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
 
     imgs = sorted(os.listdir(imgs_dir))
 
-    def split_subroutine(img, gt, offset=0):
-
-            img_imgs, img_names = split_img(img, offset=offset, tile_size=img_size, names=True)
-            if not test: 
-                gt_imgs = split_img(gt, offset=offset, tile_size=img_size)
-                add_data = [] if add_dir else None
-                if add_dir:
-                    for j in range(len(add_dir)):
-                        dat = cv2.imread(os.path.join(add_dir[j], add_dir_maps[add_dir[j]](imgs[i])))
-                        dat = split_img(dat, offset=offset, tile_size=img_size)
-                        add_data.append(dat)
-
-            for j in range(len(img_imgs)):
-                cv2.imwrite(os.path.join(output_dir, f"imgs/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), img_imgs[j])
-                if not test:
-                    cv2.imwrite(os.path.join(output_dir, f"gts/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), gt_imgs[j])
-                    if add_dir:
-                        for k in range(len(add_data)):
-                            assert cv2.imwrite(os.path.join(output_dir, f"{os.path.split(add_dir[k])[-1]}/{imgs[i].replace('.png', '_'+img_names[j] + ('' if not offset else 'off'))}.png"), add_data[k][j])
-
-    for i in tqdm(range(len(imgs))):
-        if "DS" in imgs[i]: continue
-        img = cv2.imread(os.path.join(imgs_dir, imgs[i]), -1)
+    def split_subroutine(img, gt, overlap=False):
+        #Split the sections into tiles
+        img_imgs, img_names, max_img_sizes = split_img(img, overlap=overlap, tile_size=img_size, names=True, xysizes=True)
+        #Split the ground truth sections into masks
         if not test: 
-            gt = cv2.imread(os.path.join(seg_dir, image_to_seg_name_map(imgs[i])), -1)
+            gt_imgs = split_img(gt, overlap=overlap, tile_size=img_size)
+            add_data = [] if add_dir else None
+            if add_dir:
+                for j in range(len(add_dir)):
+                    dat = cv2.imread(os.path.join(add_dir[j], add_dir_maps[add_dir[j]](imgs[i])))
+                    dat = split_img(dat, overlap=overlap, tile_size=img_size)
+                    add_data.append(dat)
+        #Write the images and masks to the output directory
+        for j in range(len(img_imgs)):
+            cv2.imwrite(os.path.join(output_dir, f"imgs/{imgs[i].replace('.png', '_'+img_names[j])}.png"), img_imgs[j])
+            #Write the ground truth images if they exist
+            if not test:
+                cv2.imwrite(os.path.join(output_dir, f"gts/{imgs[i].replace('.png', '_'+img_names[j])}.png"), gt_imgs[j])
+                if add_dir:
+                    for k in range(len(add_data)):
+                        assert cv2.imwrite(os.path.join(output_dir, f"{os.path.split(add_dir[k])[-1]}/{imgs[i].replace('.png', '_'+img_names[j])}.png"), add_data[k][j])
+
+        #Get how many Y and X tiles were created
+        return max_img_sizes[0], max_img_sizes[1] #Y, X
+        
+    for i in tqdm(range(len(imgs))):
+        img = cv2.imread(os.path.join(imgs_dir, imgs[i]), 0)
+        
+        if not test: 
+            gt = cv2.imread(os.path.join(seg_dir, image_to_seg_name_map(imgs[i])), 0)
 
             #make changes in the gt
             for ig in seg_ignore:
@@ -328,12 +333,16 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
 
             gt[gt!=0] = 255
         else: gt = None
-
-        split_subroutine(img, gt)
         
-        # make the test overlapping mode 
+        #Create and write tiles for every image in dataset, also returns how many Y and X tiles were created
         if create_overlap:
-            split_subroutine(img, gt, offset=img_size//2)
+            max_y, max_x = split_subroutine(img, gt, overlap=True)  
+        else:
+            max_y, max_x = split_subroutine(img, gt)
+
+        max_section_size = i
+        
+    return max_y, max_x, max_section_size
             
 #Example Usage
 #gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
@@ -988,7 +997,7 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
     
     return pred
 
-def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
+def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=False, xysizes=False):
     """ 
     Splits an image into tiles of a specified size, with an optional offset to remove borders.
     
@@ -997,6 +1006,7 @@ def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
         offset (int): Number of pixels to crop from each border before splitting.
         tile_size (int): Size of each square tile.
         names (bool): If True, also returns a list of tile names.
+        sizes (bool): If True, also returns a list of largest sizes in each dimension (ex. max(Y)=20, max(X)=20, max(S)=20)
 
     Returns:
         list: List of image tiles (np.ndarray).
@@ -1005,15 +1015,28 @@ def split_img(img:np.ndarray, offset=256, tile_size=512, names=False):
     Example:
         tiles, names = split_img(image, offset=0, tile_size=512, names=True)
     """
+    if overlap:
+        stride = tile_size // 2
+    
     if offset:
         img = img[offset:-offset, offset:-offset]
     imgs = []
     names_list = []
-    for i in range(0, img.shape[0], tile_size):
-        for j in range(0, img.shape[1], tile_size):
+    for i in range(0, img.shape[0], stride if overlap else tile_size):
+        for j in range(0, img.shape[1], stride if overlap else tile_size):
             imgs.append(img[i:i+tile_size, j:j+tile_size])
-            names_list.append("Y{}_X{}".format(i//tile_size, j//tile_size))
-    return (imgs, names_list) if names else imgs
+            names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
+
+    size_list = [i//stride if overlap else i//tile_size, j//stride if overlap else j//tile_size]
+    
+    if names and xysizes:
+        return (imgs, names_list, size_list)
+    elif names:
+        return(imgs, names_list)
+    elif xysizes:
+        return(imgs, size_list)
+    else:
+        return imgs
 
 def view_label(file:str):
     """
