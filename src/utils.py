@@ -88,10 +88,10 @@ def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=F
 #FUNCTIONS
 def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ:str, seg_templ:str, s_range:range, x_range:range, y_range:range, missing_dir:str=None):
     """
-    Assembles (stitches together) image tiles back into full sections.
+    Assembles (stitches together) tiles back into full sections. Default usage is for prediction tiles assembly.
     
     Parameters:
-        img_dir (str): Directory containing image tiles
+        img_dir (str): Directory containing image tiles (can be None)
         gt_dir (str): Directory containing ground truth tiles (can be None)
         pred_dir (str): Directory containing prediction tiles
         save_dir (str): Directory to save assembled results
@@ -120,18 +120,19 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                 # Create filename suffix
                 suffix = f"s{str(s).zfill(3)}_Y{y}_X{x}"
                 
-                # Handle missing images
-                img_path = os.path.join(img_dir, img_templ + suffix + ".png")
-                if not os.path.isfile(img_path):
-                    if missing_dir is not None:
-                        shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), img_path)
-                    else:
-                        raise FileNotFoundError(f"Missing image {img_templ + suffix + '.png'}")
-                
-                # Load image
-                im = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                if im is None:
-                    raise ValueError(f"Could not load image: {img_path}")
+                if img_dir:
+                    # Handle missing images
+                    img_path = os.path.join(img_dir, img_templ + suffix + ".png")
+                    if not os.path.isfile(img_path):
+                        if missing_dir is not None:
+                            shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), img_path)
+                        else:
+                            raise FileNotFoundError(f"Missing image {img_templ + suffix + '.png'}")
+                    
+                    # Load image
+                    im = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                    if im is None:
+                        raise ValueError(f"Could not load image: {img_path}")
                 
                 # Load ground truth if directory provided
                 gt = None
@@ -147,44 +148,50 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                 if os.path.isfile(pred_path):
                     pred = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
                 else:
-                    pred = np.zeros_like(im)
+                    if img_dir:
+                        pred = np.zeros_like(im)
                 
-                # Ensure all arrays have the same shape
-                if gt is not None and gt.shape != im.shape:
-                    gt = np.zeros_like(im)
-                if pred.shape != im.shape:
-                    pred = np.zeros_like(im)
+                if img_dir:
+                    # Ensure all arrays have the same shape
+                    if gt is not None and gt.shape != im.shape:
+                        gt = np.zeros_like(im)
+                    if pred.shape != im.shape:
+                        pred = np.zeros_like(im)
                 
                 # Append to row accumulators
-                y_acc_img.append(im)
-                y_acc_pred.append(pred)
+                if img_dir:
+                    y_acc_img.append(im)
                 if gt_dir:
                     y_acc_gt.append(gt)
+                y_acc_pred.append(pred)
             
             # Concatenate row tiles horizontally
-            if y_acc_img:  # Check if we have any tiles
-                s_acc_img.append(np.concatenate(y_acc_img, axis=1))
-                s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
+            if y_acc_pred:  # Check if we have any tiles
+                if img_dir:
+                    s_acc_img.append(np.concatenate(y_acc_img, axis=1))
                 if gt_dir:
                     s_acc_gt.append(np.concatenate(y_acc_gt, axis=1))
+                s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
         
         # Concatenate all rows vertically to form complete section
-        if s_acc_img:  # Check if we have any rows
-            assembled_img = np.concatenate(s_acc_img, axis=0)
-            assembled_pred = np.concatenate(s_acc_pred, axis=0)
+        if s_acc_pred:  # Check if we have any rows
+            if img_dir:
+                assembled_img = np.concatenate(s_acc_img, axis=0)
             if gt_dir:
                 assembled_gt = np.concatenate(s_acc_gt, axis=0)
+            assembled_pred = np.concatenate(s_acc_pred, axis=0)
             
             # Create output filename suffix
             out_suffix = f"s{str(s).zfill(3)}"
             
             # Save assembled results
-            cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_img.png"), assembled_img)
-            cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_pred.png"), assembled_pred)
+            if img_dir:
+                cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_img.png"), assembled_img)
             if gt_dir:
                 cv2.imwrite(os.path.join(save_dir, seg_templ + out_suffix + "_label.png"), assembled_gt)
+            cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_pred.png"), assembled_pred)
             
-            print(f"Saved assembled section {s} with shape {assembled_img.shape}")
+            print(f"Saved assembled section {s} with shape {assembled_pred.shape}")
 
 def check_filtered(folder:str, filter_func=sobel_filter):
     """
@@ -340,7 +347,7 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         else:
             max_y, max_x = split_subroutine(img, gt)
 
-        max_section_size = i
+        max_section_size = i + 1
         
     return max_y, max_x, max_section_size
             
