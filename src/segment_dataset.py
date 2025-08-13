@@ -44,7 +44,7 @@ class GapJunctionSegmentationPipeline:
 
     def stitch_predictions(self):
         #Need to crop tiles since I created overlapping tiles
-        assemble_imgs(img_dir=os.path.join(self.tiles, "imgs"),
+        assemble_imgs(img_dir=None,
                     gt_dir=None,
                     pred_dir=self.pred,
                     save_dir=self.assembled,
@@ -55,15 +55,20 @@ class GapJunctionSegmentationPipeline:
                     seg_templ=self.template)
         
     def stack_slices(self):
+        #Create volume directory if it doesn't exist
+        if not os.path.exists(self.volume):
+            os.makedirs(self.volume)
+        
         #Get prediction files
         predictions = sorted(os.listdir(self.assembled))
-
+        
         #Read all predictions and append to list
         pred_list = []
         for pred in predictions:
             pred_read = cv2.imread(os.path.join(self.assembled, pred), cv2.IMREAD_GRAYSCALE)
+            print(f"shape of {pred}: {pred_read.shape}")
             pred_list.append(pred_read)
-
+        
         #Stack all predictions into a 3D numpy array
         pred_3d = np.stack(pred_list, axis=0)
 
@@ -72,8 +77,8 @@ class GapJunctionSegmentationPipeline:
         
         return pred_3d
     
-    def visualize_volume(self):
-        "something filler"
+    def visualize_volume(self, volume):
+    
 
 def main():
     #Augmentation
@@ -109,17 +114,17 @@ def main():
     )
     print("Pipeline initialized with name:", pipeline.name)
 
-    #Step 1: Split Slices -> Tiles
-    pipeline.create_dataset()
-    print("Dataset created with tiles in:", pipeline.tiles)
+    # #Step 1: Split Slices -> Tiles
+    # pipeline.create_dataset()
+    # print("Dataset created with tiles in:", pipeline.tiles)
     
-    #Step 2: Run inference on tiles -> Get masks
-    pipeline.run_inference()
-    print("Inference completed with predictions in:", pipeline.pred)
+    # #Step 2: Run inference on tiles -> Get masks
+    # pipeline.run_inference()
+    # print("Inference completed with predictions in:", pipeline.pred)
 
-    #Step 3: Assemble Masks -> Slices
-    pipeline.stitch_predictions()
-    print("Predictions assembled into slices in:", pipeline.assembled)
+    # #Step 3: Assemble Masks -> Slices
+    # pipeline.stitch_predictions()
+    # print("Predictions assembled into slices in:", pipeline.assembled)
     
     #Step 4: Stack Slices -> 3D Volume
     volume = pipeline.stack_slices()
@@ -127,7 +132,8 @@ def main():
     print("Volume saved in:", pipeline.volume)
     
     #Step 5: Plot segmentation volume
-
+    pipeline.visualize_volume(volume)
+    print("Visualizing segmentation volume")
 
 if __name__ == "__main__":
     main()
