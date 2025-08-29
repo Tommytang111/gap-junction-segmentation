@@ -22,4 +22,4 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export OMP_NUM_THREADS=8
 
 #Run training script
-python3 /home/tommy111/projects/def-mzhen/tommy111/code/new/src/train.py 
+python3 /home/tommy111/projects/def-mzhen/tommy111/code/new/src/segment_dataset.py 

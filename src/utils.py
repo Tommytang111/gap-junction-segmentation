@@ -105,7 +105,9 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
     Returns:
         None
     """
-    
+    #Make sure at least one directory is provided
+    assert img_dir or gt_dir or pred_dir, "At least one directory must be provided"
+
     # Create save directory if it doesn't exist
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -121,17 +123,19 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                 suffix = f"s{str(s).zfill(3)}_Y{y}_X{x}"
                 
                 # Handle missing images
-                img_path = os.path.join(img_dir, img_templ + suffix + ".png")
-                if not os.path.isfile(img_path):
-                    if missing_dir is not None:
-                        shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), img_path)
-                    else:
-                        raise FileNotFoundError(f"Missing image {img_templ + suffix + '.png'}")
+                if img_dir:
+                    img_path = os.path.join(img_dir, img_templ + suffix + ".png")
+                    if not os.path.isfile(img_path):
+                        if missing_dir is not None:
+                            shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), img_path)
+                        else:
+                            raise FileNotFoundError(f"Missing image {img_templ + suffix + '.png'}")
                 
                 # Load image
-                im = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                if im is None:
-                    raise ValueError(f"Could not load image: {img_path}")
+                if img_dir:
+                    im = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+                    if im is None:
+                        raise ValueError(f"Could not load image: {img_path}")
                 
                 # Load ground truth if directory provided
                 gt = None
@@ -143,12 +147,13 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                         gt = np.zeros_like(im)
                 
                 # Load prediction
-                pred_path = os.path.join(pred_dir, img_templ + suffix + "_pred.png")
-                if os.path.isfile(pred_path):
-                    pred = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
-                else:
-                    pred = np.zeros_like(im)
-                
+                if pred_dir:
+                    pred_path = os.path.join(pred_dir, img_templ + suffix + "_pred.png")
+                    if os.path.isfile(pred_path):
+                        pred = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
+                    else:
+                        pred = np.zeros_like(im)
+                    
                 # Ensure all arrays have the same shape
                 if gt is not None and gt.shape != im.shape:
                     gt = np.zeros_like(im)
@@ -156,20 +161,22 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
                     pred = np.zeros_like(im)
                 
                 # Append to row accumulators
-                y_acc_img.append(im)
-                y_acc_pred.append(pred)
+                if img_dir:
+                    y_acc_img.append(im)
                 if gt_dir:
                     y_acc_gt.append(gt)
+                if pred_dir:
+                    y_acc_pred.append(pred)
             
             # Concatenate row tiles horizontally
-            if y_acc_img:  # Check if we have any tiles
+            if y_acc_img or y_acc_pred:  # Check if we have any tiles
                 s_acc_img.append(np.concatenate(y_acc_img, axis=1))
                 s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
                 if gt_dir:
                     s_acc_gt.append(np.concatenate(y_acc_gt, axis=1))
         
         # Concatenate all rows vertically to form complete section
-        if s_acc_img:  # Check if we have any rows
+        if s_acc_img or s_acc_pred:  # Check if we have any rows
             assembled_img = np.concatenate(s_acc_img, axis=0)
             assembled_pred = np.concatenate(s_acc_pred, axis=0)
             if gt_dir:

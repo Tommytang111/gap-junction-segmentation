@@ -254,8 +254,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         #A.HorizontalFlip(p=0.5),
         A.SquareSymmetry(p=0.5),
         A.CoarseDropout(num_holes_range=[1,8], hole_height_range=[0.1, 0.2], hole_width_range=[0.1, 0.2], fill=0, fill_mask=0, p=0.5), 
-        #Try A.ElasticTransform last for domain specific augmentation
-        A.Normalize(),
+        A.Affine(scale=(0.9, 1.1), rotate=360, translate_percent=0.15, p=0.5),
+        A.ElasticTransform(alpha=300, sigma=10, interpolation=cv2.INTER_LINEAR, p=0.5),
+        A.Normalize(mean=0, std=1),
         A.ToTensorV2() if not three else A.NoOp()
     ], seed=GLOBAL_SEED)
 
@@ -263,7 +264,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     valid_augmentation = A.Compose([
         #A.CenterCrop(height=256, width=256),
         #A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
-        A.Normalize(), #Specific to the dataset
+        A.Normalize(mean=0, std=1), #Specific to the dataset
         A.ToTensorV2()
     ])
     
@@ -271,7 +272,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     valid_augmentation3D = A.Compose([
         #A.CenterCrop(height=256, width=256), CURRENTLY UNNECESSARY, IS NOT THE SAME AS POSTPROCESSING CROP AND STITCH
         #A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),
-        A.Normalize() #Specific to the dataset
+        A.Normalize(mean=0, std=1) #Specific to the dataset
     ])
     
     #Initialize wandb
@@ -421,11 +422,11 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_base_516imgs_sem_dauer_2",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_dauer_2",
+    main(run_name="unet_3D2D_516vols_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
          epochs=200,
-         batch_size=16,
+         batch_size=4,
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
-         three=False,  # Set to True for 3D-2D U-Net, False for 2D U-Net
+         three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 
