@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 class GapJunctionSegmentationPipeline:
-    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, img_size=512):
+    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, overlap=True, img_size=512):
         self.name = name
         self.model = model_path
         self.dataset_class = dataset_class
@@ -29,9 +29,10 @@ class GapJunctionSegmentationPipeline:
         self.template = template
         self.img_size = img_size
         self.augmentations = augmentations
+        self.overlap = overlap
         
     def create_dataset(self):
-        self.max_y, self.max_x, self.max_sections = create_dataset_2d(imgs_dir=self.sections, output_dir=self.tiles, img_size=self.img_size, create_overlap=True, test=True)
+        self.max_y, self.max_x, self.max_sections, self.section_size = create_dataset_2d(imgs_dir=self.sections, output_dir=self.tiles, img_size=self.img_size, create_overlap=self.overlap, test=True)
 
     def run_inference(self):
         inference(model_path=self.model,
@@ -43,7 +44,6 @@ class GapJunctionSegmentationPipeline:
                 )
 
     def stitch_predictions(self):
-        #Need to crop tiles since I created overlapping tiles
         assemble_imgs(img_dir=None,
                     gt_dir=None,
                     pred_dir=self.pred,
@@ -52,8 +52,11 @@ class GapJunctionSegmentationPipeline:
                     x_range=range(0, self.max_x),
                     y_range=range(0, self.max_y),
                     img_templ=self.template,
-                    seg_templ=self.template)
-        
+                    seg_templ=self.template,
+                    overlap=self.overlap,
+                    s_size=self.section_size
+                    )
+
     def stack_slices(self):
         #Create volume directory if it doesn't exist
         if not os.path.exists(self.volume):
@@ -77,7 +80,7 @@ class GapJunctionSegmentationPipeline:
         
         return pred_3d
     
-    def visualize_volume(self, volume):
+    #def visualize_volume(self, volume):
     
 
 def main():
@@ -90,7 +93,7 @@ def main():
     #Step 0: Create pipeline
     pipeline = GapJunctionSegmentationPipeline(
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
-        name="unet_8jkuifab_sem_adult_s000-699_segmentation_volume_test",
+        name="unet_8jkuifab_sem_adult_s000-001_segmentation_volume_test",
         #Path to model
         model_path="/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt",
         #Dataset class (How to process data for the model)
@@ -109,22 +112,24 @@ def main():
         template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
         augmentations=valid_augmentation,
+        #Whether to create overlapping tiles (crop and stitch method from Unet 2015)
+        overlap=True,
         #Image size of tiles, default is 512
         img_size=512
     )
     print("Pipeline initialized with name:", pipeline.name)
 
-    # #Step 1: Split Slices -> Tiles
-    # pipeline.create_dataset()
-    # print("Dataset created with tiles in:", pipeline.tiles)
-    
-    # #Step 2: Run inference on tiles -> Get masks
-    # pipeline.run_inference()
-    # print("Inference completed with predictions in:", pipeline.pred)
+    #Step 1: Split Slices -> Tiles
+    pipeline.create_dataset()
+    print("Dataset created with tiles in:", pipeline.tiles)
 
-    # #Step 3: Assemble Masks -> Slices
-    # pipeline.stitch_predictions()
-    # print("Predictions assembled into slices in:", pipeline.assembled)
+    #Step 2: Run inference on tiles -> Get masks
+    pipeline.run_inference()
+    print("Inference completed with predictions in:", pipeline.pred)
+
+    #Step 3: Assemble Masks -> Slices
+    pipeline.stitch_predictions()
+    print("Predictions assembled into slices in:", pipeline.assembled)
     
     #Step 4: Stack Slices -> 3D Volume
     volume = pipeline.stack_slices()
@@ -132,8 +137,8 @@ def main():
     print("Volume saved in:", pipeline.volume)
     
     #Step 5: Plot segmentation volume
-    pipeline.visualize_volume(volume)
-    print("Visualizing segmentation volume")
+    #pipeline.visualize_volume(volume)
+    #print("Visualizing segmentation volume")
 
 if __name__ == "__main__":
     main()
