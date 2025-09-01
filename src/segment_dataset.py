@@ -1,7 +1,7 @@
 """
 Split, predict and stitch volumetric pipeline for gap junction segmentation.
 Tommy Tang
-June 2, 2025
+Last Updated: Sept 1, 2025
 """
 
 #Requirements:

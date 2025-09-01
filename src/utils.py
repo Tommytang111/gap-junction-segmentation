@@ -1,7 +1,7 @@
 """
 Complete set of utility functions for Gap Junction Segmentation API.
 Tommy Tang
-June 2, 2025
+Last Updated: Sept 1, 2025
 """
 
 #LIBRARIES
