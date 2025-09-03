@@ -8,7 +8,7 @@ Last Updated: Sept 1, 2025
 #Full sections exported from VAST from dataset of interest
 
 #Libraries
-from utils import create_dataset_2d, assemble_imgs
+from utils import create_dataset_2d, assemble_imgs, check_output_directory
 from inference import inference
 from models import TestDataset
 import albumentations as A
@@ -58,9 +58,8 @@ class GapJunctionSegmentationPipeline:
                     )
 
     def stack_slices(self):
-        #Create volume directory if it doesn't exist
-        if not os.path.exists(self.volume):
-            os.makedirs(self.volume)
+        #Create volume directory if it doesn't exist or clear it otherwise
+        check_output_directory(self.volume)
         
         #Get prediction files
         predictions = sorted(os.listdir(self.assembled))
