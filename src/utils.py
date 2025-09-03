@@ -1,7 +1,7 @@
 """
 Complete set of utility functions for Gap Junction Segmentation API.
 Tommy Tang
-June 2, 2025
+Last Updated: Sept 1, 2025
 """
 
 #LIBRARIES
@@ -24,6 +24,73 @@ from sklearn.model_selection import train_test_split
 from scipy.ndimage import label
 
 #DEPENDENCY FUNCTIONS
+def assemble_img(tile_dir:str, template:str, suffix:str, s_range:range, x_range:range, y_range:range, crop:bool=False):
+    """
+    Assemble tiled prediction images into full sections.
+
+    Reads tiles from tile_dir following the filename pattern:
+        template + f"s{section:03d}_Y{y}_X{x}" + suffix
+
+    For each section index in s_range the function:
+    - loads every tile for y in y_range and x in x_range (grayscale),
+    - optionally center-crops each tile from 512x512 to 256x256 (tile[128:384, 128:384]),
+    - stitches tiles horizontally per row and concatenates rows vertically to form a full section,
+    - collects the assembled section and its output filename (template + out_infix + suffix).
+
+    Parameters:
+        tile_dir (str): Directory containing tile images.
+        template (str): Filename prefix template (e.g. "SEM_adult_image_export_").
+        suffix (str): Filename suffix (e.g. "_pred.png").
+        s_range (range): Range of section indices to assemble.
+        x_range (range): Range of X tile indices.
+        y_range (range): Range of Y tile indices.
+        crop (bool): Whether or not to center crop the tile
+
+    Returns:
+        tuple:
+            - assembled_sections (list[np.ndarray]): List of assembled section images (uint8 arrays).
+            - assembled_sections_names (list[str]): Corresponding output filenames for each assembled section.
+
+    Raises:
+        FileNotFoundError: If any expected tile file is missing in tile_dir.
+    """
+    assembled_sections = []
+    assembled_sections_names = []
+    #Make sure at least one directory is provided
+    for s in s_range:
+        s_acc = []
+        for y in y_range:
+            y_acc = []
+            for x in x_range:
+                #Create filename infix
+                infix = f"s{str(s).zfill(3)}_Y{y}_X{x}"
+                #Assemble tile name
+                tile_path = os.path.join(tile_dir, template + infix + suffix)
+                if not os.path.isfile(tile_path):
+                    raise FileNotFoundError(f"Missing image {template + infix + suffix}")
+                
+                #Step 1: Read tile
+                tile = cv2.imread(tile_path, cv2.IMREAD_GRAYSCALE)
+                #Step 2: Center crop tile 512x512 -> 256x256
+                if crop:
+                    tile = tile[128:384, 128:384]
+                #Step 3: Append to row accumulator
+                y_acc.append(tile)
+            #Step 4: Concatenate tiles in row accumulator and append to section accumulator
+            #Check if we have any tiles
+            if y_acc:
+                s_acc.append(np.concatenate(y_acc, axis=1))
+        #Step 5: Concatenate tiles in section accumulator to create an entire section
+        #Check if we have any rows
+        if s_acc:
+            assembled_section = np.concatenate(s_acc, axis = 0)
+            assembled_sections.append(assembled_section)
+            #Create filename infix
+            out_infix = f"s{str(s).zfill(3)}"
+            assembled_sections_names.append(template + out_infix + suffix)
+
+    return assembled_sections, assembled_sections_names
+            
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
     """
     Assess image quality by evaluating sharpness and artifact level using the Sobel filter.
@@ -84,26 +151,86 @@ def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=F
             return 'exclude'
         else:
             return 'ok'
-
-#FUNCTIONS
-def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ:str, seg_templ:str, s_range:range, x_range:range, y_range:range, missing_dir:str=None):
-    """
-    Assembles (stitches together) image tiles back into full sections.
+        
+def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=False, xysizes=False):
+    """ 
+    Splits an image into tiles of a specified size, with an optional offset to remove borders.
     
     Parameters:
-        img_dir (str): Directory containing image tiles
-        gt_dir (str): Directory containing ground truth tiles (can be None)
-        pred_dir (str): Directory containing prediction tiles
-        save_dir (str): Directory to save assembled results
-        missing_dir (str): Directory to copy missing tiles from (optional)
-        img_templ (str): Template for image filenames
-        seg_templ (str): Template for segmentation filenames
-        s_range (range): Range of section indices
-        x_range (range): Range of X tile indices
-        y_range (range): Range of Y tile indices
-    
+        img (np.ndarray): Input image as a NumPy array.
+        offset (int): Number of pixels to crop from each border before splitting.
+        overlap (bool): If True, splits into overlapping tiles.
+        tile_size (int): Size of each square tile.
+        names (bool): If True, also returns a list of tile names.
+        xysizes (bool): If True, also returns a list of largest sizes in each dimension (ex. max(Y)=20, max(X)=20, max(S)=20)
+
     Returns:
-        None
+        list: List of image tiles (np.ndarray).
+        list (optional): List of tile names if names=True.
+        list (optional): List of largest sizes in each dimension if xysizes=True.
+
+    Example:
+        tiles, names = split_img(image, offset=0, overlap=True, tile_size=512, names=True)
+    """
+    if overlap:
+        stride = tile_size // 2
+    
+    if offset:
+        img = img[offset:-offset, offset:-offset]
+    imgs = []
+    names_list = []
+    for i in range(0, img.shape[0], stride if overlap else tile_size):
+        for j in range(0, img.shape[1], stride if overlap else tile_size):
+            imgs.append(img[i:i+tile_size, j:j+tile_size])
+            names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
+
+    size_list = [i//stride + 1 if overlap else i//tile_size + 1, j//stride + 1 if overlap else j//tile_size + 1]
+
+    if names and xysizes:
+        return (imgs, names_list, size_list)
+    elif names:
+        return(imgs, names_list)
+    elif xysizes:
+        return(imgs, size_list)
+    else:
+        return imgs
+
+#FUNCTIONS
+def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, s_range:range, x_range:range, y_range:range, s_size:tuple, img_templ:str=None, seg_templ:str=None, overlap:bool=False):
+    """
+    Assemble per-tile images, ground-truth masks and/or prediction tiles into full-section images and save to disk.
+
+    Reads tiled files from the provided directories using filename templates and the index ranges,
+    stitches tiles into complete sections, and writes the assembled sections into subfolders
+    under save_dir ("imgs", "gts", "preds").
+
+    Overlap condition: overlap should be set depending on how tiles were created from sections during preprocessing.
+    If overlapping tiles were created, set overlap=True to ensure predictions are stitched properly. 
+    Do not provide img_dir or gt_dir in this case as only pred_dir should be stitched with overlap.
+    Final assembled predictions will be cropped to original section size due to overlap stitching resulting in slightly 
+    larger output dimensions.
+
+    Parameters
+    - img_dir (str | None): Directory containing image tiles to assemble (pass None to skip).
+    - gt_dir  (str | None): Directory containing ground-truth tiles to assemble (pass None to skip).
+    - pred_dir (str | None): Directory containing prediction tiles to assemble (pass None to skip).
+    - save_dir (str): Directory where assembled outputs will be written. Subfolders "imgs", "gts", "preds" are created as needed.
+    - s_range (range): Range of section indices to assemble (e.g. range(0, 51)).
+    - x_range (range): Range of X tile indices per row (e.g. range(0, 20)).
+    - y_range (range): Range of Y tile indices per column (e.g. range(0, 18)).
+    - s_size (tuple): Tuple of (height, width) of the full section size in pixels (e.g. (4608, 5120)).
+    - img_templ (str | None): Filename template / prefix used for tiles (e.g. "SEM_adult_image_export_"). Used to build filenames.
+    - seg_templ (str | None): Filename template / prefix used for segmentation (gt) tiles.
+    - overlap (bool): If True, prediction tiles are cropped prior to stitching (set when tiles were created with overlap).
+
+    Returns
+    - None. Assembled images are written to disk under save_dir.
+
+    Notes
+    - Relies on helper function assemble_image.
+    - This function asserts that at least one of img_dir, gt_dir or pred_dir is provided.
+    - assemble_img is used internally and may raise FileNotFoundError if expected tiles are missing.
+    - cv2.imwrite return values are not returned; check the filesystem and permissions if files do not appear.
     """
     #Make sure at least one directory is provided
     assert img_dir or gt_dir or pred_dir, "At least one directory must be provided"
@@ -111,87 +238,27 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, img_templ
     # Create save directory if it doesn't exist
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    
-    for s in s_range:
-        s_acc_img, s_acc_pred, s_acc_gt = [], [], []
         
-        for y in tqdm(y_range, desc=f"Processing section {s}"):
-            y_acc_img, y_acc_pred, y_acc_gt = [], [], []
-            
-            for x in x_range:
-                # Create filename suffix
-                suffix = f"s{str(s).zfill(3)}_Y{y}_X{x}"
-                
-                # Handle missing images
-                if img_dir:
-                    img_path = os.path.join(img_dir, img_templ + suffix + ".png")
-                    if not os.path.isfile(img_path):
-                        if missing_dir is not None:
-                            shutil.copy(os.path.join(missing_dir, img_templ + suffix + ".png"), img_path)
-                        else:
-                            raise FileNotFoundError(f"Missing image {img_templ + suffix + '.png'}")
-                
-                # Load image
-                if img_dir:
-                    im = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                    if im is None:
-                        raise ValueError(f"Could not load image: {img_path}")
-                
-                # Load ground truth if directory provided
-                gt = None
-                if gt_dir:
-                    gt_path = os.path.join(gt_dir, seg_templ + suffix + "_label.png")
-                    if os.path.isfile(gt_path):
-                        gt = cv2.imread(gt_path, cv2.IMREAD_GRAYSCALE)
-                    else:
-                        gt = np.zeros_like(im)
-                
-                # Load prediction
-                if pred_dir:
-                    pred_path = os.path.join(pred_dir, img_templ + suffix + "_pred.png")
-                    if os.path.isfile(pred_path):
-                        pred = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
-                    else:
-                        pred = np.zeros_like(im)
-                    
-                # Ensure all arrays have the same shape
-                if gt is not None and gt.shape != im.shape:
-                    gt = np.zeros_like(im)
-                if pred.shape != im.shape:
-                    pred = np.zeros_like(im)
-                
-                # Append to row accumulators
-                if img_dir:
-                    y_acc_img.append(im)
-                if gt_dir:
-                    y_acc_gt.append(gt)
-                if pred_dir:
-                    y_acc_pred.append(pred)
-            
-            # Concatenate row tiles horizontally
-            if y_acc_img or y_acc_pred:  # Check if we have any tiles
-                s_acc_img.append(np.concatenate(y_acc_img, axis=1))
-                s_acc_pred.append(np.concatenate(y_acc_pred, axis=1))
-                if gt_dir:
-                    s_acc_gt.append(np.concatenate(y_acc_gt, axis=1))
-        
-        # Concatenate all rows vertically to form complete section
-        if s_acc_img or s_acc_pred:  # Check if we have any rows
-            assembled_img = np.concatenate(s_acc_img, axis=0)
-            assembled_pred = np.concatenate(s_acc_pred, axis=0)
-            if gt_dir:
-                assembled_gt = np.concatenate(s_acc_gt, axis=0)
-            
-            # Create output filename suffix
-            out_suffix = f"s{str(s).zfill(3)}"
-            
-            # Save assembled results
-            cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_img.png"), assembled_img)
-            cv2.imwrite(os.path.join(save_dir, img_templ + out_suffix + "_pred.png"), assembled_pred)
-            if gt_dir:
-                cv2.imwrite(os.path.join(save_dir, seg_templ + out_suffix + "_label.png"), assembled_gt)
-            
-            print(f"Saved assembled section {s} with shape {assembled_img.shape}")
+    #Assemble images/masks/predictions and save
+    if img_dir:
+        imgs, img_names = assemble_img(tile_dir=img_dir, template=img_templ, suffix=".png", s_range=s_range, x_range=x_range, y_range=y_range)
+        check_output_directory(os.path.join(save_dir, "imgs"), clear=True)
+        for img, name in zip(imgs, img_names): 
+            cv2.imwrite(os.path.join(save_dir, "imgs", name), img)
+    if gt_dir:
+        gts, gt_names = assemble_img(tile_dir=gt_dir, template=seg_templ, suffix="_label.png", s_range=s_range, x_range=x_range, y_range=y_range)
+        check_output_directory(os.path.join(save_dir, "gts"), clear=True)
+        for gt, name in zip(gts, gt_names):
+            cv2.imwrite(os.path.join(save_dir, "gts", name), gt)
+    if pred_dir:
+        if overlap:
+            preds, pred_names = assemble_img(tile_dir=pred_dir, template=img_templ, suffix="_pred.png", s_range=s_range, x_range=x_range, y_range=y_range, crop=True)
+        else:
+            preds, pred_names = assemble_img(tile_dir=pred_dir, template=img_templ, suffix="_pred.png", s_range=s_range, x_range=x_range, y_range=y_range)
+        check_output_directory(os.path.join(save_dir, "preds"), clear=True)
+        for pred, name in zip(preds, pred_names):
+            pred = pred[0:s_size[0], 0:s_size[1]]
+            cv2.imwrite(os.path.join(save_dir, "preds", name), pred)
 
 def check_filtered(folder:str, filter_func=sobel_filter):
     """
@@ -277,11 +344,13 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
     @param test: whether to run in test mode - just an images dataset
     @return: None (creates and saves your dataset to specified directory)
     """
-    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), "Missing additional directory name mapping for additional data directories, or vice versa"
+    #Check additional directories
+    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), 
     if not test and image_to_seg_name_map is None:
         print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
         image_to_seg_name_map = lambda x: x.replace('img', 'seg')
 
+    #Removes existing output directory
     if os.path.isdir(output_dir):
         print("WARNING: Output directory already exists, deleting it")
         os.system(f"rm -rf {output_dir}")
@@ -292,8 +361,9 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         # else:
         #     sys.exit(0)
 
+    #Make new output directory
     os.makedirs(output_dir)
-    #make subdirs
+    #Make subdirectories
     os.makedirs(os.path.join(output_dir, "imgs"))
     if not test:
         os.makedirs(os.path.join(output_dir, "gts"))
@@ -347,9 +417,9 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         else:
             max_y, max_x = split_subroutine(img, gt)
 
-        max_section_size = i
+        max_section_size = i + 1
         
-    return max_y, max_x, max_section_size
+    return max_y, max_x, max_section_size, img.shape
             
 #Example Usage
 #gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
@@ -1003,47 +1073,6 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
         pred = pred.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
     
     return pred
-
-def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=False, xysizes=False):
-    """ 
-    Splits an image into tiles of a specified size, with an optional offset to remove borders.
-    
-    Parameters:
-        img (np.ndarray): Input image as a NumPy array.
-        offset (int): Number of pixels to crop from each border before splitting.
-        tile_size (int): Size of each square tile.
-        names (bool): If True, also returns a list of tile names.
-        sizes (bool): If True, also returns a list of largest sizes in each dimension (ex. max(Y)=20, max(X)=20, max(S)=20)
-
-    Returns:
-        list: List of image tiles (np.ndarray).
-        list (optional): List of tile names if names=True.
-
-    Example:
-        tiles, names = split_img(image, offset=0, tile_size=512, names=True)
-    """
-    if overlap:
-        stride = tile_size // 2
-    
-    if offset:
-        img = img[offset:-offset, offset:-offset]
-    imgs = []
-    names_list = []
-    for i in range(0, img.shape[0], stride if overlap else tile_size):
-        for j in range(0, img.shape[1], stride if overlap else tile_size):
-            imgs.append(img[i:i+tile_size, j:j+tile_size])
-            names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
-
-    size_list = [i//stride if overlap else i//tile_size, j//stride if overlap else j//tile_size]
-    
-    if names and xysizes:
-        return (imgs, names_list, size_list)
-    elif names:
-        return(imgs, names_list)
-    elif xysizes:
-        return(imgs, size_list)
-    else:
-        return imgs
 
 def view_label(file:str):
     """

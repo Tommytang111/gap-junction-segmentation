@@ -1,14 +1,14 @@
 """
 Split, predict and stitch volumetric pipeline for gap junction segmentation.
 Tommy Tang
-June 2, 2025
+Last Updated: Sept 1, 2025
 """
 
 #Requirements:
 #Full sections exported from VAST from dataset of interest
 
 #Libraries
-from utils import create_dataset_2d, assemble_imgs
+from utils import create_dataset_2d, assemble_imgs, check_output_directory
 from inference import inference
 from models import TestDataset
 import albumentations as A
@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 
 class GapJunctionSegmentationPipeline:
-    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, img_size=512):
+    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, overlap=True, img_size=512):
         self.name = name
         self.model = model_path
         self.dataset_class = dataset_class
@@ -29,9 +29,10 @@ class GapJunctionSegmentationPipeline:
         self.template = template
         self.img_size = img_size
         self.augmentations = augmentations
+        self.overlap = overlap
         
     def create_dataset(self):
-        self.max_y, self.max_x, self.max_sections = create_dataset_2d(imgs_dir=self.sections, output_dir=self.tiles, img_size=self.img_size, create_overlap=True, test=True)
+        self.max_y, self.max_x, self.max_sections, self.section_size = create_dataset_2d(imgs_dir=self.sections, output_dir=self.tiles, img_size=self.img_size, create_overlap=self.overlap, test=True)
 
     def run_inference(self):
         inference(model_path=self.model,
@@ -43,8 +44,7 @@ class GapJunctionSegmentationPipeline:
                 )
 
     def stitch_predictions(self):
-        #Need to crop tiles since I created overlapping tiles
-        assemble_imgs(img_dir=os.path.join(self.tiles, "imgs"),
+        assemble_imgs(img_dir=None,
                     gt_dir=None,
                     pred_dir=self.pred,
                     save_dir=self.assembled,
@@ -52,20 +52,25 @@ class GapJunctionSegmentationPipeline:
                     x_range=range(0, self.max_x),
                     y_range=range(0, self.max_y),
                     img_templ=self.template,
-                    seg_templ=self.template)
-        
+                    seg_templ=self.template,
+                    overlap=self.overlap,
+                    s_size=self.section_size
+                    )
+
     def stack_slices(self):
-        #NEED TO ADD STACK SLICES FOR IMGS TOO
+        #Create volume directory if it doesn't exist or clear it otherwise
+        check_output_directory(self.volume)
         
         #Get prediction files
         predictions = sorted(os.listdir(self.assembled))
-
+        
         #Read all predictions and append to list
         pred_list = []
         for pred in predictions:
             pred_read = cv2.imread(os.path.join(self.assembled, pred), cv2.IMREAD_GRAYSCALE)
+            print(f"shape of {pred}: {pred_read.shape}")
             pred_list.append(pred_read)
-
+        
         #Stack all predictions into a 3D numpy array
         pred_3d = np.stack(pred_list, axis=0)
 
@@ -74,8 +79,7 @@ class GapJunctionSegmentationPipeline:
         
         return pred_3d
     
-    def visualize_volume(self):
-        "something filler"
+    #def visualize_volume(self, volume):
 
 def main():
     #Augmentation
@@ -95,13 +99,13 @@ def main():
         #Path to sections
         sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699",
         #Path to where to save tiles
-        output_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_split/s000-699",
+        output_dir="/home/tommy111/scratch/outputs/sem_adult_split/s000-699",
         #Path to where to save predictions
-        pred_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699",
+        pred_dir="/home/tommy111/scratch/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699",
         #Path to where to save assembled results
-        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_8jkuifab/sem_adult_s000-699",
+        assembled_dir="/home/tommy111/scratch/outputs/assembled_results/unet_8jkuifab/sem_adult_s000-699/preds",
         #Path to where to save volume results
-        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699",
+        volume_dir="/home/tommy111/scratch/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699",
         #Template name for images and masks, edit as needed
         template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
