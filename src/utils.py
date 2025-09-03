@@ -344,7 +344,7 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
     @param test: whether to run in test mode - just an images dataset
     @return: None (creates and saves your dataset to specified directory)
     """
-    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), "Missing additional directory name mapping for additional data directories, or vice versa"
+    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), 
     if not test and image_to_seg_name_map is None:
         print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
         image_to_seg_name_map = lambda x: x.replace('img', 'seg')
