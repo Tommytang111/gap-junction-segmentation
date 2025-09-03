@@ -126,20 +126,23 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
-def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, threshold:float=0.5, augmentation=None, filter:bool=False):
+def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, clear:bool=False, threshold:float=0.5, augmentation=None, filter:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
     This function loads a trained UNet model, processes images from the specified input directory,
     generates predicted segmentation masks, and saves the results to the output directory. The input
     directory must contain the 'imgs' subdirectory. The output masks are thresholded using
-    a sigmoid activation and saved as binary images.
+    a sigmoid activation and saved as binary images. Can do efficient inference by setting clear=True.
 
     Parameters:
         model_path (str): Path to the trained model weights (.pt file).
+        dataset (torch.utils.data.Dataset): Dataset class for loading images.
         input_dir (str): Path to the input directory containing 'imgs' subfolder.
         output_dir (str): Path to the directory where predicted masks will be saved.
+        clear (bool): If true, images will be deleted after inference on an ongoing basis.
         threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
+        augmentation (callable, optional): Augmentation pipeline to apply to the images. Default is None.
         filter (bool): Applies a pixel filter if true. Default is false.
 
     Returns:
@@ -184,6 +187,9 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
                     gj_pred = filter_pixels(gj_pred, size_threshold=10) #Apply filter_pixels 
                 save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[img_num]) 
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
+                #Removes original image from input directory after inference
+                if clear:
+                    os.remove(Path(input_dir) / "imgs" / imgs[img_num])
                 img_num += 1
 
 def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True) -> plt.Figure:
