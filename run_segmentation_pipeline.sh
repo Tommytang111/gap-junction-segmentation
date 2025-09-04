@@ -18,9 +18,17 @@ module purge
 module load gcc/13.3 cuda/12.6 opencv
 source /home/tommy111/.gj_venv/bin/activate
 
-wandb offline
+#Configure environment for parallel processing
+export WANDB_MODE=disabled
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export OMP_NUM_THREADS=8
 
-#Run training script
+#Set number of threads for various libraries to match SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export NUMEXPR_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export OPENBLAS_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export VECLIB_MAXIMUM_THREADS=${SLURM_CPUS_PER_TASK}
+
+#Run segmentation pipeline
+echo "Starting segmentation pipeline with ${SLURM_CPUS_PER_TASK} CPU cores and GPU: $(nvidia-smi -L)"
 python3 /home/tommy111/projects/def-mzhen/tommy111/code/new/src/segment_dataset.py 
