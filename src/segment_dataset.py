@@ -40,6 +40,7 @@ class GapJunctionSegmentationPipeline:
                   input_dir=self.tiles,
                   output_dir=self.pred,
                   augmentation=self.augmentations,
+                  batch_size=32,
                   clear=True,
                   filter=True
                 )
