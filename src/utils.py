@@ -325,48 +325,123 @@ def check_output_directory(path:str, clear:bool=True) -> None:
         print(f"Output directory already exists: {path}")
         if clear:
             print(f"Clearing output directory: {path}")
-            subprocess.run(f"rm -f {path}/*", shell=True)
+            try:
+                # Use shutil.rmtree instead of shell rm command - much more reliable
+                for entry in os.scandir(path):
+                    if entry.is_dir(follow_symlinks=False):
+                        shutil.rmtree(entry.path, ignore_errors=True)
+                    else:
+                        try:
+                            os.unlink(entry.path)
+                        except FileNotFoundError:
+                            pass  # Another process may have deleted it
+            except Exception as e:
+                print(f"Warning: Error clearing directory contents: {e}")
     else:
-        os.makedirs(path)
+        # Create with exist_ok to handle race conditions
+        os.makedirs(path, exist_ok=True)
+        
+def _ensure_empty_dir(path:str) -> None:
+    """
+    Recursively removes a directory if it exists and recreates it empty.
+    Uses a rename-and-delete strategy that's more reliable with concurrent access.
+    """
+    if os.path.exists(path):
+        try:
+            # Rename strategy - much safer for parallel operations
+            tmp_path = f"{path}.{os.getpid()}.{time.time()}.old"
+            os.rename(path, tmp_path)
+            # Create the new directory
+            os.makedirs(path, exist_ok=True)
+            # Remove the old directory in background
+            try:
+                shutil.rmtree(tmp_path, ignore_errors=True)
+            except:
+                pass  # We don't care if cleanup fails
+        except OSError:
+            # If rename failed, fall back to recreating
+            try:
+                shutil.rmtree(path, ignore_errors=True)
+                # Sleep a tiny bit to let filesystem catch up
+                time.sleep(0.1)
+                os.makedirs(path, exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Could not fully clear directory {path}: {e}")
+                # Last resort - ensure it exists
+                os.makedirs(path, exist_ok=True)
+    else:
+        os.makedirs(path, exist_ok=True)
         
 def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, create_overlap=False, seg_ignore=None, test=False):
     """
-    Function to create a 2d dataset from a dataset of full EM images
-    @param imgs_dir: the directory of the full EM images
-    @param output_dir: the directory to output the 2d dataset
-    @param seg_dir: the directory of the segmentations
-    @param img_size: the size of the images
-    @param image_to_seg_name_map: the mapping from image to segmentation name
-    @param add_dir: the additional directories to include in the dataset
-    @param add_dir_maps: the mapping from image to additional data directory
-    @param create_overlap: whether to create overlapping tiles - an offset of img_size//2 is used -- helps with predictions since every GJ is given a centered context
-    @param seg_ignore: the values to ignore in the segmentation
-    @param test: whether to run in test mode - just an images dataset
-    @return: None (creates and saves your dataset to specified directory)
+    Create a 2D training/validation dataset by tiling full-section EM images (and optional annotations).
+
+    This function reads full-size images from imgs_dir (and optional segmentations from seg_dir),
+    splits each section into tiles of size img_size, and writes the tiles to output_dir under
+    subfolders "imgs" and, if not test mode, "gts". Optionally creates overlapping tiles
+    (half-stride) when create_overlap=True, and supports copying additional auxiliary directories.
+
+    Key behaviors
+    - If test is False, seg_dir must be provided (unless a custom image_to_seg_name_map handles mapping).
+      Ground-truth tiles will be converted to binary masks (non-zero -> 255).
+    - If create_overlap is True, tiles are created with a stride of img_size//2 (useful for prediction stitching).
+    - If add_dir and add_dir_maps are provided, additional per-image data directories are tiled and saved.
+    - If output_dir exists it will be removed and recreated (guarded by a printed warning).
+    - Returns tiling metadata useful for later stitching: (max_y, max_x, max_section_size, last_image_shape).
+
+    Parameters
+    - imgs_dir (str): Directory containing full-section images.
+    - output_dir (str): Directory to write tiled dataset. Subfolders "imgs" and "gts" (if not test) are created.
+    - seg_dir (str | None): Directory containing segmentation images. Required for non-test mode unless a mapping function is used.
+    - img_size (int): Tile size in pixels (square). Default 512.
+    - image_to_seg_name_map (callable | None): Function mapping an image filename to its segmentation filename.
+      If None and test==False a default mapping is assumed (replacing 'img' with 'seg').
+    - add_dir (list[str] | None): Additional directories whose files should be included (each will get its own output subfolder).
+    - add_dir_maps (dict | None): Mapping from each add_dir path to a function mapping an image filename to that add_dir filename.
+    - create_overlap (bool): If True, create overlapping tiles with stride img_size//2.
+    - seg_ignore (iterable | None): Iterable of label values to set to 0 in ground-truth before binarization.
+    - test (bool): If True, only create image tiles (no ground-truth output).
+
+    Returns
+    - tuple: (max_y, max_x, max_section_size, image_shape)
+        - max_y (int): maximum number of tile rows produced for a section.
+        - max_x (int): maximum number of tile columns produced for a section.
+        - max_section_size (int): number of processed sections (index of last processed + 1).
+        - image_shape (tuple): shape of the last processed full-section image (H, W).
+
+    Notes and examples
+    - Example:
+        max_y, max_x, n_sections, img_shape = create_dataset_2d(
+            imgs_dir='/data/sections',
+            output_dir='/data/tiles',
+            seg_dir='/data/labels',
+            img_size=512,
+            create_overlap=False,
+            test=False
+        )
+    - Be careful: calling this on a large dataset will delete output_dir if it exists.
+    - When using create_overlap=True, downstream stitching must account for the cropping strategy used during assembly.
     """
-    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None), 
+    #Check additional directories
+    assert (add_dir is None and add_dir_maps is None or add_dir is not None and add_dir_maps is not None) 
     if not test and image_to_seg_name_map is None:
         print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
         image_to_seg_name_map = lambda x: x.replace('img', 'seg')
 
+    #Safely remove/recreate the output directory
     if os.path.isdir(output_dir):
-        print("WARNING: Output directory already exists, deleting it")
-        os.system(f"rm -rf {output_dir}")
-        #Optional user confirmation block
-        #response = input("Do you want to continue? (y/n): ")
-        # if response.lower() == 'y':
-        #     os.system(f"rm -rf {output_dir}")
-        # else:
-        #     sys.exit(0)
-
-    os.makedirs(output_dir)
-    #make subdirs
-    os.makedirs(os.path.join(output_dir, "imgs"))
+        print("WARNING: Output directory already exists, recreating it")
+        _ensure_empty_dir(output_dir)
+    else:
+        os.makedirs(output_dir, exist_ok=True)
+    
+    #Make subdirectories
+    os.makedirs(os.path.join(output_dir, "imgs"), exist_ok=True)
     if not test:
-        os.makedirs(os.path.join(output_dir, "gts"))
+        os.makedirs(os.path.join(output_dir, "gts"), exist_ok=True)
         if add_dir:
             for i in (add_dir):
-                os.makedirs(os.path.join(output_dir, os.path.split(i)[-1]))
+                os.makedirs(os.path.join(output_dir, os.path.split(i)[-1]), exist_ok=True)
 
     imgs = sorted(os.listdir(imgs_dir))
 
