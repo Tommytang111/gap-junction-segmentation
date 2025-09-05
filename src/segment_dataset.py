@@ -15,9 +15,13 @@ import albumentations as A
 import os
 import cv2
 import numpy as np
+import multiprocessing
+from functools import partial
+from pathlib import Path
+from tqdm import tqdm
 
 class GapJunctionSegmentationPipeline:
-    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, overlap=True, img_size=512):
+    def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, overlap=True, img_size=512, batch_size=8, num_workers=None):
         self.name = name
         self.model = model_path
         self.dataset_class = dataset_class
@@ -30,6 +34,10 @@ class GapJunctionSegmentationPipeline:
         self.img_size = img_size
         self.augmentations = augmentations
         self.overlap = overlap
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        # Print number of workers being used
+        print(f"Using {self.num_workers} worker processes")
         
     def create_dataset(self):
         self.max_y, self.max_x, self.max_sections, self.section_size = create_dataset_2d(imgs_dir=self.sections, output_dir=self.tiles, img_size=self.img_size, create_overlap=self.overlap, test=True)
@@ -40,6 +48,8 @@ class GapJunctionSegmentationPipeline:
                   input_dir=self.tiles,
                   output_dir=self.pred,
                   augmentation=self.augmentations,
+                  batch_size=self.batch_size,
+                  clear=True,
                   filter=True
                 )
 
@@ -56,6 +66,11 @@ class GapJunctionSegmentationPipeline:
                     overlap=self.overlap,
                     s_size=self.section_size
                     )
+        
+    def _read_image_worker(self, section):
+        """Worker function to read a single section file"""
+        img_path = os.path.join(self.assembled, section)
+        return cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
     def stack_slices(self):
         #Create volume directory if it doesn't exist or clear it otherwise
@@ -64,25 +79,37 @@ class GapJunctionSegmentationPipeline:
         #Get prediction files
         predictions = sorted(os.listdir(self.assembled))
         
-        #Read all predictions and append to list
-        pred_list = []
-        for pred in predictions:
-            pred_read = cv2.imread(os.path.join(self.assembled, pred), cv2.IMREAD_GRAYSCALE)
-            print(f"shape of {pred}: {pred_read.shape}")
-            pred_list.append(pred_read)
+        #Use multiprocessing pool to read images in parallel
+        print(f"Reading {len(predictions)} image slices using {self.num_workers} processes...")
+        
+        # Create a multiprocessing pool
+        with multiprocessing.Pool(processes=self.num_workers) as pool:
+        #Read all predictions and append to list in parallel
+            pred_list = list(tqdm(
+                pool.imap(self._read_image_worker, predictions),
+                total=len(predictions),
+                desc="Loading images"
+            ))
         
         #Stack all predictions into a 3D numpy array
+        print("Stacking slices into volume...")
         pred_3d = np.stack(pred_list, axis=0)
 
         #Save the volume
-        np.save(os.path.join(self.volume, "volume.npy"), pred_3d)
+        volume_path = os.path.join(self.volume, "volume.npy")
+        print(f"Saving volume to {volume_path}")
+        np.save(volume_path, pred_3d)
         
         return pred_3d
-    
-    #def visualize_volume(self, volume):
-    
 
 def main():
+    #Get number of CPUs from Slurm environment or default to all available CPUs
+    num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
+    
+    #Set number of OpenMP threads (important for numpy operations)
+    os.environ["OMP_NUM_THREADS"] = str(num_workers)
+    os.environ["MKL_NUM_THREADS"] = str(num_workers)
+
     #Augmentation
     valid_augmentation = A.Compose([
         A.Normalize(mean=0, std=1), #Specific to the dataset, very important to set these values to the same as training
@@ -114,7 +141,11 @@ def main():
         #Whether to create overlapping tiles (crop and stitch method from Unet 2015)
         overlap=True,
         #Image size of tiles, default is 512
-        img_size=512
+        img_size=512,
+        #Batch size for inference, default is 8
+        batch_size=32,
+        #Number of workers for data loading and processing, default is all available CPUs
+        num_workers=num_workers
     )
     print("Pipeline initialized with name:", pipeline.name)
 
