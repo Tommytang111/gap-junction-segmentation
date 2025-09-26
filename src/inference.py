@@ -26,9 +26,6 @@ from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_o
 
 #FUNCTIONS
 
-#NEED FUNCTION FOR GETTING TILES FROM A LARGE SECTION
-#NEED FUNCTION FOR STITCHING IMAGES BACK TOGETHER
-
 def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
     """
     Compare predictions from three different UNet models on a randomly selected image.
@@ -413,9 +410,9 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt"
-    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s000-699"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699"
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_dauer_2_h1qrqboc.pt"
+    data_dir = "/mnt/e/Tommy"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/assembled_results/unet_h1qrqboc/sem_dauer_1_s000-850"
 
     #Augmentation
     valid_augmentation = A.Compose([
@@ -424,20 +421,20 @@ def main():
     ])
     
     #Run inference
-    inference(model_path=model_path,
-              dataset=TestDataset,
-              input_dir=data_dir,
-              output_dir=pred_dir,
-              augmentation=valid_augmentation,
-              filter=True
-              )
+    # inference(model_path=model_path,
+    #           dataset=TestDataset,
+    #           input_dir=data_dir,
+    #           output_dir=pred_dir,
+    #           augmentation=valid_augmentation,
+    #           filter=True
+    #           )
     
-    # #Visualize results
-    # for i in range(1):
-    #     fig = visualize(data_dir=data_dir,
-    #                     pred_dir=pred_dir,
-    #                     style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
-    #     plt.show()
+    #Visualize results
+    for i in range(1):
+        fig = visualize(data_dir=data_dir,
+                        pred_dir=pred_dir,
+                        style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png", gt=False)
+        plt.show()
 
     # #Evaluate model performance
     # performance_plot = evaluate(data_dir=data_dir,
