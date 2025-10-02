@@ -101,6 +101,11 @@ class GapJunctionSegmentationPipeline:
         np.save(volume_path, pred_3d)
         
         return pred_3d
+<<<<<<< HEAD
+=======
+    
+    #def visualize_volume(self, volume):
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
 
 def main():
     #Get number of CPUs from Slurm environment or default to all available CPUs
@@ -121,19 +126,19 @@ def main():
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
         name="unet_8jkuifab_sem_adult_s000-001_segmentation_volume_test",
         #Path to model
-        model_path="/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt",
+        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt",
         #Dataset class (How to process data for the model)
         dataset_class=TestDataset,
         #Path to sections
-        sections_dir="/home/tommytang111/gap-junction-segmentation/data/sem_adult_test/SEM_full/s000-001",
+        sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699",
         #Path to where to save tiles
-        output_dir="/home/tommytang111/gap-junction-segmentation/data/sem_adult_test/SEM_split/s000-001",
+        output_dir="/home/tommy111/scratch/outputs/sem_adult_split/s000-699",
         #Path to where to save predictions
-        pred_dir="/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-001",
+        pred_dir="/home/tommy111/scratch/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699",
         #Path to where to save assembled results
-        assembled_dir="/home/tommytang111/gap-junction-segmentation/outputs/assembled_results/unet_8jkuifab/sem_adult_s000-001",
+        assembled_dir="/home/tommy111/scratch/outputs/assembled_results/unet_8jkuifab/sem_adult_s000-699/preds",
         #Path to where to save volume results
-        volume_dir="/home/tommytang111/gap-junction-segmentation/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-001",
+        volume_dir="/home/tommy111/scratch/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699",
         #Template name for images and masks, edit as needed
         template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
@@ -165,10 +170,13 @@ def main():
     volume = pipeline.stack_slices()
     print("3D volume created with shape:", volume.shape)
     print("Volume saved in:", pipeline.volume)
+<<<<<<< HEAD
     
     #Step 5: Plot segmentation volume
     #pipeline.visualize_volume(volume)
     #print("Visualizing segmentation volume")
+=======
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
 
 if __name__ == "__main__":
     main()
