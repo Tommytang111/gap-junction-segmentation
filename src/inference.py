@@ -123,7 +123,11 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
+<<<<<<< HEAD
 def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, clear:bool=False, threshold:float=0.5, augmentation=None, filter:bool=False):
+=======
+def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, batch_size:int=8, num_workers:int=8, clear:bool=False, threshold:float=0.5, augmentation=None, filter:bool=False):
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
@@ -137,6 +141,11 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
         dataset (torch.utils.data.Dataset): Dataset class for loading images.
         input_dir (str): Path to the input directory containing 'imgs' subfolder.
         output_dir (str): Path to the directory where predicted masks will be saved.
+<<<<<<< HEAD
+=======
+        batch_size (int): Number of images to process in each batch. Default is 8.
+        num_workers (int): Number of worker processes for the DataLoader. Default is 8.
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
         clear (bool): If true, images will be deleted after inference on an ongoing basis.
         threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
         augmentation (callable, optional): Augmentation pipeline to apply to the images. Default is None.
@@ -156,7 +165,7 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
     #Instantiate dataset class 
     dataset = dataset(Path(input_dir) / "imgs", augmentation=augmentation)
     #Load dataset class in Dataloader
-    dataloader = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=8)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     #Load model and set to evaluation mode
     #model = joblib.load(model_dir)
@@ -421,6 +430,7 @@ def main():
     ])
     
     #Run inference
+<<<<<<< HEAD
     # inference(model_path=model_path,
     #           dataset=TestDataset,
     #           input_dir=data_dir,
@@ -428,6 +438,16 @@ def main():
     #           augmentation=valid_augmentation,
     #           filter=True
     #           )
+=======
+    inference(model_path=model_path,
+              dataset=TestDataset,
+              input_dir=data_dir,
+              output_dir=pred_dir,
+              augmentation=valid_augmentation,
+              clear=False,
+              filter=True
+              )
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
     
     #Visualize results
     for i in range(1):

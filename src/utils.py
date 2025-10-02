@@ -180,8 +180,13 @@ def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=
         img = img[offset:-offset, offset:-offset]
     imgs = []
     names_list = []
+<<<<<<< HEAD
     for i in range(-171, img.shape[0] + 171, stride if overlap else tile_size):
         for j in range(-171, img.shape[1] + 171, stride if overlap else tile_size):
+=======
+    for i in range(0, img.shape[0], stride if overlap else tile_size):
+        for j in range(0, img.shape[1], stride if overlap else tile_size):
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
             imgs.append(img[i:i+tile_size, j:j+tile_size])
             names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
 
@@ -258,7 +263,10 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, s_range:r
             preds, pred_names = assemble_img(tile_dir=pred_dir, template=img_templ, suffix="_pred.png", s_range=s_range, x_range=x_range, y_range=y_range)
         check_output_directory(os.path.join(save_dir, "preds"), clear=True)
         for pred, name in zip(preds, pred_names):
+<<<<<<< HEAD
             #Crop to same size as the original section
+=======
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
             pred = pred[0:s_size[0], 0:s_size[1]]
             cv2.imwrite(os.path.join(save_dir, "preds", name), pred)
 
@@ -430,6 +438,7 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
         image_to_seg_name_map = lambda x: x.replace('img', 'seg')
 
+<<<<<<< HEAD
     #Safely remove/recreate the output directory
     if os.path.isdir(output_dir):
         print("WARNING: Output directory already exists, recreating it")
@@ -439,6 +448,23 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
     
     #Make subdirectories
     os.makedirs(os.path.join(output_dir, "imgs"), exist_ok=True)
+=======
+    #Removes existing output directory
+    if os.path.isdir(output_dir):
+        print("WARNING: Output directory already exists, deleting it")
+        os.system(f"rm -rf {output_dir}")
+        #Optional user confirmation block
+        #response = input("Do you want to continue? (y/n): ")
+        # if response.lower() == 'y':
+        #     os.system(f"rm -rf {output_dir}")
+        # else:
+        #     sys.exit(0)
+
+    #Make new output directory
+    os.makedirs(output_dir)
+    #Make subdirectories
+    os.makedirs(os.path.join(output_dir, "imgs"))
+>>>>>>> f63d368742cb81a910b2914d17d012a74c9f0e2d
     if not test:
         os.makedirs(os.path.join(output_dir, "gts"), exist_ok=True)
         if add_dir:
