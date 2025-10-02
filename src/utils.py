@@ -1,7 +1,7 @@
 """
 Complete set of utility functions for Gap Junction Segmentation API.
 Tommy Tang
-Last Updated: Sept 1, 2025
+Last Updated: Oct 2, 2025
 """
 
 #LIBRARIES
@@ -13,6 +13,7 @@ from torch import nn
 import torch
 import os
 import shutil
+import time
 import subprocess
 from pathlib import Path
 import cv2
@@ -179,8 +180,8 @@ def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=
         img = img[offset:-offset, offset:-offset]
     imgs = []
     names_list = []
-    for i in range(0, img.shape[0], stride if overlap else tile_size):
-        for j in range(0, img.shape[1], stride if overlap else tile_size):
+    for i in range(-171, img.shape[0] + 171, stride if overlap else tile_size): #-171 is very specific to tiles with shape (512, 512), is the exact number of pixels to offset to keep original section size after cropping.
+        for j in range(-171, img.shape[1] + 171, stride if overlap else tile_size):
             imgs.append(img[i:i+tile_size, j:j+tile_size])
             names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
 
@@ -257,6 +258,7 @@ def assemble_imgs(img_dir:str, gt_dir:str, pred_dir:str, save_dir:str, s_range:r
             preds, pred_names = assemble_img(tile_dir=pred_dir, template=img_templ, suffix="_pred.png", s_range=s_range, x_range=x_range, y_range=y_range)
         check_output_directory(os.path.join(save_dir, "preds"), clear=True)
         for pred, name in zip(preds, pred_names):
+            #Crop to same size as the original section
             pred = pred[0:s_size[0], 0:s_size[1]]
             cv2.imwrite(os.path.join(save_dir, "preds", name), pred)
 
@@ -325,9 +327,52 @@ def check_output_directory(path:str, clear:bool=True) -> None:
         print(f"Output directory already exists: {path}")
         if clear:
             print(f"Clearing output directory: {path}")
-            subprocess.run(f"rm -f {path}/*", shell=True)
+            try:
+                # Use shutil.rmtree instead of shell rm command - much more reliable
+                for entry in os.scandir(path):
+                    if entry.is_dir(follow_symlinks=False):
+                        shutil.rmtree(entry.path, ignore_errors=True)
+                    else:
+                        try:
+                            os.unlink(entry.path)
+                        except FileNotFoundError:
+                            pass  # Another process may have deleted it
+            except Exception as e:
+                print(f"Warning: Error clearing directory contents: {e}")
     else:
-        os.makedirs(path)
+        # Create with exist_ok to handle race conditions
+        os.makedirs(path, exist_ok=True)
+        
+def _ensure_empty_dir(path:str) -> None:
+    """
+    Recursively removes a directory if it exists and recreates it empty.
+    Uses a rename-and-delete strategy that's more reliable with concurrent access.
+    """
+    if os.path.exists(path):
+        try:
+            # Rename strategy - much safer for parallel operations
+            tmp_path = f"{path}.{os.getpid()}.{time.time()}.old"
+            os.rename(path, tmp_path)
+            # Create the new directory
+            os.makedirs(path, exist_ok=True)
+            # Remove the old directory in background
+            try:
+                shutil.rmtree(tmp_path, ignore_errors=True)
+            except:
+                pass  # We don't care if cleanup fails
+        except OSError:
+            # If rename failed, fall back to recreating
+            try:
+                shutil.rmtree(path, ignore_errors=True)
+                # Sleep a tiny bit to let filesystem catch up
+                time.sleep(0.1)
+                os.makedirs(path, exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Could not fully clear directory {path}: {e}")
+                # Last resort - ensure it exists
+                os.makedirs(path, exist_ok=True)
+    else:
+        os.makedirs(path, exist_ok=True)
         
 def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, create_overlap=False, seg_ignore=None, test=False):
     """
@@ -385,26 +430,20 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         print("WARNING: No image to segmentation name mapping provided, assuming the default naming convention")
         image_to_seg_name_map = lambda x: x.replace('img', 'seg')
 
-    #Removes existing output directory
+    #Safely remove/recreate the output directory
     if os.path.isdir(output_dir):
-        print("WARNING: Output directory already exists, deleting it")
-        os.system(f"rm -rf {output_dir}")
-        #Optional user confirmation block
-        #response = input("Do you want to continue? (y/n): ")
-        # if response.lower() == 'y':
-        #     os.system(f"rm -rf {output_dir}")
-        # else:
-        #     sys.exit(0)
-
-    #Make new output directory
-    os.makedirs(output_dir)
+        print("WARNING: Output directory already exists, recreating it")
+        _ensure_empty_dir(output_dir)
+    else:
+        os.makedirs(output_dir, exist_ok=True)
+    
     #Make subdirectories
-    os.makedirs(os.path.join(output_dir, "imgs"))
+    os.makedirs(os.path.join(output_dir, "imgs"), exist_ok=True)
     if not test:
-        os.makedirs(os.path.join(output_dir, "gts"))
+        os.makedirs(os.path.join(output_dir, "gts"), exist_ok=True)
         if add_dir:
             for i in (add_dir):
-                os.makedirs(os.path.join(output_dir, os.path.split(i)[-1]))
+                os.makedirs(os.path.join(output_dir, os.path.split(i)[-1]), exist_ok=True)
 
     imgs = sorted(os.listdir(imgs_dir))
 
@@ -455,10 +494,6 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         max_section_size = i + 1
         
     return max_y, max_x, max_section_size, img.shape
-            
-#Example Usage
-#gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
-#create_dataset_2d_from_full(args.imgs_dir, args.output_dir, seg_dir=args.seg_dir, img_size=args.img_size, image_to_seg_name_map= f, add_dir=args.add_dir, add_dir_maps=gs, seg_ignore=args.seg_ignore, create_overlap=args.create_overlap, test=args.test)
             
 def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, depth_pattern=r's\d\d\d', test=False):
     """
