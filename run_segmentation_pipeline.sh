@@ -7,7 +7,7 @@
 #SBATCH --error=%x-%j.out
 #SBATCH --gpus-per-node=h100:1
 #SBATCH --mem=128G
-#SBATCH --time=48:00:00
+#SBATCH --time=24:00:00
 #SBATCH --signal=SIGUSR1@90
 #SBATCH --mail-user=tommytang111@hotmail.com
 #SBATCH --mail-type=ALL
