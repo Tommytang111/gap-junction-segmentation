@@ -31,4 +31,4 @@ export VECLIB_MAXIMUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 #Run segmentation pipeline
 echo "Starting segmentation pipeline with ${SLURM_CPUS_PER_TASK} CPU cores and GPU: $(nvidia-smi -L)"
-python3 /home/tommy111/projects/def-mzhen/tommy111/code/new/src/segment_dataset.py 
+python3 /home/tommy111/projects/def-mzhen/tommy111/code/src/segment_dataset.py 
