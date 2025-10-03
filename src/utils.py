@@ -155,7 +155,10 @@ def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=F
         
 def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=False, xysizes=False):
     """ 
-    Splits an image into tiles of a specified size, with an optional offset to remove borders.
+    Splits an image into tiles of a specified size, with an optional offset to remove borders. If tiles are set to overlapping,
+    (i.e., they will eventually be center cropped), padding will be applied to the image on the top and left to ensure that center cropping retains the 
+    original image size after stitching. Padding on the right and bottom is not performed to make sure that no new pixels are introduced to 
+    the output image (after assembly).
     
     Parameters:
         img (np.ndarray): Input image as a NumPy array.
@@ -173,19 +176,26 @@ def split_img(img:np.ndarray, offset=False, overlap=False, tile_size=512, names=
     Example:
         tiles, names = split_img(image, offset=0, overlap=True, tile_size=512, names=True)
     """
-    if overlap:
-        stride = tile_size // 2
-    
     if offset:
         img = img[offset:-offset, offset:-offset]
+    
+    if overlap:
+        stride = tile_size // 2
+        #Add padding to top and left if overlapping tiles are created
+        pad = 128
+        img = np.pad(img, ((pad, 0), (pad, 0)))
+    else:
+        stride = tile_size
+    
     imgs = []
     names_list = []
-    for i in range(-171, img.shape[0] + 171, stride if overlap else tile_size): #-171 is very specific to tiles with shape (512, 512), is the exact number of pixels to offset to keep original section size after cropping.
-        for j in range(-171, img.shape[1] + 171, stride if overlap else tile_size):
+    #Create tiles
+    for i in range(0, img.shape[0], stride): 
+        for j in range(0, img.shape[1], stride):
             imgs.append(img[i:i+tile_size, j:j+tile_size])
-            names_list.append(f"Y{i//stride if overlap else i//tile_size}_X{j//stride if overlap else j//tile_size}")
+            names_list.append(f"Y{i//stride}_X{j//stride}")
 
-    size_list = [i//stride + 1 if overlap else i//tile_size + 1, j//stride + 1 if overlap else j//tile_size + 1]
+    size_list = [i//stride + 1, j//stride + 1]
 
     if names and xysizes:
         return (imgs, names_list, size_list)
