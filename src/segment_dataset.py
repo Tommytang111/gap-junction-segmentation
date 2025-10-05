@@ -175,24 +175,29 @@ def main():
         num_workers=num_workers
     )
     print("Pipeline initialized with name:", pipeline.name)
+    print()
 
     #Step 1: Split Slices -> Tiles
     pipeline.create_dataset()
     print(f"Max Sections: {pipeline.max_sections}\n, X Tiles: {pipeline.max_x}\n, Y Tiles: {pipeline.max_y}\n, Section Dimensions: {pipeline.section_shape}")
     print("Dataset created with tiles in:", pipeline.tiles)
+    print()
     
     #Step 2: Run inference on tiles -> Get masks
     pipeline.run_inference()
     print("Inference completed with predictions in:", pipeline.pred)
+    print()
 
     #Step 3: Assemble Masks -> Slices
     pipeline.stitch_predictions()
     print("Predictions assembled into slices in:", pipeline.assembled_pred_dir)
+    print()
 
     #Step 4: Stack Slices -> 3D Volume
     pipeline.stack_slices()
     print("3D volume created with shape:", pipeline.volume_file.shape)
     print("Volume saved in:", pipeline.volume)
+    print()
     
     #Step 5: Downsample 3D Volume -> Visualizable Volume
     pipeline.downsample_volume()
