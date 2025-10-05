@@ -202,6 +202,7 @@ def main():
     #Step 5: Downsample 3D Volume -> Visualizable Volume
     pipeline.downsample_volume()
     print(f"Downsampling complete with shape: {pipeline.downsampled_volume.shape}")
+    print("Downsampled volume saved in:", pipeline.volume)
 
 if __name__ == "__main__":
     main()
