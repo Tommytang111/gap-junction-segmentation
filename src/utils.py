@@ -964,26 +964,26 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     
     orig_width, orig_height = img.size
 
-    # Compute scaling factor to fit within target box
+    #Compute scaling factor to fit within target box
     scale = min(new_width / orig_width, new_length / orig_height)
     resized_width = int(orig_width * scale)
     resized_height = int(orig_height * scale)
 
     img = img.resize((resized_width, resized_height), Image.LANCZOS)
 
-    # Determine mode and pad color
+    #Determine mode and pad color
     mode = img.mode
     if mode == 'L' and not channels:
         pad_color = pad_clr[0] if isinstance(pad_clr, (tuple, list)) else pad_clr
     elif mode == 'L' and channels:
-        # If channels=True, convert to RGB
+        #If channels=True, convert to RGB
         img = img.convert('RGB')
         mode = 'RGB'
         pad_color = pad_clr
     else:
         pad_color = pad_clr
         
-    # Create new image and paste resized image onto center
+    #Create new image and paste resized image onto center
     new_img = Image.new(mode, (new_width, new_length), pad_color)
     paste_x = (new_width - resized_width) // 2
     paste_y = (new_length - resized_height) // 2

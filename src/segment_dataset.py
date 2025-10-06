@@ -148,23 +148,23 @@ def main():
     #Step 0: Create pipeline
     pipeline = GapJunctionSegmentationPipeline(
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
-        name="unet_h1qrqboc_sem_dauer_2_s000-972_segmentation_volume",
+        name="unet_8jkuifab_sem_adult_s000-699_segmentation_volume",
         #Path to model
-        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_base_516imgs_sem_dauer_2_h1qrqboc.pt",
+        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt",
         #Dataset class (How to process data for the model)
         dataset_class=TestDataset,
         #Path to sections
-        sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_2/SEM_full/s000-972",
+        sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699",
         #Path to where to save tiles
-        output_dir= Path(tmpdir) / "outputs/sem_dauer_2_split/s000-972",
+        output_dir= Path(tmpdir) / "outputs/sem_adult_split/s000-699",
         #Path to where to save predictions
-        pred_dir= Path(tmpdir) / "outputs/inference_results/unet_h1qrqboc/sem_dauer_2_s000-972",
+        pred_dir= Path(tmpdir) / "outputs/inference_results/unet_8jkuifab/sem_adult_s000-699",
         #Path to where to save assembled results
-        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_h1qrqboc/sem_dauer_2_s000-972",
+        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_8jkuifab/sem_adult_s000-699",
         #Path to where to save volume and downsampled volume results
-        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972",
+        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699",
         #Template name for images and masks, edit as needed
-        template="SEM_dauer_2_export_",
+        template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
         augmentations=valid_augmentation,
         #Image size of tiles, default is 512

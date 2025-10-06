@@ -1,1 +1,5 @@
-__pycache__/
+*.sh
+.vscode/
+legacy/
+**/wandb/
+**/__pycache__/
