@@ -1,3 +1,4 @@
+*.sh
 legacy/
 **/wandb/
 **/__pycache__/

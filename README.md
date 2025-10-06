@@ -1,3 +1,6 @@
+# Project Structure
+
+```
 .
 ├── notebooks
 │   ├── inference.ipynb
@@ -16,3 +19,4 @@
 └── README.md
 
 2 directories, 13 files
+```
