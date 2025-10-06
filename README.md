@@ -24,3 +24,5 @@ Gap junctions are specialized intercellular connections that facilitate direct c
 
 2 directories, 13 files
 ```
+
+The `notebooks` directory contains Jupyter notebooks used for experimentation and model development. The `src` directory contains the source code for the project, including model definitions, dataset handling, and utility functions. Python scripts are intuitively named (e.g., `train.py` for training models, `inference.py` for making predictions using a specific model). Most importantly, `segment_dataset.py` is the script that contains the `GapJunctionSegmentationPipeline` class, which orchestrates the entire segmentation process from ETL to model inference and post-processing.
