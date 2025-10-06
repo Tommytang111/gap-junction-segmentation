@@ -1,1 +1,3 @@
+legacy/
 **/wandb/
+**/__pycache__/
