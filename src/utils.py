@@ -553,7 +553,7 @@ def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
                     volume = np.concatenate([volume, tile[None, ...]], axis=0)
             #After volume is created, save it as a .npy file
             prefix = re.sub(r"_s\d+\.png$", "_s", item)
-            np.save(Path(output_dir) / f"{prefix}{str(i).zfill(3)}_{names[j]}.npy", volume)
+            np.save(Path(output_dir) / "vols" / f"{prefix}{str(i).zfill(3)}_{names[j]}.npy", volume)
             
     #        
     return sizes[0], sizes[1], i+1, section.shape
