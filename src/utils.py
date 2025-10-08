@@ -505,7 +505,7 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         
     return max_y, max_x, max_section_size, img.shape
             
-def create_dataset_3d(imgs_dir, output_dir):
+def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
     """
     """
     #Step 0: Setup directories
@@ -526,7 +526,7 @@ def create_dataset_3d(imgs_dir, output_dir):
     names_list = []
     for item in sections:
         section = cv2.imread(os.path.join(imgs_dir, item), cv2.IMREAD_GRAYSCALE)
-        tiles, names, sizes = split_img(section, tile_size=512, names=True, xysizes=True)
+        tiles, names, sizes = split_img(section, overlap=create_overlap, tile_size=512, names=True, xysizes=True)
         sections_list.append(tiles)
         names_list.append(names)
         
@@ -556,7 +556,7 @@ def create_dataset_3d(imgs_dir, output_dir):
             np.save(Path(output_dir) / f"{prefix}{str(i).zfill(3)}_{names[j]}.npy", volume)
             
     #        
-    return sizes[0], sizes[1], i+1, item.shape
+    return sizes[0], sizes[1], i+1, section.shape
 
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40, three=False):
     """
@@ -944,26 +944,26 @@ def resize_image(image:Union[str,np.ndarray], new_width:int, new_length:int, pad
     
     orig_width, orig_height = img.size
 
-    # Compute scaling factor to fit within target box
+    #Compute scaling factor to fit within target box
     scale = min(new_width / orig_width, new_length / orig_height)
     resized_width = int(orig_width * scale)
     resized_height = int(orig_height * scale)
 
     img = img.resize((resized_width, resized_height), Image.LANCZOS)
 
-    # Determine mode and pad color
+    #Determine mode and pad color
     mode = img.mode
     if mode == 'L' and not channels:
         pad_color = pad_clr[0] if isinstance(pad_clr, (tuple, list)) else pad_clr
     elif mode == 'L' and channels:
-        # If channels=True, convert to RGB
+        #If channels=True, convert to RGB
         img = img.convert('RGB')
         mode = 'RGB'
         pad_color = pad_clr
     else:
         pad_color = pad_clr
         
-    # Create new image and paste resized image onto center
+    #Create new image and paste resized image onto center
     new_img = Image.new(mode, (new_width, new_length), pad_color)
     paste_x = (new_width - resized_width) // 2
     paste_y = (new_length - resized_height) // 2
@@ -1108,12 +1108,12 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
             target_key = f'image{i}'
             aug_data[target_key] = volume[i][..., None]
 
-        # Apply augmentation once to all slices
+        #Apply augmentation once to all slices
         augmented = augmentation(**aug_data)
 
         print("Shape of augmented image:", augmented['image'].shape)
 
-        # Reconstruct volume from augmented slices
+        #Reconstruct volume from augmented slices
         augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
         for i in range(1, volume.shape[0]):
             augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
@@ -1134,31 +1134,7 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
     
     return pred
 
-def view_label(file:str):
-    """
-    Displays a grayscale label, converting all non-zero pixels to 255 (white).
-
-    Parameters:
-        file (str): Path to the image file to display.
-
-    Returns:
-        None. Shows the processed image using matplotlib.
-    """
-    img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
-    img[img != 0] = 255
-    plt.figure()
-    plt.imshow(img, cmap='gray')
-    plt.show()
-    
-def worker_init_fn(worker_id):
-    """
-    Initialize the worker with a unique seed based on the worker ID.
-    """
-    seed = GLOBAL_SEED + worker_id
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-def write_imgs(source_path:str, target_path:str, suffix:str="", index:int=1):
+def split_imgs(source_path:str, target_path:str, suffix:str="", index:int=1):
     """
     Splits all images in a source directory into smaller tiles and saves them to a target directory.
 
@@ -1199,6 +1175,30 @@ def write_imgs(source_path:str, target_path:str, suffix:str="", index:int=1):
         split_imgs = split_img(read_img, offset=0, tile_size=512)
         for i, split in enumerate(split_imgs):
             cv2.imwrite(f"{target_path}/{Path(img).stem}{suffix}{i+index}{Path(img).suffix}", split)
+
+def view_label(file:str):
+    """
+    Displays a grayscale label, converting all non-zero pixels to 255 (white).
+
+    Parameters:
+        file (str): Path to the image file to display.
+
+    Returns:
+        None. Shows the processed image using matplotlib.
+    """
+    img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+    img[img != 0] = 255
+    plt.figure()
+    plt.imshow(img, cmap='gray')
+    plt.show()
+    
+def worker_init_fn(worker_id):
+    """
+    Initialize the worker with a unique seed based on the worker ID.
+    """
+    seed = GLOBAL_SEED + worker_id
+    np.random.seed(seed)
+    torch.manual_seed(seed)
             
 def zoom_out_and_pad(image: np.ndarray) -> np.ndarray:
     """
