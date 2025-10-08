@@ -505,78 +505,58 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
         
     return max_y, max_x, max_section_size, img.shape
             
-def create_dataset_3d(flat_dataset_dir, output_dir, window=(0, 1, 0, 0), image_to_seg_name_map=None, add_dir=None, add_dir_maps=None, depth_pattern=r's\d\d\d', test=False):
+def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
     """
-    Function to create a 3d dataset from a 2d, aka flat, dataset
-    @param flat_dataset_dir: the directory of the flat dataset
-    @param output_dir: the directory to output the 3d dataset
-    @param window: the context window to use for the 3d dataset, only one dimension can be set to 1
-    @param image_to_seg_name_map: the mapping from image to segmentation name
-    @param add_dir: the additional directories to include in the dataset
-    @param add_dir_maps: the mapping from image to additional data directory
-    @param depth_pattern: the pattern to match the depth
-    @param test: whether to run in test mode - just an images dataset
-    @return: None (creates and saves your dataset to specified directory)
     """
-    assert window.count(1) == 1, "Only one dimension can be set to 1"
-
-    imgs = os.listdir(os.path.join(flat_dataset_dir, "imgs"))
-
-    flat_imgs, flat_segs, flat_adds = [], [], []
-    seq_imgs, seq_segs, seq_adds = [], [], []
-
-    min_depth = min([int(re.findall(depth_pattern, img)[0][1:]) for img in imgs])
-    max_depth = max([int(re.findall(depth_pattern, img)[0][1:]) for img in imgs])
-
-    central_pos = window.index(1)
-
-    def helper_for_another(img, name_map):
-        temp_seq = []
-        for i in range(len(window)):
-            if i < central_pos:
-                temp_seq.append(get_another(name_map(img), i-central_pos))
-            elif i == central_pos:
-                temp_seq.append(name_map(img))
-            else:
-                temp_seq.append(get_another(name_map(img), i-central_pos))
-        return temp_seq
-
-    for img in tqdm(imgs):
-        depth = int(re.findall(depth_pattern, img)[0][1:])
-        if depth < min_depth + central_pos or depth > max_depth - len(window) + central_pos+1: continue
-                
-        # flat_masks += [get_mask(img)]
-        if not test: flat_segs += [image_to_seg_name_map(img)]
-
-        img = (os.path.join(flat_dataset_dir, "imgs", img))
-        flat_imgs += [img]
-
-        if not test: seq_segs.append(helper_for_another(img, image_to_seg_name_map))
-        seq_imgs.append(helper_for_another(img, lambda x: x))
+    #Step 0: Setup directories
+    #Safely remove/recreate the output directory
+    if os.path.isdir(output_dir):
+        print("WARNING: Output directory already exists, recreating it")
+        _ensure_empty_dir(output_dir)
+    else:
+        os.makedirs(output_dir, exist_ok=True)
         
-        if not test:
-            for i in add_dir_maps:
-                flat_adds.append(add_dir_maps[i](img))
-                seq_adds.append(helper_for_another(img, add_dir_maps[i]))
+    #Make subdirectory    
+    os.makedirs(os.path.join(output_dir, "vols"), exist_ok=True)
 
-    for i in tqdm(range(len(seq_imgs))):
-        os.makedirs(os.path.join(output_dir, "imgs", os.path.split(seq_imgs[i][1])[-1][:-4]))
-        if not test:
-            os.makedirs(os.path.join(output_dir, "gts", os.path.split(seq_imgs[i][1])[-1][:-4]))
-            for j in add_dir_maps:
-                os.makedirs(os.path.join(output_dir, os.path.split(j)[-1], os.path.split(seq_imgs[i][1])[-1][:-4]))
+    #Step 1: Create tiles from sections and store in a list
+    sections = sorted(os.listdir(imgs_dir))
 
-        for j in range(4):
-            shutil.copy(os.path.join(flat_dataset_dir, "imgs", seq_imgs[i][j]), os.path.join(output_dir, "imgs", os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_imgs[i][j])[-1]))
-            if not test:
-                shutil.copy(os.path.join(flat_dataset_dir, "gts", seq_segs[i][j]), os.path.join(output_dir, "gts", os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_segs[i][j])[-1]))
-                for k in add_dir:
-                    shutil.copy(os.path.join(flat_dataset_dir, os.path.split(k)[-1], seq_adds[i][j]), os.path.join(output_dir, os.path.split(k)[-1], os.path.split(seq_imgs[i][1])[-1][:-4], os.path.split(seq_adds[i][j])[-1]))
-
-#Example Usage
-#gs = None if args.add_dir is None else {i: lambda x: x.replace(args.img_template, args.add_dir_templates[j]) for j, i in enumerate(args.add_dir)}
-#output_dir = args.output_dir if not args.make_twoD else args.output_dir+"_3d"
-#create_dataset_3d(args.flat_dataset_dir, output_dir, depth_pattern=r's\d\d\d', window=args.window, test=args.test, image_to_seg_name_map=f, add_dir_maps=gs, add_dir=args.add_dir)
+    sections_list = []
+    names_list = []
+    for item in sections:
+        section = cv2.imread(os.path.join(imgs_dir, item), cv2.IMREAD_GRAYSCALE)
+        tiles, names, sizes = split_img(section, overlap=create_overlap, tile_size=512, names=True, xysizes=True)
+        sections_list.append(tiles)
+        names_list.append(names)
+        
+    #Step 2: Create 3D volumes (9,512,512) from tiles
+    #For each section in the dataset
+    for i, names in tqdm(enumerate(names_list), total=len(names_list), desc="Creating 3D volumes"):
+        #For each tile in the section
+        for j in range(len(names)):
+            #Start with a flat/empty volume    
+            volume = np.zeros((0, 512, 512), dtype=np.uint8)
+            #For each tile surrounding the current tile (4 above and 4 below)
+            for k in range(-4, 5):
+                #Index is a sum of the current section j and the iterable k
+                idx = i + k
+                #If index is negative or out of range, we pad with blank images
+                if (idx < 0 or idx >= len(sections_list)):
+                    tile = np.zeros((1, 512, 512), dtype=np.uint8)
+                    #Append tile to volume on z dimension
+                    volume = np.concatenate([volume, tile], axis=0)
+                else:
+                    #Pad tile to 512x512 if smaller, necessary for performing concatenation afterward
+                    tile = np.pad(sections_list[idx][j], ((0, 512- sections_list[idx][j].shape[0]), (0, 512- sections_list[idx][j].shape[1])))
+                    #Append tile to volume on z dimension
+                    volume = np.concatenate([volume, tile[None, ...]], axis=0)
+            #After volume is created, save it as a .npy file
+            prefix = re.sub(r"_s\d+\.png$", "_s", item)
+            np.save(Path(output_dir) / f"{prefix}{str(i).zfill(3)}_{names[j]}.npy", volume)
+            
+    #        
+    return sizes[0], sizes[1], i+1, section.shape
 
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40, three=False):
     """
@@ -1128,12 +1108,12 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
             target_key = f'image{i}'
             aug_data[target_key] = volume[i][..., None]
 
-        # Apply augmentation once to all slices
+        #Apply augmentation once to all slices
         augmented = augmentation(**aug_data)
 
         print("Shape of augmented image:", augmented['image'].shape)
 
-        # Reconstruct volume from augmented slices
+        #Reconstruct volume from augmented slices
         augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
         for i in range(1, volume.shape[0]):
             augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
