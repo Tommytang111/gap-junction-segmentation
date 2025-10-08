@@ -1,7 +1,7 @@
 """
 Inference for Gap Junction Segmentation API.
 Tommy Tang
-June 2, 2025
+October 8, 2025
 """
 
 #LIBRARIES
@@ -123,7 +123,7 @@ def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
 
     return fig1, fig2
 
-def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, batch_size:int=8, num_workers:int=8, clear:bool=False, threshold:float=0.5, augmentation=None, filter:bool=False):
+def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, output_dir:str, batch_size:int=8, num_workers:int=8, clear:bool=False, threshold:float=0.5, augmentation=None, filter:bool=False, three:bool=False):
     """
     Runs inference using a trained UNet model on a dataset of images to generate segmentation masks.
 
@@ -143,35 +143,41 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
         threshold (float, optional): Threshold for binarizing the predicted mask after sigmoid activation. Default is 0.5.
         augmentation (callable, optional): Augmentation pipeline to apply to the images. Default is None.
         filter (bool): Applies a pixel filter if true. Default is false.
+        three (bool): Whether the model is 3D. Default is false.
 
     Returns:
         None
     """
     #Check if input directory has the required subdirectories
     data = os.listdir(input_dir)
-    if not ("imgs" in data):
-        raise ValueError("Input directory must contain 'imgs' subdirectory.")
-
-    #Data and Labels (sorted because naming convention is typically dataset, section, coordinates. Example: SEM_Dauer_2_image_export_s000 -> 001)
-    imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
+    if three:
+        if not ("vols" in data):
+            raise ValueError("Input directory must contain 'vols' subdirectory.")
+        #Data 
+        vols = [i for i in sorted(os.listdir(Path(input_dir) / "vols"))] 
+    else:
+        if not ("imgs" in data):
+            raise ValueError("Input directory must contain 'imgs' subdirectory.")
+        #Data 
+        imgs = [i for i in sorted(os.listdir(Path(input_dir) / "imgs"))] 
 
     #Instantiate dataset class 
-    dataset = dataset(Path(input_dir) / "imgs", augmentation=augmentation)
+    dataset = dataset(Path(input_dir) / ("vols" if three else "imgs"), augmentation=augmentation)
     #Load dataset class in Dataloader
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     #Load model and set to evaluation mode
     #model = joblib.load(model_dir)
-    model = UNet(classes=1)
+    model = UNet(classes=1, three=three)
     model.load_state_dict(torch.load(model_path))
-    model = model.to("cuda") #Send to gpu
+    model = model.to("cuda" if torch.cuda.is_available() else "cpu") #Send to gpu
     model.eval() 
 
     #Check if output directory exists, if not create it
     check_output_directory(output_dir)
 
-    #Keeps track of the image number in the batch
-    img_num = 0 
+    #Keeps track of the image/volume number in the batch
+    i_num = 0 
     
     #Generates gap junction prediction masks per batch
     with torch.no_grad(): 
@@ -181,15 +187,18 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
             for i in range(batch_pred.shape[0]): #For each image in the batch
                 #Convert tensor to binary mask using Sigmoid activation function
                 gj_pred = (nn.Sigmoid()(batch_pred[i]) >= threshold)
-                gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensor to numpy array
+                if three:
+                    gj_pred = gj_pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensor to numpy array, remove channel and depth dims
+                else:
+                    gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensor to numpy array, remove channel dim
                 if filter:
                     gj_pred = filter_pixels(gj_pred, size_threshold=10) #Apply filter_pixels 
-                save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[img_num]) 
+                save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[i_num]) 
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
-                #Removes original image from input directory after inference
+                #Removes original image/volume from input directory after inference
                 if clear:
-                    os.remove(Path(input_dir) / "imgs" / imgs[img_num])
-                img_num += 1
+                    os.remove(Path(input_dir) / ("vols" if three else "imgs") / imgs[i_num])
+                i_num += 1
 
 def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True) -> plt.Figure:
     """
@@ -412,9 +421,9 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_dauer_2_h1qrqboc.pt"
-    data_dir = "/mnt/e/Tommy"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/assembled_results/unet_h1qrqboc/sem_dauer_1_s000-850"
+    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt"
+    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s000-699"
+    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699"
 
     #Augmentation
     valid_augmentation = A.Compose([
@@ -432,12 +441,12 @@ def main():
               filter=True
               )
     
-    #Visualize results
-    for i in range(1):
-        fig = visualize(data_dir=data_dir,
-                        pred_dir=pred_dir,
-                        style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png", gt=False)
-        plt.show()
+    # #Visualize results
+    # for i in range(1):
+    #     fig = visualize(data_dir=data_dir,
+    #                     pred_dir=pred_dir,
+    #                     style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
+    #     plt.show()
 
     # #Evaluate model performance
     # performance_plot = evaluate(data_dir=data_dir,
