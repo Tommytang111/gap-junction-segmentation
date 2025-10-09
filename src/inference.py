@@ -193,11 +193,11 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
                     gj_pred = gj_pred.squeeze(0).detach().cpu().numpy().astype("uint8") #Convert tensor to numpy array, remove channel dim
                 if filter:
                     gj_pred = filter_pixels(gj_pred, size_threshold=10) #Apply filter_pixels 
-                save_name = Path(output_dir) / re.sub(r'.png$', r'_pred.png', imgs[i_num]) 
+                save_name = Path(output_dir) / re.sub(r'.npy$' if three else r'.png$', r'_pred.png', (vols[i_num] if three else imgs[i_num])) 
                 cv2.imwrite(save_name, gj_pred * 255) #All values either black:0 or white:255
                 #Removes original image/volume from input directory after inference
                 if clear:
-                    os.remove(Path(input_dir) / ("vols" if three else "imgs") / imgs[i_num])
+                    os.remove(Path(input_dir) / ("vols" if three else "imgs") / (vols[i_num] if three else imgs[i_num]))
                 i_num += 1
 
 def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True) -> plt.Figure:
