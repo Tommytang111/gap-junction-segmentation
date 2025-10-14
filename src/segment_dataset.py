@@ -133,6 +133,9 @@ class GapJunctionSegmentationPipeline:
         np.save(downsampled_volume_path, downsampled_volume_file)
         
 def main():
+    #Count start time
+    start_time = time.time()
+    
     #Get number of CPUs from Slurm environment or default to all available CPUs
     num_workers = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
     
@@ -215,6 +218,11 @@ def main():
     pipeline.downsample_volume()
     print(f"Downsampling complete with shape: {pipeline.downsampled_volume.shape}")
     print("Downsampled volume saved in:", pipeline.volume)
+    print()
+    
+    #Count ending time
+    end_time = time.time()
+    print(f"GJS Pipeline completed in: {(end_time - start_time) / 3600:.2f} hours")
 
 if __name__ == "__main__":
     main()
