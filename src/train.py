@@ -182,8 +182,14 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
     # Extract augmentations
     train_aug_details = extract_augmentations(augmentations)
     
-    wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
-    
+    #Read wandb API key from secrets.txt
+    with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
+        lines = file.readlines()
+        #WandB API key is on the fourth line
+        wandb_api_key = lines[3].strip()
+
+    wandb.login(key=wandb_api_key)
+
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,

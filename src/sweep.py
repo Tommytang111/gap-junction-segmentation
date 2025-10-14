@@ -135,17 +135,23 @@ def validate(dataloader, model, loss_fn, recall, precision, f1):
     return val_loss_per_epoch, val_recall, val_precision, val_f1
 
 def sweep(data_dir:str, output_dir:str, seed:int=40, epochs:int=50):
-    # Initialize wandb run
-    wandb.login(key="04e003d2c64e518f8033ab016c7a0036545c05f5")
+    #Read wandb API key from secrets.txt
+    with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
+        lines = file.readlines()
+        #WandB API key is on the fourth line
+        wandb_api_key = lines[3].strip()
+    
+    #Initialize wandb run
+    wandb.login(key=wandb_api_key)
     wandb.init(dir="/home/tommytang111/gap-junction-segmentation/wandb")
     
-    # Get hyperparameters from wandb config
+    #Get hyperparameters from wandb config
     config = wandb.config
     
-    # Set seeds
+    #Set seeds
     seed_everything(seed)
     
-    # Get augmentation strategy from config, default to 'medium'
+    #Get augmentation strategy from config, default to 'medium'
     aug_strategy = config.get('augmentation', 'custom2')
 
     if aug_strategy == 'custom1':
@@ -155,7 +161,7 @@ def sweep(data_dir:str, output_dir:str, seed:int=40, epochs:int=50):
 
     valid_aug = A.Compose([A.Normalize(mean=0.0, std=1.0), ToTensorV2()])
 
-    # Initialize datasets with config batch size
+    #Initialize datasets with config batch size
     train_dataset = TrainingDataset(
         images=f"{data_dir}/train/imgs",
         labels=f"{data_dir}/train/gts",
@@ -187,7 +193,7 @@ def sweep(data_dir:str, output_dir:str, seed:int=40, epochs:int=50):
         worker_init_fn=worker_init_fn
     )
     
-    # Initialize model with config dropout
+    #Initialize model with config dropout
     model = UNet(dropout=config.dropout).to(device)
     
     #Loss function mapping
