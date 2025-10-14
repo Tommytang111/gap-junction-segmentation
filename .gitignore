@@ -3,3 +3,4 @@
 legacy/
 **/wandb/
 **/__pycache__/
+secrets.txt
