@@ -1,5 +1,6 @@
 *.sh
 .vscode/
 legacy/
+catmaid/
 **/wandb/
 **/__pycache__/
