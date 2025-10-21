@@ -11,6 +11,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from typing import Union
 from torch import nn
 import torch
+import torchvision.transforms as transforms
 import os
 import shutil
 import time
@@ -984,6 +985,67 @@ def seed_everything(seed: int = 40):
     torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = False
     
+def single_image_inference_kirpa(image:np.ndarray, model_path:str, model, augmentation=None):
+    """
+    Performs inference on a single grayscale image using a trained PyTorch model.
+    
+    This function loads a trained model from a checkpoint, preprocesses the input image,
+    runs inference, and returns a binary segmentation mask.
+    
+    Args:
+        image (np.ndarray): Input grayscale image as a NumPy array with shape (H, W).
+                           Expected to have pixel values in range [0, 255].
+        model_path (str): Path to the saved PyTorch model checkpoint (.pt file).
+        model: PyTorch model instance (e.g., UNet) to load the state dict into.
+               The model architecture should match the saved checkpoint.
+        augmentation (callable, optional): Optional augmentation function to apply to the image.
+    
+    Returns:
+        np.ndarray: Binary segmentation mask as uint8 NumPy array with shape (H, W).
+                   Values are 0 (background) or 1 (foreground/gap junction).
+    
+    Note:
+        - Input image is automatically normalized to [0, 1] range.
+        - Uses sigmoid activation with 0.5 threshold for binarization.
+        - Model is automatically set to evaluation mode.
+    
+    Example:
+        >>> import cv2
+        >>> from models import UNet
+        >>> 
+        >>> # Load image and model
+        >>> image = cv2.imread('input.png', cv2.IMREAD_GRAYSCALE)
+        >>> model = UNet()
+        >>> 
+        >>> # Run inference
+        >>> mask = single_image_inference(image, 'model.pt', model, valid_augmentation)
+        >>> 
+        >>> # Save result
+        >>> cv2.imwrite('mask.png', mask * 255)
+    """
+    #Setup model
+    model = model
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model = model.to('cpu') #Send to gpu
+    model.eval() 
+   
+    #Prepare image
+    if augmentation:
+        augmented = augmentation(image=image) # Augmentation does normalization + standardization and converts to tensor
+        image = augmented['image']
+    else:
+        transform = transforms.ToTensor()
+        image = transform(image)
+        image = image.unsqueeze(0)
+
+    #Inference
+    with torch.no_grad():
+        pred = model(image.to('cpu')) 
+        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
+        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
+    
+    return pred
+
 def single_image_inference(image:np.ndarray, model_path:str, model, augmentation=None):
     """
     Performs inference on a single grayscale image using a trained PyTorch model.
