@@ -1,5 +1,22 @@
-*.sh
-.vscode/
-legacy/
-**/wandb/
-**/__pycache__/
+# Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# Virtual envs
+venv/
+env/
+.gvenv/
+gj_segmentation/
+
+# Notebooks/runtime
+.ipynb_checkpoints/
+
+# Big ML artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.h5
+*.npz
