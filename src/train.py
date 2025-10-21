@@ -1,6 +1,7 @@
 #Training script for cloud use
 #July 2025
 #Tommy Tang
+## train.py
 
 #LIBRARIES
 import torch
@@ -15,9 +16,12 @@ from tqdm import tqdm
 import copy
 import wandb
 import cv2
+import cc3d 
+import numpy as np
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
+from entity_detection import GapJunctionEntityDetector, evaluate_entity_metrics_batch
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -27,6 +31,7 @@ GLOBAL_SEED = 40
 
 #MODEL CLASS
 #Unet from src/models.py
+
 
 #FUNCTIONS
 def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False):
@@ -341,6 +346,13 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     recall = BinaryRecall().to(device)
     precision = BinaryPrecision().to(device)
     f1 = BinaryF1Score().to(device)
+
+    entity_detector = GapJunctionEntityDetector(
+        threshold=0.5,      # Probability threshold
+        min_size=5,         # Minimum voxels per entity
+        connectivity=26     # 26-connectivity for 3D
+    )
+
     
     #Clear GPU memory before training
     torch.cuda.empty_cache()
@@ -352,6 +364,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     best_val_loss = float('inf')
     best_epoch = 0
     best_model_state = copy.deepcopy(model.state_dict())
+    best_val_entity_f1 = 0.0
     
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}")
@@ -361,6 +374,37 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
 
         #Validation
         val_loss, val_recall, val_precision, val_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1, three=three)
+
+        if epoch % 5 == 0 or epoch == epochs - 1:
+            print("\nEvaluating entity-level metrics...")
+            
+            # Validation entity metrics
+            val_entity_metrics = evaluate_entity_metrics_batch(
+                model, valid_dataloader, entity_detector, device, three=three
+            )
+            
+            # Test entity metrics (less frequently - every 10 epochs)
+            if epoch % 10 == 0 or epoch == epochs - 1:
+                test_entity_metrics = evaluate_entity_metrics_batch(
+                    model, test_dataloader, entity_detector, device, three=three
+                )
+            else:
+                test_entity_metrics = None
+            
+            print(f"Val Entity   | F1: {val_entity_metrics['entity_f1']:.4f}, "
+                  f"Precision: {val_entity_metrics['entity_precision']:.4f}, "
+                  f"Recall: {val_entity_metrics['entity_recall']:.4f}, "
+                  f"Avg Entities: Pred={val_entity_metrics['avg_num_pred']:.1f}, "
+                  f"GT={val_entity_metrics['avg_num_gt']:.1f}")
+            
+            if test_entity_metrics:
+                print(f"Test Entity  | F1: {test_entity_metrics['entity_f1']:.4f}, "
+                      f"Precision: {test_entity_metrics['entity_precision']:.4f}, "
+                      f"Recall: {test_entity_metrics['entity_recall']:.4f}")
+            
+            # Track best entity F1
+            if val_entity_metrics['entity_f1'] > best_val_entity_f1:
+                best_val_entity_f1 = val_entity_metrics['entity_f1']
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
@@ -384,8 +428,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
             best_epoch = epoch
             best_model_state = copy.deepcopy(model.state_dict())
             
-        #Log metrics to wandb
-        wandb.log({
+        log_dict = {
             "epoch": epoch + 1,
             "train_loss": train_loss,
             "train_recall": train_recall,
@@ -399,8 +442,28 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
             "best_val_f1": best_val_f1,
             "best_val_loss": best_val_loss,
             "best_epoch": best_epoch,
+            "best_val_entity_f1": best_val_entity_f1,
             "lr": optimizer.param_groups[0]["lr"]
-        })
+        }
+        
+        # Add entity metrics if they were calculated this epoch
+        if epoch % 5 == 0 or epoch == epochs - 1:
+            log_dict.update({
+                "val_entity_f1": val_entity_metrics['entity_f1'],
+                "val_entity_precision": val_entity_metrics['entity_precision'],
+                "val_entity_recall": val_entity_metrics['entity_recall'],
+                "val_avg_num_pred": val_entity_metrics['avg_num_pred'],
+                "val_avg_num_gt": val_entity_metrics['avg_num_gt']
+            })
+            
+            if test_entity_metrics:
+                log_dict.update({
+                    "test_entity_f1": test_entity_metrics['entity_f1'],
+                    "test_entity_precision": test_entity_metrics['entity_precision'],
+                    "test_entity_recall": test_entity_metrics['entity_recall']
+                })
+        
+        wandb.log(log_dict)
 
     print("Training Complete!")
     

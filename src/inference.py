@@ -3,6 +3,7 @@ Inference for Gap Junction Segmentation API.
 Tommy Tang
 June 2, 2025
 """
+##inference.py
 
 #LIBRARIES
 from pathlib import Path

@@ -11,6 +11,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from typing import Union
 from torch import nn
 import torch
+from torchvision.transforms import ToTensor
 import os
 import shutil
 import time
@@ -983,6 +984,39 @@ def seed_everything(seed: int = 40):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = False
+
+def single_image_inference_kirpa(image:np.ndarray, model_path:str, model, augmentation=None):
+    # Setup model
+    model = model  # assuming you've defined the model class already
+
+    # Load weights directly onto CPU
+    state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+    model.load_state_dict(state_dict)
+
+    # Move model to CPU (optional, redundant here)
+    model.to('cpu')
+
+    # Set to evaluation mode
+    model.eval()
+
+   
+    #Prepare image
+    if augmentation:
+        augmented = augmentation(image=image) # Augmentation does normalization + standardization and converts to tensor
+        image = augmented['image']
+        image = image.unsqueeze(0) # Add shape: (1, 1, H, W) for batch and channel
+    else:
+        transform = ToTensor()
+        image = transform(image)
+        image = image.unsqueeze(0)
+
+    #Inference
+    with torch.no_grad():
+        pred = model(image.to('cpu')) 
+        pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
+        pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
+    
+    return pred
     
 def single_image_inference(image:np.ndarray, model_path:str, model, augmentation=None):
     """
@@ -1022,11 +1056,19 @@ def single_image_inference(image:np.ndarray, model_path:str, model, augmentation
         >>> # Save result
         >>> cv2.imwrite('mask.png', mask * 255)
     """
-    #Setup model
-    model = model
-    model.load_state_dict(torch.load(model_path))
-    model = model.to("cuda"if torch.cuda.is_available else 'cpu') #Send to gpu
-    model.eval() 
+    # Setup model
+    model = model  # assuming you've defined the model class already
+
+    # Load weights directly onto CPU
+    state_dict = torch.load(model_path)
+    model.load_state_dict(state_dict)
+
+    # Move model to CPU (optional, redundant here)
+    model.to('cpu')
+
+    # Set to evaluation mode
+    model.eval()
+
    
     #Prepare image
     if augmentation:
@@ -1034,12 +1076,13 @@ def single_image_inference(image:np.ndarray, model_path:str, model, augmentation
         image = augmented['image']
         image = image.unsqueeze(0) # Add shape: (1, 1, H, W) for batch and channel
     else:
-        image = torch.ToTensor()
-        image = image.unsqueeze(0).unsqueeze(0)
+        transform = ToTensor()
+        image = transform(image)
+        image = image.unsqueeze(0)
 
     #Inference
     with torch.no_grad():
-        pred = model(image.to('cuda')) 
+        pred = model(image.to('cpu')) 
         pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
         pred = pred.squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
     

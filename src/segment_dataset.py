@@ -3,6 +3,7 @@ Split, predict and stitch volumetric pipeline for gap junction segmentation.
 Tommy Tang
 Last Updated: Oct 2, 2025
 """
+##segment_dataset.py
 
 #Requirements:
 #Full sections exported from VAST from dataset of interest
@@ -20,6 +21,7 @@ from pathlib import Path
 from tqdm import tqdm
 import time
 import scipy.ndimage as ndi
+from entity_detection import GapJunctionEntityDetector
 
 class GapJunctionSegmentationPipeline:
     def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, overlap=True, img_size=512, batch_size=8, num_workers=None):
@@ -126,6 +128,122 @@ class GapJunctionSegmentationPipeline:
         #Save the downsampled volume
         downsampled_volume_path = os.path.join(self.volume, "volume_downsampled.npy")
         np.save(downsampled_volume_path, downsampled_volume_file)
+
+    def calculate_entity_metrics(self, gt_volume_path=None):
+        """
+        Calculate entity-level metrics on the assembled 3D volume.
+        
+        Args:
+            gt_volume_path: Optional path to ground truth volume (.npy file).
+                          If None, only counts predicted entities without F1 score.
+                          
+        Returns:
+            results_dict: Dictionary with entity metrics and statistics
+        """
+        print("\n" + "="*60)
+        print("Step 6: Calculating Entity-Level Metrics")
+        print("="*60)
+        
+        # Initialize entity detector
+        # Using threshold=127 because your volume is uint8 (0-255)
+        entity_detector = GapJunctionEntityDetector(
+            threshold=127,  # For uint8 images
+            min_size=10,    # Minimum voxels for a valid gap junction
+            connectivity=26  # 26-connectivity
+        )
+        
+        # Get predicted volume
+        if not hasattr(self, 'volume_file'):
+            print("Loading volume from disk...")
+            volume_path = os.path.join(self.volume, "volume.npy")
+            pred_volume = np.load(volume_path)
+        else:
+            pred_volume = self.volume_file
+        
+        print(f"Volume shape: {pred_volume.shape}")
+        print(f"Volume dtype: {pred_volume.dtype}")
+        print(f"Volume range: [{pred_volume.min()}, {pred_volume.max()}]")
+        
+        # Extract entities from prediction
+        print("\nExtracting gap junction entities from predictions...")
+        labeled_pred, num_pred = entity_detector.extract_entities(pred_volume)
+        
+        print(f"✓ Found {num_pred} gap junction entities in predicted volume")
+        
+        # Save labeled volume
+        labeled_path = os.path.join(self.volume, "volume_labeled.npy")
+        np.save(labeled_path, labeled_pred)
+        print(f"✓ Saved labeled volume to {labeled_path}")
+        
+        # Calculate entity size statistics
+        stats = entity_detector.get_entity_statistics(labeled_pred)
+        
+        print(f"\nEntity Size Statistics:")
+        print(f"  Number of entities: {stats['num_entities']}")
+        print(f"  Mean size: {stats['mean_size']:.1f} voxels")
+        print(f"  Median size: {stats['median_size']:.1f} voxels")
+        print(f"  Min size: {stats['min_size']} voxels")
+        print(f"  Max size: {stats['max_size']} voxels")
+        print(f"  Std dev: {stats['std_size']:.1f} voxels")
+        
+        results = {
+            'num_entities': num_pred,
+            'labeled_volume': labeled_pred,
+            'statistics': stats
+        }
+        
+        # If ground truth is provided, calculate F1 score
+        if gt_volume_path is not None and os.path.exists(gt_volume_path):
+            print(f"\nLoading ground truth from {gt_volume_path}...")
+            gt_volume = np.load(gt_volume_path)
+            
+            if gt_volume.shape != pred_volume.shape:
+                print(f"WARNING: Shape mismatch! GT: {gt_volume.shape}, Pred: {pred_volume.shape}")
+                print("Cannot calculate F1 score.")
+            else:
+                print("Calculating entity-level F1 score...")
+                f1, precision, recall, metrics = entity_detector.calculate_entity_f1(
+                    pred_volume, 
+                    gt_volume,
+                    iou_threshold=0.5
+                )
+                
+                print(f"\n{'='*60}")
+                print("Entity Detection Performance")
+                print(f"{'='*60}")
+                print(f"  F1 Score:           {f1:.4f}")
+                print(f"  Precision:          {precision:.4f}")
+                print(f"  Recall:             {recall:.4f}")
+                print(f"  True Positives:     {metrics['tp']}")
+                print(f"  False Positives:    {metrics['fp']}")
+                print(f"  False Negatives:    {metrics['fn']}")
+                print(f"  Predicted Entities: {metrics['num_pred']}")
+                print(f"  GT Entities:        {metrics['num_gt']}")
+                print(f"{'='*60}")
+                
+                # Save metrics to file
+                metrics_path = os.path.join(self.volume, "entity_metrics.txt")
+                with open(metrics_path, 'w') as f:
+                    f.write(f"Entity Detection Metrics\n")
+                    f.write(f"{'='*60}\n")
+                    f.write(f"F1 Score: {f1:.4f}\n")
+                    f.write(f"Precision: {precision:.4f}\n")
+                    f.write(f"Recall: {recall:.4f}\n")
+                    f.write(f"True Positives: {metrics['tp']}\n")
+                    f.write(f"False Positives: {metrics['fp']}\n")
+                    f.write(f"False Negatives: {metrics['fn']}\n")
+                    f.write(f"Predicted Entities: {metrics['num_pred']}\n")
+                    f.write(f"Ground Truth Entities: {metrics['num_gt']}\n")
+                print(f"✓ Saved metrics to {metrics_path}")
+                
+                results.update({
+                    'f1': f1,
+                    'precision': precision,
+                    'recall': recall,
+                    'metrics': metrics
+                })
+        
+        return results
         
 def main():
     #Get number of CPUs from Slurm environment or default to all available CPUs
@@ -144,6 +262,7 @@ def main():
         A.Normalize(mean=0, std=1), #Specific to the dataset, very important to set these values to the same as training
         A.ToTensorV2()
     ])
+
     
     #Step 0: Create pipeline
     pipeline = GapJunctionSegmentationPipeline(
@@ -198,6 +317,16 @@ def main():
     pipeline.downsample_volume()
     print(f"Downsampling complete with shape: {pipeline.downsampled_volume.shape}")
 
+    #Step 6: Calculate Entity-Level Metrics
+    # we need to specify the path of our gt volume in order for this section to work
+    # Otherwise set to None to just count entities
+    # entity_results = pipeline.calculate_entity_metrics(gt_volume_path=None)
+    # print(f"\n✓ Entity detection complete! Found {entity_results['num_entities']} gap junction entities")
+    
+    # print(f"✓ Labeled volume saved to: {pipeline.volume}/volume_labeled.npy")
+    # print(f"✓ Statistics: Mean size = {entity_results['statistics']['mean_size']:.1f} voxels")
+
 if __name__ == "__main__":
+    
     main()
     
