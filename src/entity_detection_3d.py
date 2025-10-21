@@ -60,43 +60,21 @@ class GapJunctionEntityDetector3D:
         else:
             # Assume already binary
             binary_volume = (volume > 0).astype(np.uint8)
+            
+        # Filter out small components (likely noise)
+        if self.min_size > 1:
+            filtered_volume = cc3d.dust(labeled_volume, threshold=self.min_size, connectivity=self.connectivity, in_place=False)
         
         # Run 3D connected components with specified connectivity
         labeled_volume = cc3d.connected_components(
-            binary_volume, 
+            filtered_volume, 
             connectivity=26 # Using 26-connectivity for 3D
         )
-        
-        # Filter out small components (likely noise)
-        if self.min_size > 1:
-            labeled_volume = self._filter_small_components_3d(labeled_volume)
         
         # Count entities (excluding background which is 0)
         num_entities = np.max(labeled_volume)
         
         return labeled_volume, num_entities
-    
-    def _filter_small_components_3d(self, labeled_volume):
-        """
-        Remove connected components smaller than min_size.
-        
-        Args:
-            labeled_volume: 3D array with labeled connected components
-            
-        Returns:
-            filtered_volume: 3D array with small components removed and labels renumbered
-        """
-        unique_labels, counts = np.unique(labeled_volume, return_counts=True)
-        
-        # Keep labels that meet size threshold (excluding background 0)
-        valid_labels = unique_labels[(counts >= self.min_size) & (unique_labels != 0)]
-        
-        # Create filtered volume with renumbered labels
-        filtered_volume = np.zeros_like(labeled_volume)
-        for new_label, old_label in enumerate(valid_labels, start=1):
-            filtered_volume[labeled_volume == old_label] = new_label
-        
-        return filtered_volume
     
     def calculate_metrics_3d(self, pred_volume, gt_volume, iou_threshold=0.5):
         """
