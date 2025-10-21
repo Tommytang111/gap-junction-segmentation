@@ -4,4 +4,20 @@ legacy/
 catmaid/
 **/wandb/
 **/__pycache__/
-secrets.txt
+secrets.txt# Virtual envs
+venv/
+env/
+.gvenv/
+gj_segmentation/
+
+# Py caches & big artifacts
+__pycache__/
+*.pyc
+.DS_Store
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.h5
+*.npz
