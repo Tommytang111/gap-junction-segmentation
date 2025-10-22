@@ -18,6 +18,7 @@ import cv2
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
+from entity_detection_2d import GapJunctionEntityDetector2D
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -42,6 +43,8 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     precision.reset()
     f1.reset()
     
+    ## x is the images in the batch, y is the ground truth masks
+    ## batch represents the batch index
     for batch, (X, y) in tqdm(enumerate(dataloader), total=num_batches, desc="Training Batches"):
         X, y = X.to(device), y.to(device)
         
@@ -59,21 +62,54 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
             pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1).squeeze(1) #Remove channel dimension and depth dimension to match y
         else:
             pred_binary = (torch.sigmoid(pred) > 0.5).squeeze(1) #Remove channel dimension to match y
+        ## batch dimension still there 
+
+        entity_detector = GapJunctionEntityDetector2D(
+            threshold=0.5,
+            iou_threshold=0.001,
+            connectivity=8,
+            min_size=30
+        )
+
+        ##Convert to numpy for entity detection
+        pred_binary_np = pred_binary.cpu().numpy()
+        labels_np = y.cpu().numpy()
+
+        for i in range(pred_binary_np.shape[0]): # Iterate over batch
+            pred_img = pred_binary_np[i]
+            label_img = labels_np[i]
+            
+            _, entity_metrics, _ = entity_detector.entity_metrics_2d(pred_img, label_img)
+
+            batch_metrics.append(entity_metrics)
+            batch_tp_sum += entity_metrics['tp']
+            batch_fp_sum += entity_metrics['fp']
+            batch_fn_sum += entity_metrics['fn']
+
+        batch_metrics_dict = {"tp": int(tp_sum), "fp": int(fp_sum), "fn": int(fn_sum)}
+        batch_metrics_dict['precision'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) > 0 else 0
+        batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
+        batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
+
         
         #Update metrics
         recall.update(pred_binary, y)
         precision.update(pred_binary, y)
         f1.update(pred_binary, y)
+
         
         train_loss += loss.item()
 
     #Compute final metrics per epoch
+    train_entity_precision = batch_metrics_dict['precision']
+    train_entity_recall = batch_metrics_dict['recall']
+    train_entity_f1 = batch_metrics_dict['f1']
     train_recall = recall.compute().item()
     train_precision = precision.compute().item()
     train_f1 = f1.compute().item()
     train_loss_per_epoch = train_loss / num_batches 
     
-    return train_loss_per_epoch, train_recall, train_precision, train_f1
+    return train_loss_per_epoch, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1
     
 def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', three=False):
     """

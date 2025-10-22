@@ -42,19 +42,20 @@ class GapJunctionEntityDetector2D:
             binary_img = (img > 0).astype(np.uint8)
         
         # Use cc3d connected_components
-        labelled_img = cc3d.connected_components(
+        labelled_img, num_entities = cc3d.connected_components(
             binary_img,
             connectivity=8
+            return_N=True
         )
-        
-        num_entities = np.max(labelled_img)
-        
+                
         for entity_id in range(1, num_entities + 1):  # Start from 1 to skip background (0)
             rows, cols = np.where(labelled_img == entity_id)
             pixel_positions = list(zip(rows, cols))  # List of tuples for this entity
             position_list.append(pixel_positions)
+
+        gj_pixels = np.sum(binary_img)
         
-        return position_list, num_entities
+        return labelled_img, position_list, num_entities
     
     def calculate_iou(self, entity1_positions, entity2_positions):
         """
@@ -79,9 +80,10 @@ class GapJunctionEntityDetector2D:
         matched_pred_indices = []
         matched_gt_indices = []
         shared_positions = []  # Store actual positions of matched entities
+        shared_entities = 0
         
-        pred_positions, pred_entities = self.extract_entities_2d(pred_img)
-        gt_positions, gt_entities = self.extract_entities_2d(gt_img)
+        pred_labelled, pred_positions, pred_entities = self.extract_entities_2d(pred_img)
+        gt_labelled gt_positions, gt_entities = self.extract_entities_2d(gt_img)
         
         # Compare each predicted entity with each GT entity
         for pred_idx, pred_entity_positions in enumerate(pred_positions):
@@ -100,6 +102,7 @@ class GapJunctionEntityDetector2D:
                 matched_pred_indices.append(pred_idx)
                 # Add the positions of this matched entity
                 shared_positions.extend(pred_entity_positions)
+                shared_entities += 1
                 if best_gt_idx not in matched_gt_indices:
                     matched_gt_indices.append(best_gt_idx)
         
@@ -121,14 +124,14 @@ class GapJunctionEntityDetector2D:
         }
         
         # Return both indices and actual positions
-        return shared_positions, metrics_dict
+        return shared_positions, metrics_dict, shared_entities
     
     def visualize_matches(self, pred_img, gt_img):
         """
         Create visualization showing matched entities.
         """
         # Get matched entities
-        matched_pred, metrics = self.entity_metrics_2d(pred_img, gt_img)
+        matched_pred, metrics, shared_entities_num = self.entity_metrics_2d(pred_img, gt_img)
         
         # Create image showing only matched predictions
         shared_img = np.zeros_like(pred_img)
