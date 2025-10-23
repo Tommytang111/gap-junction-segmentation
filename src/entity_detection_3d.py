@@ -66,13 +66,11 @@ class GapJunctionEntityDetector3D:
             filtered_volume = cc3d.dust(labeled_volume, threshold=self.min_size, connectivity=self.connectivity, in_place=False)
         
         # Run 3D connected components with specified connectivity
-        labeled_volume = cc3d.connected_components(
+        labeled_volume, num_entities = cc3d.connected_components(
             filtered_volume, 
-            connectivity=26 # Using 26-connectivity for 3D
+            connectivity=self.connectivity,
+            return_N=True
         )
-        
-        # Count entities (excluding background which is 0)
-        num_entities = np.max(labeled_volume)
         
         return labeled_volume, num_entities
     

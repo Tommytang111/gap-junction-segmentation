@@ -328,7 +328,7 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
 
     Notes:
         - Images are automatically resized to match dimensions if needed.
-        - Ground truth labels are filtered to remove small pixel islands (<8 pixels).
+        - Ground truth labels are filtered to remove small pixel islands (<10 pixels).
         - Predictions are binarized using threshold of 127.
         - Metrics are calculated per-image and then averaged across all images.
         - Results are printed to console and displayed as a bar chart.
