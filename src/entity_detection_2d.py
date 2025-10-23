@@ -9,7 +9,7 @@ import numpy as np
 import cc3d  # Using cc3d for connected components
 
 class GapJunctionEntityDetector2D:
-    def __init__(self, threshold=0.5, iou_threshold=0.001, connectivity=8, min_size=30):
+    def __init__(self, threshold=0.5, iou_threshold=0.001, connectivity=8, min_size=25):
         self.threshold = threshold
         self.iou_threshold = iou_threshold
         self.connectivity = connectivity  # 6, 18, or 26 for 3D; 4 or 8 for 2D
@@ -40,20 +40,20 @@ class GapJunctionEntityDetector2D:
                 binary_img = img.astype(np.uint8)
         else:
             binary_img = (img > 0).astype(np.uint8)
+
+        ## binary_img = cc3d.dust(img=binary_img, threshold=self.min_size, connectivity=8)
         
         # Use cc3d connected_components
         labelled_img, num_entities = cc3d.connected_components(
             binary_img,
-            connectivity=8
+            connectivity=8,
             return_N=True
         )
-                
+        
         for entity_id in range(1, num_entities + 1):  # Start from 1 to skip background (0)
             rows, cols = np.where(labelled_img == entity_id)
             pixel_positions = list(zip(rows, cols))  # List of tuples for this entity
             position_list.append(pixel_positions)
-
-        gj_pixels = np.sum(binary_img)
         
         return labelled_img, position_list, num_entities
     
@@ -83,7 +83,7 @@ class GapJunctionEntityDetector2D:
         shared_entities = 0
         
         pred_labelled, pred_positions, pred_entities = self.extract_entities_2d(pred_img)
-        gt_labelled gt_positions, gt_entities = self.extract_entities_2d(gt_img)
+        gt_labelled, gt_positions, gt_entities = self.extract_entities_2d(gt_img)
         
         # Compare each predicted entity with each GT entity
         for pred_idx, pred_entity_positions in enumerate(pred_positions):
@@ -131,7 +131,7 @@ class GapJunctionEntityDetector2D:
         Create visualization showing matched entities.
         """
         # Get matched entities
-        matched_pred, metrics, shared_entities_num = self.entity_metrics_2d(pred_img, gt_img)
+        matched_pred, metrics = self.entity_metrics_2d(pred_img, gt_img)
         
         # Create image showing only matched predictions
         shared_img = np.zeros_like(pred_img)
