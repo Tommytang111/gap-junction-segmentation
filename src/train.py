@@ -91,6 +91,8 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
     with torch.no_grad():
         for X, y in tqdm(dataloader, desc="Validation Batches"):
             X, y = X.to(device), y.to(device)
+            
+            #Compute prediction and loss
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             
@@ -431,7 +433,7 @@ if __name__ == "__main__":
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
          seed=40,
          epochs=200,
-         batch_size=4,
+         batch_size=4, #16 for 2D, 4 for 3D-2D
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
          three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 
