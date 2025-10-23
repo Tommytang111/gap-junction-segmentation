@@ -1,3 +1,7 @@
+#Downsample multiple volumes by the same factor using block_reduce from skimage
+#October 13, 2025
+#Tommy Tang
+
 from skimage.measure import block_reduce
 import numpy as np
 
