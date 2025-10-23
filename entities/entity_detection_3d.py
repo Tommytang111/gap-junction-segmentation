@@ -87,7 +87,7 @@ class GapJunctionEntityDetector3D:
             iou_threshold: Minimum IoU to consider a match (default 0.5)
             
         Returns:
-            f1: F1 score
+            f1: F1 score = 2 * (Precision * Recall)/(Precision + Recall)
             precision: Precision (TP / (TP + FP))
             recall: Recall (TP / (TP + FN))
             metrics_dict: Dictionary with detailed metrics including TP, FP, FN, counts
