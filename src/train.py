@@ -3,6 +3,7 @@
 #Tommy Tang
 
 #LIBRARIES
+import os
 import sys
 sys.path.insert(0, '/home/kchandok/projects/def-mzhen/kchandok/code')
 import torch
@@ -327,7 +328,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     else:
         source_img_dir = f"{data_dir}/imgs"
     source_gt_dir = f"{data_dir}/gts"
-    output_base_dir = f"{data_dir}_split"
+    #KIRPA ONLY
+    output_base_dir = os.environ.get("DATA_SPLIT_DIR", os.path.join(os.environ.get("SCRATCH", str(Path.home() / "scratch")), f"{Path(data_dir).name}_split"))
+    os.makedirs(output_base_dir, exist_ok=True)
 
     #Create the splits (does not overwrite existing splits)
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
