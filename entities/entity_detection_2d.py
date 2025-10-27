@@ -91,6 +91,9 @@ class GapJunctionEntityDetector2D:
             best_gt_idx = -1
             
             for gt_idx, gt_entity_positions in enumerate(gt_positions):
+                if gt_idx in matched_gt_indices:
+                    continue
+                
                 iou = self.calculate_iou(pred_entity_positions, gt_entity_positions)
                 
                 if iou > best_iou:
@@ -100,11 +103,11 @@ class GapJunctionEntityDetector2D:
             # If best IoU exceeds threshold, consider it a match
             if best_iou >= self.iou_threshold:
                 matched_pred_indices.append(pred_idx)
+                matched_gt_indices.append(best_gt_idx)
+
                 # Add the positions of this matched entity
                 shared_positions.extend(pred_entity_positions)
                 shared_entities += 1
-                if best_gt_idx not in matched_gt_indices:
-                    matched_gt_indices.append(best_gt_idx)
         
         tp = len(matched_pred_indices)  # True positives: predicted entities that matched
         fp = pred_entities - tp  # False positives: predicted entities that didn't match

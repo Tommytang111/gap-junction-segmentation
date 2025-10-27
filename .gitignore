@@ -9,6 +9,7 @@ venv/
 env/
 .gvenv/
 gj_segmentation/
+.gj_venv
 
 # Py caches & big artifacts
 __pycache__/

@@ -3,6 +3,8 @@
 #Tommy Tang
 
 #LIBRARIES
+import sys
+sys.path.insert(0, '/home/kchandok/projects/def-mzhen/kchandok/code')
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW, SGD
@@ -16,9 +18,9 @@ import copy
 import wandb
 import cv2
 #Custom Libraries
-from utils import seed_everything, worker_init_fn, create_dataset_splits
-from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
-from entity_detection_2d import GapJunctionEntityDetector2D
+from src.utils import seed_everything, worker_init_fn, create_dataset_splits
+from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
+from entities.entity_detection_2d import GapJunctionEntityDetector2D
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -325,7 +327,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     else:
         source_img_dir = f"{data_dir}/imgs"
     source_gt_dir = f"{data_dir}/gts"
-    output_base_dir = f"{data_dir}_split"
+    output_base_dir = "/home/kchandok/projects/def-mzhen/kchandok/data/516imgs_sem_adult_split"
+
 
     #Create the splits (does not overwrite existing splits)
     dataset_paths = create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, random_state=seed, filter=True, three=three)
@@ -543,10 +546,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         
 if __name__ == "__main__":
     main(run_name="unet_3D2D_516vols_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516imgs_sem_adult_split",
          seed=40,
-         epochs=200,
-         batch_size=4,
-         output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
-         three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
+         epochs=100,
+         batch_size=32, #16 or 32 for 2D, 4 for 3D
+         output_path="/home/kchandok/projects/def-mzhen/kchandok/outputs",
+         three=False,  # Set to True for 3D-2D U-Net, False for 2D U-Nets
          dropout=0) 
