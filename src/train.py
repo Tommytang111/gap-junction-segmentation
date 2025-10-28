@@ -15,6 +15,7 @@ from tqdm import tqdm
 import copy
 import wandb
 import cv2
+import time
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
 from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
@@ -217,6 +218,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     """
     Main function to run training, validation, and test loop.
     """
+    #Log start time
+    start_time = time.time()
+    
     #Set seed for reproducibility
     seed_everything(seed)
 
@@ -425,6 +429,14 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     # Log test metrics to wandb
     wandb.log(test_metrics)
+    
+    #Log end time
+    end_time = time.time()
+    
+    #Calculate and log total training time
+    total_time = (end_time - start_time) / 3600
+    wandb.log({"total_runtime (hours)": total_time})
+    print(f"\nScript finished in {round(total_time, 2)} hours.")
     
     wandb.finish()
         
