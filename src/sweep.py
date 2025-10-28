@@ -19,6 +19,7 @@ from albumentations.pytorch import ToTensorV2
 from tqdm import tqdm 
 import copy
 import wandb
+import time
 #Custom Libraries
 from utils import seed_everything, worker_init_fn
 from models import TrainingDataset, UNet, GenDLoss, FocalLoss
@@ -316,6 +317,9 @@ sweep_config = {
 }
 
 if __name__ == "__main__":
+    #Log start time
+    start_time = time.time()
+    
     #Initialize sweep
     sweep_id = wandb.sweep(sweep_config, project="gap-junction-segmentation")
     print(f"Sweep ID: {sweep_id}")
@@ -328,3 +332,10 @@ if __name__ == "__main__":
                                                           epochs=50
                                                           )
     )
+    
+    #Log end time
+    end_time = time.time()
+    
+    #Calculate and log total training time
+    total_time = (end_time - start_time) / 3600
+    print(f"\nScript finished in {round(total_time, 2)} hours.")
