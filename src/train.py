@@ -84,6 +84,10 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         recall.update(pred_binary, y)
         precision.update(pred_binary, y)
         f1.update(pred_binary, y)
+
+        batch_tp_sum = 0
+        batch_fp_sum = 0
+        batch_fn_sum = 0
         
         for i in range(pred_binary_np.shape[0]): # Iterate over batch
                 pred_img = pred_binary_np[i]
@@ -155,6 +159,10 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
             recall.update(pred_binary, y)
             precision.update(pred_binary, y)
             f1.update(pred_binary, y)
+
+            batch_tp_sum = 0
+            batch_fp_sum = 0
+            batch_fn_sum = 0
             
             ## Entity detection metrics
             for i in range(pred_binary_np.shape[0]): # Iterate over batch
@@ -237,6 +245,10 @@ def test(model, dataloader, loss_fn, device='cuda', three=False):
             precision.update(pred_binary, y)
             f1.update(pred_binary, y)
 
+            batch_tp_sum = 0
+            batch_fp_sum = 0
+            batch_fn_sum = 0
+
             for i in range(pred_binary_np.shape[0]): # Iterate over batch
                 pred_img = pred_binary_np[i]
                 label_img = labels_np[i]
@@ -287,7 +299,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
     # Extract augmentations
     train_aug_details = extract_augmentations(augmentations)
     
-    with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
+    with open("/home/kchandok/projects/def-mzhen/kchandok/code/secrets.txt", "r") as file:
         lines = file.readlines()
         #WandB API key is on the fourth line
         wandb_api_key = lines[3].strip()
@@ -297,7 +309,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
     run = wandb.init(project="gap-junction-segmentation", 
             entity="zhen_lab",
             name=run_name,
-            dir="/home/tommy111/projects/def-mzhen/tommy111",
+            dir="/home/kchandok/projects/def-mzhen/kchandok",
             reinit=True,
             config={
                 "dataset": data,
@@ -483,8 +495,8 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         scheduler.step(val_loss)
         
         #Print metrics
-        print(f"Train | Loss: {train_loss:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, EntityRecall: {train_entity_recall:.4f}, EntityPrecision: {train_entity_precision:.4f}, EntityF1: {train_entity_f1:.4f}")
-        print(f"Val   | Loss: {val_loss:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, EntityRecall: {val_entity_recall:.4f}, EntityPrecision: {val_entity_precision:.4f}, EntityF1: {val_entity_f1:.4f}")
+        print(f"Train | Loss: {train_loss:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, Entity Recall: {train_entity_recall:.4f}, Entity Precision: {train_entity_precision:.4f}, Entity F1: {train_entity_f1:.4f}")
+        print(f"Val   | Loss: {val_loss:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, Entity Recall: {val_entity_recall:.4f}, Entity Precision: {val_entity_precision:.4f}, Entity F1: {val_entity_f1:.4f}")
         print("-----------------------------")
         
         #Log best model state based on validation loss
