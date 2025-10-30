@@ -1,15 +1,18 @@
-#Import Libraries
+#Convert 3D volumes to individual 2D slices and save as PNG images
+#October 20, 2025
+#Tommy Tang
+
+#Libraries
 import numpy as np
 import cv2
 
 #Load volume
-volume1 = np.load('/home/tommy111/scratch/sem_dauer_1_GJs_enlarged.npy')
-#volume2 = np.load('/home/tommy111/scratch/sem_dauer_2_GJs_entities.npy')
+volume1 = np.load('/home/tommy111/scratch/sem_dauer_1_GJs_enlarged.npy').astype(np.uint8)
+#volume2 = np.load('/home/tommy111/scratch/sem_dauer_2_GJs_entities.npy').astype(np.uint8)
 
 #Convert volume1 from boolean mask to uint8 for visualization
 volume1 = (volume1.astype(np.uint8)) * 255
 #volume2[volume2 > 0] = 255
-#volume2 = volume2.astype(np.uint8)
 
 for i in range(volume1.shape[0]):
     volume1_slice = volume1[i, :, :]

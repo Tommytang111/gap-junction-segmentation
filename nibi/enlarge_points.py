@@ -1,3 +1,7 @@
+#Enlarge GJ point annotations in 2D for visualization on VAST
+#October 20, 2025
+#Tommy Tang
+
 from scipy.ndimage import binary_dilation, generate_binary_structure
 import numpy as np
 import time
