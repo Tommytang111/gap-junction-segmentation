@@ -355,7 +355,7 @@ def check_output_directory(path:str, clear:bool=True) -> None:
         
 def _ensure_empty_dir(path:str) -> None:
     """
-    Recursively removes a directory if it exists and recreates it empty.
+    Recursively removes a directory if it exists and recreates it empty. Creates the directory if it does not exist.
     Uses a rename-and-delete strategy that's more reliable with concurrent access.
     """
     if os.path.exists(path):
