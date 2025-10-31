@@ -9,19 +9,53 @@ from scipy.ndimage import distance_transform_edt
 from skimage.measure import block_reduce
 import gc
 
-def transform_points_to_nearby_entities(preds_path:str, points_path:str, radius:int=15):
+def transform_points_to_nearby_entities(preds_path:str, points_path:str, radius:int=10, dust_size:int=6):
     """
+    Transform a points array into an entity array by keeping only the closest entity to a point within a specified radius. 
+    This function performs a connected component analysis to identify entities, then computes a distance transform to find 
+    the closest Euclidian distance to every existing point.
+
+    This loads two 3D .npy volumes with shape (Z, Y, X):
+    - preds_path: predicted binary mask (non-zero = foreground).
+    - points_path: binary point annotations (non-zero = point locations).
+
+    Processing pipeline:
+    - Downsample both volumes in-plane by a factor of 2 using max pooling
+      (block_reduce(..., block_size=(1, 2, 2))) to reduce memory and noise.
+    - Remove small speckles from the predictions with cc3d.dust(threshold=dust_size, connectivity=26).
+    - Label remaining connected components (entities) with 26-connectivity (uint32 labels).
+    - Compute a Euclidean distance transform from the point mask.
+    - Keep only entity labels that intersect voxels within `radius` voxels of any point.
+
+    Parameters
+    - preds_path (str): Path to .npy file of the predicted binary volume.
+    - points_path (str): Path to .npy file of the point-annotation volume.
+    - radius (int, default=15): Neighborhood radius in voxels in the downsampled grid
+      (after the 2× downsampling in X and Y). Adjust accordingly if you need a radius
+      in the original resolution.
+    - dust_size (int, default=6): Minimum size of connected components to keep in preds.
+
+    Returns
+    - filtered_entity_array (np.ndarray): uint32 labeled volume (same shape as the
+      downsampled inputs) where only entities near points are retained; others set to 0.
+    - num_entities (int): Total number of connected components before filtering.
+
+    Notes
+    - Inputs are cast to uint8; any non-zero value is treated as foreground/point.
+    - Uses 26-connectivity for 3D components.
+    - np.load errors (e.g., missing files) will propagate.
     """
     #Relevant paths
     points = np.load(points_path).astype(np.uint8)
     preds = np.load(preds_path).astype(np.uint8)
 
+    #Optional downsampling depending on RAM constraints for faster processing
     points = block_reduce(points, block_size=(1, 2, 2), func=np.max)
     preds = block_reduce(preds, block_size=(1, 2, 2), func=np.max)
     print("Loaded and downsampled preds and points by a factor of 2 in x and y.")
 
     #Convert preds to entity array
-    preds_filtered = cc3d.dust(preds, threshold=6, connectivity=26, in_place=False)
+    preds_filtered = cc3d.dust(preds, threshold=dust_size, connectivity=26, in_place=False)
     entities, num_entities = cc3d.connected_components(preds_filtered, connectivity=26, return_N=True, out_dtype=np.uint32)
     print("Entity array computed.")
 
@@ -45,6 +79,11 @@ def transform_points_to_nearby_entities(preds_path:str, points_path:str, radius:
 
     return filtered_entity_array, num_entities
 
+def move_points_to_gap_junctions():
+    """
+    Transforms points in a point array such that each point is moved to the nearest predicted/real gap junction entity.
+    """
+    
 if __name__ == "__main__":
     point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume.npy",
                                     "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs.npy",
