@@ -79,42 +79,101 @@ def transform_points_to_nearby_entities(preds_path:str, points_path:str, radius:
 
     return filtered_entity_array, num_entities
 
-def move_points_to_gap_junctions():
+def move_points_to_gap_junctions(preds_path:str, points_path:str):
     """
     Transforms points in a point array such that each point is moved to the nearest predicted/real gap junction entity.
     """
+    #Load points and predictions (140GB RAM for 700x10000x10000 volume)
+    points = np.load(points_path).astype(np.uint8) #Should already be uint8
+    preds = np.load(preds_path).astype(np.uint8)
+    
+    #Convert to boolean masks (140GB RAM)
+    points_bool = (points > 0)
+    preds_bool = (preds > 0)
+    
+    #Compute distance transform from predicted gap junctions (280GB + 210GB RAM)
+    distance, nearest_indices = distance_transform_edt(~preds_bool, return_indices=True)
+    
+    #Transform points from 3D array to a list of points
+    points_list = np.argwhere(points_bool) #shape: (N_points, 3)
+    
+    #For each point find its nearest predicted gap junction
+    #nearest_indices has shape (3, D, H, W) with [z, y, x] indices at each voxel
+    nearest_gap_junctions_list = nearest_indices[:, points_list[:,0], points_list[:,1], points_list[:,2]].T
+    #nearest_gap_junctions now has shape (N_points, 3)
+
+    #Create an array of moved points (70GB RAM)
+    moved_points = np.zeros_like(points, dtype=np.uint8)
+    moved_points[nearest_gap_junctions_list[:,0], nearest_gap_junctions_list[:,1], nearest_gap_junctions_list[:,2]] = 255
+    
+    #Report statistics
+    distances_moved = distance[points_list[:,0], points_list[:,1], points_list[:,2]]
+    #distances_moved has shape (N, 1)
+    print(f"Moved {len(points_list)} points to nearest blobs")
+    print(f"Mean distance moved: {distances_moved.mean():.2f} voxels")
+    print(f"Max distance moved: {distances_moved.max():.2f} voxels")
+    
+    return moved_points
+      
     
 if __name__ == "__main__":
-    point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume.npy",
-                                    "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs.npy",
-                                    radius=7
-                                    )
-    #Save point entities to scratch
-    np.save("/home/tommy111/scratch/sem_dauer_1_GJs_entities.npy", point_entities)
-    print(f'Saved point entities to /home/tommy111/scratch/sem_dauer_1_GJs_entities.npy')
-    print(f'Number of entities found: {num_entities}')
+    #Move points to nearest gap junction predictions
+    moved_points = move_points_to_gap_junctions(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699/volume.npy",
+                                                points_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.npy"
+                                                )
+    #Save moved points
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs.npy", moved_points)
 
-    #Downsample and save transformed points for 3D visualization comparison
-    downsampled_point_entities = block_reduce(point_entities, block_size=(1, 4, 4), func=np.max)
-    np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs_entities_downsampled.npy", downsampled_point_entities)
-    print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs_entities_downsampled.npy')
-    
-    #Garbage collection
-    del point_entities, num_entities, downsampled_point_entities
+    #Free up RAM
+    del moved_points
     gc.collect()
     
-    ####SECOND SET OF POINTS####
-    point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume.npy",
-                                    "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs.npy",
-                                    radius=7
-                                    )
+    #Transform moved points to entities
+    point_entities, num_entities = transform_points_to_nearby_entities(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699/volume.npy",
+                                                                       points_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs.npy",
+                                                                       radius=7
+                                                                       )
     #Save point entities to scratch
-    np.save("/home/tommy111/scratch/sem_dauer_2_GJs_entities.npy", point_entities)
-    print(f'Saved point entities to /home/tommy111/scratch/sem_dauer_2_GJs_entities.npy')
+    np.save("/home/tommy111/scratch/sem_adult_GJs_entities.npy", point_entities)
+    print(f'Saved point entities to /home/tommy111/scratch/sem_adult_GJs_entities.npy')
     print(f'Number of entities found: {num_entities}')
 
     #Downsample and save transformed points for 3D visualization comparison
     downsampled_point_entities = block_reduce(point_entities, block_size=(1, 4, 4), func=np.max)
-    np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs_entities_downsampled.npy", downsampled_point_entities)
-    print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs_entities_downsampled.npy')
-    print('Second set finished!')
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs_entities_downsampled.npy", downsampled_point_entities)
+    print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs_entities_downsampled.npy')
+
+    ###PREVIOUS CALLS
+    # point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume.npy",
+    #                                 "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs.npy",
+    #                                 radius=7
+    #                                 )
+    # #Save point entities to scratch
+    # np.save("/home/tommy111/scratch/sem_dauer_1_GJs_entities.npy", point_entities)
+    # print(f'Saved point entities to /home/tommy111/scratch/sem_dauer_1_GJs_entities.npy')
+    # print(f'Number of entities found: {num_entities}')
+
+    # #Downsample and save transformed points for 3D visualization comparison
+    # downsampled_point_entities = block_reduce(point_entities, block_size=(1, 4, 4), func=np.max)
+    # np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs_entities_downsampled.npy", downsampled_point_entities)
+    # print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs_entities_downsampled.npy')
+    
+    # #Garbage collection
+    # del point_entities, num_entities, downsampled_point_entities
+    # gc.collect()
+    
+    # ####SECOND SET OF POINTS####
+    # point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume.npy",
+    #                                 "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs.npy",
+    #                                 radius=7
+    #                                 )
+    # #Save point entities to scratch
+    # np.save("/home/tommy111/scratch/sem_dauer_2_GJs_entities.npy", point_entities)
+    # print(f'Saved point entities to /home/tommy111/scratch/sem_dauer_2_GJs_entities.npy')
+    # print(f'Number of entities found: {num_entities}')
+
+    # #Downsample and save transformed points for 3D visualization comparison
+    # downsampled_point_entities = block_reduce(point_entities, block_size=(1, 4, 4), func=np.max)
+    # np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs_entities_downsampled.npy", downsampled_point_entities)
+    # print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_2_GJs_entities_downsampled.npy')
+    # print('Second set finished!')
