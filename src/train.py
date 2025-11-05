@@ -23,6 +23,7 @@ import time
 from src.utils import seed_everything, worker_init_fn, create_dataset_splits
 from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
 from entities.entity_detection_2d import GapJunctionEntityDetector2D
+from entities.entity_detection_2d_optimized import GapJunctionEntityDetector2DOptimized
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -34,7 +35,7 @@ GLOBAL_SEED = 40
 #Unet from src/models.py
 
 #FUNCTIONS
-def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False):
+def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False, entity_loss=False):
     """
     Training logic for the epoch.
     """
@@ -52,7 +53,8 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
             threshold=0.5,
             iou_threshold=0.001,
             connectivity=8,
-            min_size=30
+            min_size=30,
+            # n_workers=4
         )    
     
     ## x is the images in the batch, y is the ground truth masks
@@ -79,6 +81,9 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         ##Convert to numpy for entity detection
         pred_binary_np = pred_binary.cpu().numpy()
         labels_np = y.cpu().numpy()
+
+        if batch == 0:
+            print(f"Pred binary shape: {pred_binary_np.shape}, Labels shape: {labels_np.shape}")
         
         #Update metrics
         recall.update(pred_binary, y)
@@ -87,25 +92,29 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
 
         batch_tp_sum = 0
         batch_fp_sum = 0
-        batch_fn_sum = 0
+        batch_fn_sum = 0            
         
         for i in range(pred_binary_np.shape[0]): # Iterate over batch
-                pred_img = pred_binary_np[i]
-                label_img = labels_np[i]
+            pred_img = pred_binary_np[i]
+            label_img = labels_np[i]
                 
-                _, entity_metrics, _ = entity_detector.entity_metrics_2d(pred_img, label_img)
+            _, entity_metrics, _ = entity_detector.entity_metrics_2d(pred_img, label_img)
 
-                batch_tp_sum += entity_metrics['tp']
-                batch_fp_sum += entity_metrics['fp']
-                batch_fn_sum += entity_metrics['fn']
+            batch_tp_sum += entity_metrics['tp']
+            batch_fp_sum += entity_metrics['fp']
+            batch_fn_sum += entity_metrics['fn']
 
         batch_metrics_dict = {"tp": int(batch_tp_sum), "fp": int(batch_fp_sum), "fn": int(batch_fn_sum)}
         batch_metrics_dict['precision'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) > 0 else 0
         batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
         batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
 
-        
-        train_loss += loss.item()
+        ## computes loss based on entity f1 score
+        if entity_loss:
+            entity_loss = 1 - batch_metrics_dict['f1']
+            train_loss += entity_loss
+        else:
+            train_loss += loss.item()
 
     #Compute final metrics per epoch
     train_entity_precision = batch_metrics_dict['precision']
@@ -118,7 +127,7 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     
     return train_loss_per_epoch, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1
     
-def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', three=False):
+def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', three=False, entity_loss=False):
     """
     Validation logic for the epoch.
     """
@@ -136,14 +145,15 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
             threshold=0.5,
             iou_threshold=0.001,
             connectivity=8,
-            min_size=30
+            min_size=30,
+            # n_workers=4
         )    
     
     with torch.no_grad():
         for X, y in tqdm(dataloader, desc="Validation Batches"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            loss = loss_fn(pred, y)
             
             #Calculate metrics
             if three:
@@ -179,7 +189,12 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
             batch_metrics_dict['precision'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fp']) > 0 else 0
             batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
             batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
-
+            
+            if entity_loss:
+                entity_loss = 1 - batch_metrics_dict['f1']
+                test_loss += entity_loss
+            else: 
+                test_loss += loss.item()
 
         #Compute final metrics per epoch
         val_recall = recall.compute().item()
@@ -193,7 +208,7 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
     return val_loss_per_epoch, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1
     print(f"Avg loss: {test_loss:>7f}\n")
 
-def test(model, dataloader, loss_fn, device='cuda', three=False):
+def test(model, dataloader, loss_fn, device='cuda', three=False, entity_loss=False):
     """
     Evaluate the model on the test dataset
     
@@ -220,14 +235,15 @@ def test(model, dataloader, loss_fn, device='cuda', three=False):
             threshold=0.5,
             iou_threshold=0.001,
             connectivity=8,
-            min_size=30
+            min_size=30,
+            # n_workers=4
         )   
     
     with torch.no_grad():
         for X, y in tqdm(dataloader, desc="Test Evaluation"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            loss = loss_fn(pred, y)
             
             # Calculate metrics
             if three:
@@ -264,6 +280,12 @@ def test(model, dataloader, loss_fn, device='cuda', three=False):
             batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
             batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
 
+            if entity_loss:
+                entity_loss = 1 - batch_metrics_dict['f1']
+                test_loss += entity_loss
+            else: 
+                test_loss += loss.item()
+    
     # Compute final metrics
     test_metrics = {
         "test_loss": test_loss / num_batches,
@@ -279,9 +301,9 @@ def test(model, dataloader, loss_fn, device='cuda', three=False):
           f"Recall: {test_metrics['test_recall']:.4f}, "
           f"Precision: {test_metrics['test_precision']:.4f}, "
           f"F1: {test_metrics['test_f1']:.4f}, "
-          f" EntityRecall: {test_metrics['test_entity_recall']:.4f}, "
-          f"EntityPrecision: {test_metrics['test_entity_precision']:.4f}, "
-          f"EntityF1: {test_metrics['test_entity_f1']:.4f}")
+          f"Entity Recall: {test_metrics['test_entity_recall']:.4f}, "
+          f"Entity Precision: {test_metrics['test_entity_precision']:.4f}, "
+          f"Entity F1: {test_metrics['test_entity_f1']:.4f}")
     
     return test_metrics
 
@@ -486,10 +508,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         print(f"Epoch {epoch+1}")
         
         #Training
-        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1  = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1, three=three)
+        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1  = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1, three=three, entity_loss=True)
 
         #Validation
-        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1, three=three)
+        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1, three=three, entity_loss=True)
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
@@ -540,7 +562,11 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
             "best_val_loss": best_val_loss,
             "best_epoch": best_epoch,
             "best_train_entity_f1": best_train_entity_f1,
-            "lr": optimizer.param_groups[0]["lr"]
+            "lr": optimizer.param_groups[0]["lr"],
+            "val_entity_recall": val_entity_recall,
+            "val_entity_precision": val_entity_precision,
+            "val_entity_f1": val_entity_f1,
+            "best_val_entity_f1": best_val_entity_f1
         })
 
     print("Training Complete!")
@@ -555,7 +581,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     # Evaluate on test set
     print("\nEvaluating on test set...")
-    test_metrics = test(model, test_dataloader, loss_fn, device, three=three)
+    test_metrics = test(model, test_dataloader, loss_fn, device, three=three, entity_loss=True)
     
     # Log test metrics to wandb
     wandb.log(test_metrics)
@@ -574,7 +600,7 @@ if __name__ == "__main__":
     main(run_name="unet_2D_516imgs_sem_adult",
          data_dir="/home/kchandok/projects/def-mzhen/tommy111/data/516imgs_sem_adult",
          seed=40,
-         epochs=100,
+         epochs=200,
          batch_size=16, #16 for 2D, 4 for 3D
          output_path="/home/kchandok/projects/def-mzhen/kchandok/models",
          three=False,  # Set to True for 3D-2D U-Net, False for 2D U-Nets
