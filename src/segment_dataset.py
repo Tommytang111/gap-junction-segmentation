@@ -20,7 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 import time
 import scipy.ndimage as ndi
-from skimage import block_reduce
+from skimage.measure import block_reduce
 
 class GapJunctionSegmentationPipeline:
     def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, three=False, overlap=True, img_size=512, batch_size=8, num_workers=None):
@@ -164,7 +164,7 @@ def main():
     #Step 0: Create pipeline
     pipeline = GapJunctionSegmentationPipeline(
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
-        name="unet_u4lqcs5g_sem_dauer_1_s000-850_segmentation_volume",
+        name="unet_u4lqcs5g_sem_adult_s000-699_segmentation_volume",
         #Path to model
         model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_3D2D_516vols_sem_adult_u4lqcs5g.pt",
         #Whether not model is 3D
@@ -172,17 +172,17 @@ def main():
         #Dataset class (How to process data for the model)
         dataset_class=TestDataset3D,
         #Path to sections
-        sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_1/SEM_full/s000-850",
+        sections_dir="/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699",
         #Path to where to save tiles/volumes
-        output_dir= Path(tmpdir) / "outputs/sem_dauer_1_split/s000-850",
+        output_dir= Path(tmpdir) / "outputs/sem_adult_split/s000-699",
         #Path to where to save predictions
-        pred_dir= Path(tmpdir) / "outputs/inference_results/unet_u4lqcs5g/sem_dauer_1_s000-850",
+        pred_dir= Path(tmpdir) / "outputs/inference_results/unet_u4lqcs5g/sem_adult_s000-699",
         #Path to where to save assembled results
-        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_u4lqcs5g/sem_dauer_1_s000-850",
+        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_u4lqcs5g/sem_adult_s000-699",
         #Path to where to save volume and downsampled volume results
-        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_dauer_1_s000-850",
+        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699",
         #Template name for images and masks, edit as needed
-        template="SEM_dauer_1_export_",
+        template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
         augmentations=valid_augmentation3D,
         #Image size of tiles, default is 512
@@ -192,6 +192,7 @@ def main():
         #Number of workers for data loading and processing, default is all available CPUs
         num_workers=num_workers
     )
+    
     print("Pipeline initialized with name:", pipeline.name)
     print()
 

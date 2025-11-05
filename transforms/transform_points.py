@@ -97,9 +97,13 @@ def move_points_to_gap_junctions(preds_path:str, points_path:str):
     #Transform points from 3D array to a list of points
     points_list = np.argwhere(points_bool) #shape: (N_points, 3)
     
+    #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
+    max_distance = 70
+    points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1], points_list[:,2]] < max_distance]
+    
     #For each point find its nearest predicted gap junction
     #nearest_indices has shape (3, D, H, W) with [z, y, x] indices at each voxel
-    nearest_gap_junctions_list = nearest_indices[:, points_list[:,0], points_list[:,1], points_list[:,2]].T
+    nearest_gap_junctions_list = nearest_indices[:, points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]].T
     #nearest_gap_junctions now has shape (N_points, 3)
 
     #Create an array of moved points (70GB RAM)
