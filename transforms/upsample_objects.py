@@ -1,4 +1,4 @@
-#Upsample volumes using np.kron
+#Upsample volumes using np.repeat
 #October 28, 2025
 #Tommy Tang
 

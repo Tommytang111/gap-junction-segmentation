@@ -122,8 +122,8 @@ def move_points_to_gap_junctions(preds_path:str, points_path:str):
     
 if __name__ == "__main__":
     #Move points to nearest gap junction predictions
-    moved_points = move_points_to_gap_junctions(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699/volume.npy",
-                                                points_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.npy"
+    moved_points = move_points_to_gap_junctions(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled2x.npy",
+                                                points_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs_downsampled2x.npy"
                                                 )
     #Save moved points
     np.save("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs.npy", moved_points)
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     gc.collect()
     
     #Transform moved points to entities
-    point_entities, num_entities = transform_points_to_nearby_entities(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_8jkuifab/sem_adult_s000-699/volume.npy",
+    point_entities, num_entities = transform_points_to_nearby_entities(preds_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_4lqcs5g/sem_adult_s000-699/volume_block_downsampled2x.npy",
                                                                        points_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs.npy",
                                                                        radius=7
                                                                        )
@@ -148,6 +148,7 @@ if __name__ == "__main__":
     print(f'Saved downsampled point entities to /home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs_entities_downsampled.npy')
 
     ###PREVIOUS CALLS
+    ###TRANSFORM POINTS TO ENTITIES
     # point_entities, num_entities = transform_points_to_nearby_entities("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume.npy",
     #                                 "/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_dauer_1_GJs.npy",
     #                                 radius=7
