@@ -107,7 +107,7 @@ class GapJunctionEntityDetector2D:
 
                 # Add the positions of this matched entity
                 shared_positions.extend(pred_entity_positions)
-                shared_entities += 1
+                num_shared_entities += 1
         
         tp = len(matched_pred_indices)  # True positives: predicted entities that matched
         fp = pred_entities - tp  # False positives: predicted entities that didn't match
@@ -127,7 +127,7 @@ class GapJunctionEntityDetector2D:
         }
         
         # Return both indices and actual positions
-        return shared_positions, metrics_dict, shared_entities
+        return shared_positions, metrics_dict, num_shared_entities
     
     def visualize_matches(self, pred_img, gt_img):
         """

@@ -21,7 +21,7 @@ import cv2
 import time
 #Custom Libraries
 from src.utils import seed_everything, worker_init_fn, create_dataset_splits
-from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss
+from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss, GenDLossEntity
 from entities.entity_detection_2d import GapJunctionEntityDetector2D
 from entities.entity_detection_2d_optimized import GapJunctionEntityDetector2DOptimized
 
@@ -35,7 +35,7 @@ GLOBAL_SEED = 40
 #Unet from src/models.py
 
 #FUNCTIONS
-def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='cuda', three=False, entity_loss=False):
+def train(dataloader, model, loss_fn, entity_loss_fn, optimizer, recall, precision, f1, device='cuda', three=False, entity_loss=False):
     """
     Training logic for the epoch.
     """
@@ -64,10 +64,15 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         
         #Compute prediction and loss
         pred = model(X)
+        
+        loss_entity = entity_loss_fn(pred, y) 
         loss = loss_fn(pred, y)
         
         #Backpropagation
-        loss.backward()
+        if entity_loss: 
+            loss_entity.backward()
+        else:
+            loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         
@@ -81,9 +86,6 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         ##Convert to numpy for entity detection
         pred_binary_np = pred_binary.cpu().numpy()
         labels_np = y.cpu().numpy()
-
-        if batch == 0:
-            print(f"Pred binary shape: {pred_binary_np.shape}, Labels shape: {labels_np.shape}")
         
         #Update metrics
         recall.update(pred_binary, y)
@@ -109,12 +111,9 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
         batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
         batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
 
-        ## computes loss based on entity f1 score
-        if entity_loss:
-            entity_loss = 1 - batch_metrics_dict['f1']
-            train_loss += entity_loss
-        else:
-            train_loss += loss.item()
+
+        entity_train_loss = 1 - batch_metrics_dict['f1']
+        train_loss += loss.item()
 
     #Compute final metrics per epoch
     train_entity_precision = batch_metrics_dict['precision']
@@ -124,10 +123,11 @@ def train(dataloader, model, loss_fn, optimizer, recall, precision, f1, device='
     train_precision = precision.compute().item()
     train_f1 = f1.compute().item()
     train_loss_per_epoch = train_loss / num_batches 
+    entity_train_loss_per_epoch = entity_train_loss / num_batches
     
-    return train_loss_per_epoch, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1
+    return train_loss_per_epoch, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1, entity_train_loss_per_epoch
     
-def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', three=False, entity_loss=False):
+def validate(dataloader, model, loss_fn, entity_loss_fn, recall, precision, f1, device='cuda', three=False, entity_loss=False):
     """
     Validation logic for the epoch.
     """
@@ -153,6 +153,7 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
         for X, y in tqdm(dataloader, desc="Validation Batches"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
+
             loss = loss_fn(pred, y)
             
             #Calculate metrics
@@ -190,11 +191,8 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
             batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
             batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
             
-            if entity_loss:
-                entity_loss = 1 - batch_metrics_dict['f1']
-                test_loss += entity_loss
-            else: 
-                test_loss += loss.item()
+            entity_test_loss = 1 - batch_metrics_dict['f1']
+            test_loss += loss.item()
 
         #Compute final metrics per epoch
         val_recall = recall.compute().item()
@@ -204,11 +202,12 @@ def validate(dataloader, model, loss_fn, recall, precision, f1, device='cuda', t
         val_entity_recall = batch_metrics_dict['recall']
         val_entity_precision = batch_metrics_dict['precision']
         val_entity_f1 = batch_metrics_dict['f1']
+        entity_val_loss_per_epoch = entity_test_loss / num_batches
 
-    return val_loss_per_epoch, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1
+    return val_loss_per_epoch, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1, entity_val_loss_per_epoch
     print(f"Avg loss: {test_loss:>7f}\n")
 
-def test(model, dataloader, loss_fn, device='cuda', three=False, entity_loss=False):
+def test(model, dataloader, loss_fn, entity_loss_fn, device='cuda', three=False, entity_loss=False):
     """
     Evaluate the model on the test dataset
     
@@ -243,6 +242,7 @@ def test(model, dataloader, loss_fn, device='cuda', three=False, entity_loss=Fal
         for X, y in tqdm(dataloader, desc="Test Evaluation"):
             X, y = X.to(device), y.to(device)
             pred = model(X)
+
             loss = loss_fn(pred, y)
             
             # Calculate metrics
@@ -280,11 +280,8 @@ def test(model, dataloader, loss_fn, device='cuda', three=False, entity_loss=Fal
             batch_metrics_dict['recall'] = batch_metrics_dict['tp'] / (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) if (batch_metrics_dict['tp'] + batch_metrics_dict['fn']) > 0 else 0
             batch_metrics_dict['f1'] = 2 * batch_metrics_dict['precision'] * batch_metrics_dict['recall'] / (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) if (batch_metrics_dict['precision'] + batch_metrics_dict['recall']) > 0 else 0
 
-            if entity_loss:
-                entity_loss = 1 - batch_metrics_dict['f1']
-                test_loss += entity_loss
-            else: 
-                test_loss += loss.item()
+            entity_test_loss = 1 - batch_metrics_dict['f1']
+            test_loss += loss.item()
     
     # Compute final metrics
     test_metrics = {
@@ -294,16 +291,17 @@ def test(model, dataloader, loss_fn, device='cuda', three=False, entity_loss=Fal
         "test_f1": f1.compute().item(),
         "test_entity_recall": batch_metrics_dict['recall'],
         "test_entity_precision": batch_metrics_dict['precision'],
-        "test_entity_f1": batch_metrics_dict['f1']
+        "test_entity_f1": batch_metrics_dict['f1'],
+        "entity_test_loss": entity_test_loss / num_batches
     }
     
-    print(f"Test Results | Loss: {test_metrics['test_loss']:.4f}, "
+    print(f"Test Results | Loss: {test_metrics['test_loss']:.4f}, Entity Loss: {test_metrics['entity_test_loss']:.4f}, "
           f"Recall: {test_metrics['test_recall']:.4f}, "
           f"Precision: {test_metrics['test_precision']:.4f}, "
           f"F1: {test_metrics['test_f1']:.4f}, "
           f"Entity Recall: {test_metrics['test_entity_recall']:.4f}, "
           f"Entity Precision: {test_metrics['test_entity_precision']:.4f}, "
-          f"Entity F1: {test_metrics['test_entity_f1']:.4f}")
+          f"Entity F1: {test_metrics['test_entity_f1']:.4f}, ")
     
     return test_metrics
 
@@ -335,12 +333,12 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
             reinit=True,
             config={
                 "dataset": data,
-                "model": "UNet3D-2D",
+                "model": "UNet_base",
                 "learning_rate": 0.01,
                 "batch_size": batch_size,
                 "epochs": epochs,
                 "image_size": (512, 512),
-                "loss_function": "Generalized Dice Loss",
+                "loss_function": "Entity Generalized Dice Loss",
                 "optimizer": "SGD",
                 "momentum": 0.9,
                 "scheduler": "ReduceLROnPlateau",
@@ -483,6 +481,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
+    entity_loss_fn = GenDLossEntity()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
@@ -503,27 +502,31 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     best_model_state = copy.deepcopy(model.state_dict())
     best_train_entity_f1 = 0.0
     best_val_entity_f1 = 0.0
+    best_entity_val_loss = float('inf')
     
     for epoch in range(epochs):
         print(f"Epoch {epoch+1}")
         
         #Training
-        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1  = train(train_dataloader, model, loss_fn, optimizer, recall, precision, f1, three=three, entity_loss=True)
+        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1, train_entity_loss  = train(train_dataloader, model, loss_fn, entity_loss_fn, optimizer, recall, precision, f1, three=three, entity_loss=True)
 
         #Validation
-        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1 = validate(valid_dataloader, model, loss_fn, recall, precision, f1, three=three, entity_loss=True)
+        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1, val_entity_loss = validate(valid_dataloader, model, loss_fn, entity_loss_fn, recall, precision, f1, three=three, entity_loss=True)
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
         
         #Print metrics
-        print(f"Train | Loss: {train_loss:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, Entity Recall: {train_entity_recall:.4f}, Entity Precision: {train_entity_precision:.4f}, Entity F1: {train_entity_f1:.4f}")
-        print(f"Val   | Loss: {val_loss:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, Entity Recall: {val_entity_recall:.4f}, Entity Precision: {val_entity_precision:.4f}, Entity F1: {val_entity_f1:.4f}")
+        print(f"Train | Loss: {train_loss:.4f}, Entity Loss: {train_entity_loss:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, Entity Recall: {train_entity_recall:.4f}, Entity Precision: {train_entity_precision:.4f}, Entity F1: {train_entity_f1:.4f}")
+        print(f"Val   | Loss: {val_loss:.4f}, Entity Loss: {val_entity_loss:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, Entity Recall: {val_entity_recall:.4f}, Entity Precision: {val_entity_precision:.4f}, Entity F1: {val_entity_f1:.4f}")
         print("-----------------------------")
         
         #Log best model state based on validation loss
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+        
+        if val_entity_loss < best_entity_val_loss:
+            best_entity_val_loss = val_entity_loss
         
         #Log best model state based on F1 score
         if train_f1 > best_train_f1:
@@ -566,7 +569,9 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
             "val_entity_recall": val_entity_recall,
             "val_entity_precision": val_entity_precision,
             "val_entity_f1": val_entity_f1,
-            "best_val_entity_f1": best_val_entity_f1
+            "best_val_entity_f1": best_val_entity_f1,
+            "entity_val_loss": val_entity_loss,
+            "best_entity_val_loss": best_entity_val_loss
         })
 
     print("Training Complete!")
@@ -581,7 +586,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     # Evaluate on test set
     print("\nEvaluating on test set...")
-    test_metrics = test(model, test_dataloader, loss_fn, device, three=three, entity_loss=True)
+    test_metrics = test(model, test_dataloader, loss_fn, entity_loss_fn, device, three=three, entity_loss=True)
     
     # Log test metrics to wandb
     wandb.log(test_metrics)

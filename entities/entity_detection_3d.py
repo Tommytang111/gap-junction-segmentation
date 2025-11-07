@@ -71,8 +71,32 @@ class GapJunctionEntityDetector3D:
             connectivity=self.connectivity,
             return_N=True
         )
+
+        voxel_list = []
+
+        for entity_id in range(1, num_entities + 1):
+            rows, cols, depths = np.where(labeled_volume == entity_id)
+            voxel_positions = list(zip(rows, cols, depths))
+            voxel_list.append(voxel_positions)
         
-        return labeled_volume, num_entities
+        return labeled_volume, voxel_list, num_entities
+    
+    def calculate_iou(self, entity1_voxels, entity2_voxels):
+        """
+        Calculate IoU between two entities represented as lists of voxel positions.
+        """
+
+        set1 = set(entity1_voxels)
+        set2 = set(entity2_voxels)
+        
+        intersection = len(set1 & set2)
+        union = len(set1 | set2)
+        
+        if union == 0:
+            return 0
+        
+        return intersection / union
+
     
     def calculate_metrics_3d(self, pred_volume, gt_volume, iou_threshold=0.5):
         """
@@ -93,8 +117,8 @@ class GapJunctionEntityDetector3D:
             metrics_dict: Dictionary with detailed metrics including TP, FP, FN, counts
         """
         # Extract entities from both volumes
-        pred_labeled, num_pred = self.extract_entities(pred_volume)
-        gt_labeled, num_gt = self.extract_entities(gt_volume)
+        pred_labeled, pred_voxel_list, num_pred = self.extract_entities_3d(pred_volume)
+        gt_labeled, gt_voxel_list, num_gt = self.extract_entities_3d(gt_volume)
         
         # Handle edge cases
         if num_pred == 0 and num_gt == 0:
@@ -115,39 +139,36 @@ class GapJunctionEntityDetector3D:
                 'num_pred': num_pred, 'num_gt': 0
             }
         
-        # Match predicted entities to ground truth using IoU
-        matched_pred = set()
-        matched_gt = set()
+        matched_pred_indices = []
+        matched_gt_indices = []
+        shared_voxels = []  # Store actual voxel positions of matched entities
+        shared_entities = 0
         
-        for pred_id in range(1, num_pred + 1):
-            pred_mask = (pred_labeled == pred_id)
+        for pred_idx, pred_entity_voxels in enumerate(pred_voxel_list):
             best_iou = 0
-            best_gt_id = None
-            
-            # Find best matching ground truth entity
-            for gt_id in range(1, num_gt + 1):
-                if gt_id in matched_gt:
+            best_gt_idx = -1
+
+            for gt_idx, gt_entity_voxels in enumerate(gt_voxel_list):
+                if gt_idx in matched_gt_indices:
                     continue
                 
-                gt_mask = (gt_labeled == gt_id)
+                iou = self.calculate_iou(pred_entity_voxels, gt_entity_voxels)
                 
-                # Calculate IoU
-                intersection = np.logical_and(pred_mask, gt_mask).sum()
-                union = np.logical_or(pred_mask, gt_mask).sum()
-                
-                if union > 0:
-                    iou = intersection / union
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_gt_id = gt_id
-            
-            # If we found a match above threshold, mark both as matched
-            if best_iou >= iou_threshold and best_gt_id is not None:
-                matched_pred.add(pred_id)
-                matched_gt.add(best_gt_id)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt_idx = gt_idx
+
+            # If best IoU exceeds threshold, consider it a match
+            if best_iou >= self.iou_threshold:
+                matched_pred_indices.append(pred_idx)
+                matched_gt_indices.append(best_gt_idx)
+
+                # Add the positions of this matched entity
+                shared_voxels.extend(pred_entity_voxels)
+                num_shared_entities += 1
         
         # Calculate metrics
-        tp = len(matched_pred)  # True positives: correctly detected entities
+        tp = len(matched_pred_indices)  # True positives: correctly detected entities
         fp = num_pred - tp      # False positives: predicted but no match
         fn = num_gt - tp        # False negatives: ground truth but not detected
         
@@ -159,9 +180,9 @@ class GapJunctionEntityDetector3D:
             'tp': tp,
             'fp': fp,
             'fn': fn,
-            'num_pred': num_pred,
-            'num_gt': num_gt,
-            'iou_threshold': iou_threshold
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1,
         }
         
-        return metrics_dict
+        return shared_voxels, metrics_dict, num_shared_entities

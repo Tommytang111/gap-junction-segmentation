@@ -566,6 +566,45 @@ class GenDLoss(nn.Module):
         return torch.nanmean(1 - 2 * torch.nansum(weights * torch.nansum(targets * inputs, dim=-1), dim=-1)/\
                           torch.nansum(weights * torch.nansum(targets + inputs, dim=-1), dim=-1))
 
+
+class GenDLossEntity(nn.Module): 
+    def __init__(self):
+        super(GenDLossEntity, self).__init__()
+    
+    def forward(self, preds, targets, loss_mask=None, mito_mask=None, classes=3, **kwargs):
+        """
+        Compute Generalized Dice Loss for entities.
+        
+        :return: Generalized Dice Loss value.
+        """
+        # Apply sigmoid to predictions to get probabilities
+        preds = torch.sigmoid(preds)
+
+        # Flatten predictions and targets to (B, C, N) where N = H * W
+        preds = preds.view(preds.shape[0], preds.shape[1], -1)  # (B, C, N)
+        targets = targets.view(targets.shape[0], targets.shape[1], -1)  # (B, C, N)
+
+        # Apply loss mask if provided
+        if loss_mask is not None:
+            loss_mask = loss_mask.view(loss_mask.shape[0], -1)  # (B, N)
+            preds = preds * loss_mask.unsqueeze(1)  # Mask predictions
+            targets = targets * loss_mask.unsqueeze(1)  # Mask targets
+
+        # Compute class-specific weights
+        # Weights are inversely proportional to the square of the target sums
+        class_weights = 1 / (torch.sum(targets, dim=-1).pow(2) + 1e-6)  # (B, C)
+
+        # Compute intersection and union for each class
+        intersection = torch.sum(preds * targets, dim=-1)  # (B, C)
+        union = torch.sum(preds + targets, dim=-1)  # (B, C)
+
+        # Compute Generalized Dice Loss
+        numerator = 2 * torch.sum(class_weights * intersection, dim=-1)  # (B,)
+        denominator = torch.sum(class_weights * union, dim=-1)  # (B,)
+        gdl = 1 - numerator / (denominator + 1e-6)  # (B,)
+
+        return gdl.mean()  # Return the mean loss across the batch
+
 class MultiGenDLoss(nn.Module):
     def __init__(self):
         super(MultiGenDLoss, self).__init__()
@@ -578,6 +617,7 @@ class MultiGenDLoss(nn.Module):
         # print(weights.shape, torch.nansum(targets * inputs, dim=-1).shape)
         return torch.nanmean(1 - 2 * torch.nansum(weights * torch.nansum(targets * inputs, dim=-1))/\
                           torch.nansum(weights * torch.nansum(targets + inputs, dim=-1)))
+
         
 # Example usage and testing
 if __name__ == "__main__":
