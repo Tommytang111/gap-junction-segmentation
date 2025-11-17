@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 import os
 from src.utils import check_output_directory
-from time import time
+import time
 
 def extract_labels_from_masks(input_dir:str, output_dir:str, labels_to_extract:list[int]):
     """Extract and save label-filtered segmentation masks.
