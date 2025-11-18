@@ -1,0 +1,607 @@
+"""
+A class to transform volumes, masks, points and other objects for 2D/3D visualization or quantatitive analysis. 
+Tommy Tang
+Last Updated: Nov 17th, 2025
+"""
+
+#Libraries
+import numpy as np
+import pandas as pd
+import cv2
+import os
+from pathlib import Path
+from time import time
+from skimage.measure import block_reduce
+from scipy.ndimage import binary_dilation, generate_binary_structure, distance_transform_edt
+import cc3d
+from src.utils import check_output_directory
+    
+def downsample(object_path:str, block_size:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
+    """
+    Downsample a NumPy volume (e.g., image stack, mask, segmentation) by applying
+    skimage.measure.block_reduce with a max aggregation.
+
+    Parameters
+    ----------
+    object_path : str
+        Path to a .npy file containing the source array to downsample.
+    block_size : tuple[int, ...]
+        Block size per dimension; length must equal the array ndim.
+        Example: (1, 4, 4) keeps the first axis (e.g., slices) and downsamples
+        spatial axes by 4× using max pooling.
+    save : bool, default True
+        If True, write the downsampled array to save_path.
+    save_path : str | None
+        Output .npy path. Required when save is True.
+
+    Returns
+    -------
+    np.ndarray
+        The downsampled array.
+
+    Notes
+    -----
+    Uses np.max within each block (preserves foreground in binary/label volumes).
+    Change func in block_reduce for different aggregation (e.g., np.mean).
+    """
+    #Load object
+    obj = np.load(object_path)
+    
+    #Downsample
+    downsampled_obj = block_reduce(obj, block_size=block_size, func=np.max)
+    
+    #Save downsampled volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, downsampled_obj)
+        
+    print(f"Object successfully downsampled and saved as {save_path}.")
+    return downsampled_obj
+
+def upsample(object_path:str, scale_factors:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
+    """
+    Upsample a 3D NumPy array by integer factors using nearest-neighbor replication.
+
+    Parameters
+    ----------
+    object_path : str
+        Path to a .npy file containing the source volume to upsample.
+    scale_factors : tuple[int, ...]
+        Integer scale per axis (z, y, x). Length must equal the array ndim (typically 3).
+        Example: (2, 4, 4) doubles slices and quadruples in-plane resolution.
+    save : bool, default True
+        If True, writes the upsampled array to save_path as .npy.
+    save_path : str | None
+        Output path for the .npy file. Required when save is True.
+
+    Returns
+    -------
+    np.ndarray
+        Upsampled array with shape (D*s0, H*s1, W*s2) and the same dtype as input.
+
+    Notes
+    -----
+    - Implemented via numpy.repeat along each axis (nearest-neighbor). Best for masks/labels.
+    - For continuous images, consider interpolation-based methods (e.g., scipy.ndimage.zoom,
+        skimage.transform.resize) to avoid blocky artifacts.
+    - Assumes integer scale factors >= 1; no validation is performed here.
+    """
+    #Load object
+    obj = np.load(object_path)
+    
+    #Upsample
+    upsampled_volume = np.repeat(np.repeat(np.repeat(obj, scale_factors[0], axis=0), scale_factors[1], axis=1), scale_factors[2], axis=2)
+    
+    #Save downsampled volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, upsampled_volume)
+        
+    print(f"Object successfully upsampled and saved as {save_path}.")
+    return upsampled_volume
+
+def enlarge(object_path:str, binary_structure:tuple[int,int]|None=None, iterations:int=1, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
+    """
+    Morphologically enlarge (dilate) a binary or label volume.
+
+    Parameters
+    ----------
+    object_path : str
+        Path to a .npy file containing the source array. Expected shape (Z, Y, X) or (Y, X).
+    binary_structure : tuple[int, int] | None, default None
+        (rank, connectivity) passed to scipy.ndimage.generate_binary_structure.
+        If None, uses a 2D (rank=2, connectivity=2) structuring element broadcast along Z.
+        For true 3D dilation, pass (3, 2).
+    iterations : int, default 1
+        Number of dilation iterations. Each iteration expands boundaries once.
+    save : bool, default True
+        If True, writes the enlarged volume to save_path.
+    save_path : str | None
+        Output .npy path. Required when save is True.
+    to_uint8 : bool, default True
+        Convert boolean result to uint8 (0/255). If False, return bool array.
+
+    Returns
+    -------
+    np.ndarray
+        Enlarged volume (uint8 with {0,255} if to_uint8 else bool).
+
+    Notes
+    -----
+    - Input is binarized (values > 0 become True).
+    - Default structure applies 2D dilation independently per slice (no inter-slice connectivity).
+    - For 3D connectivity (link slices), supply structure_params=(3, 1 or 2).
+    - Dilation can dramatically grow thin structures; tune iterations.
+    """
+    #Load object
+    obj = np.load(object_path)
+    
+    #Structuring element
+    if binary_structure is None:
+        base = generate_binary_structure(2, 2)
+        structure = base[None, :, :]
+    else:
+        structure = generate_binary_structure(binary_structure[0], binary_structure[1])
+    
+    #Dilate/enlarge
+    obj_enlarged = binary_dilation(obj, structure=structure, iterations=iterations)
+    
+    #Convert to uint8 if specified
+    obj_enlarged = obj_enlarged.astype(np.uint8) * 255 if to_uint8 else obj_enlarged
+    
+    #Save enlarged volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, obj_enlarged)
+
+    print(f"Object successfully enlarged and saved as {save_path}.")
+    return obj_enlarged
+
+def stack_slices(slice_dir:str, output_path:str, multi_label:bool=True, save:bool=False, save_path:str=None, file_extension:str=".png") -> np.ndarray:
+    """
+    Load 2D image slices from a directory and stack them into a 3D volume.
+
+    Parameters
+    ----------
+    slice_dir : str
+        Directory containing per-slice image files (e.g. z-slices).
+    output_path : str
+        Unused parameter (consider removing); stacking does not read from this path.
+    multi_label : bool, default True
+        If True, load images with cv2.IMREAD_UNCHANGED (preserve multi-channel or multi-class labels).
+        If False, load as single-channel grayscale.
+    save : bool, default False
+        If True, save the stacked volume to save_path as .npy.
+    save_path : str | None
+        Output .npy file path. Required when save=True.
+    file_extension : str, default ".png"
+        File extension filter for slice selection.
+
+    Returns
+    -------
+    np.ndarray
+        3D volume with shape (Z, H, W) or (Z, H, W, C) depending on source images.
+
+    Notes
+    -----
+    - Slices are sorted lexicographically; use zero-padded filenames to ensure correct z-order.
+    - All slices must share identical spatial dimensions (and channels if multi-label).
+    - Missing imports: ensure `import os` and `import cv2` are present at top of file.
+    - `output_path` is not used; pass `save_path` when save=True.
+    """
+    #Load slices
+    img_dir = Path(slice_dir)
+    img_paths = sorted([p for p in os.listdir(img_dir) if p.endswith(file_extension)])
+    imgs = []
+    for img_path in img_paths:
+        img = cv2.imread(str(img_dir / img_path), cv2.IMREAD_UNCHANGED if multi_label else cv2.IMREAD_GRAYSCALE)
+        imgs.append(img)
+
+    #Stack slices along Z
+    volume = np.stack(imgs, axis=0)
+    
+    #Save stacked volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, volume)
+        
+    print(f"Volume successfully stacked from slices in {slice_dir}.")
+    return volume
+    
+def filter_labels(img_path:str, output_path:str, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
+    """
+    Keep only specified label IDs in a labeled mask; set all other pixels to 0.
+
+    Parameters
+    ----------
+    img_path : str
+        Path to the input mask/image file (typically single-channel label image).
+    output_path : str
+        Unused parameter (kept for API compatibility). Use save_path to control output location.
+    labels_to_keep : list[int]
+        Label values to retain. Pixels whose value is not in this list are set to 0.
+    save : bool, default True
+        If True, writes the filtered mask to save_path using cv2.imwrite.
+    save_path : str | None
+        Destination path for the filtered image. Required when save=True.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered mask with the same shape and dtype as the input (in memory). Pixels not in
+        labels_to_keep are zeroed.
+
+    Notes
+    -----
+    - Expects a single-channel label mask. If the source is multi-channel, convert to a single-channel
+        label image before using this function.
+    - When saving, ensure the dtype is supported by cv2.imwrite (e.g., uint8 or uint16); otherwise,
+        cast accordingly before saving.
+    """
+    #Read img/mask
+    mask = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+    
+    #Filter mask
+    mask_filtered = np.where(np.isin(mask, labels_to_keep), mask, 0)
+    
+    #Save mask
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        cv2.imwrite(save_path, mask_filtered)
+        
+def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, save:bool=True, save_path:str=None) -> np.ndarray:
+    """
+    Create a sparse 3D volume from 3D point coordinates stored in a JSON file.
+
+    Parameters
+    ----------
+    json_path : str
+        Path to a JSON file containing points. Expected format is a mapping where
+        each value is a 3-element list [x, y, z] (same physical units as voxel_size).
+        The file is read with pandas.read_json(..., orient='index').
+    volume_shape : tuple[int, int, int]
+        Output array shape as (Z, Y, X).
+    voxel_size : tuple[int, int, int]
+        Physical voxel size (dz, dy, dx). Each coordinate is divided by the corresponding
+        voxel size and floored (//) to obtain integer indices.
+    point_value : int, default 255
+        Value to assign at each point voxel.
+    save : bool, default True
+        If True, saves the resulting array to save_path as a .npy file.
+    save_path : str | None
+        Destination .npy path. Required when save=True.
+
+    Returns
+    -------
+    np.ndarray
+        A uint8 volume of shape (Z, Y, X) with zeros everywhere except at point
+        locations set to point_value.
+
+    Notes
+    -----
+    - Axis/order: indices are computed as (z_idx, y_idx, x_idx) from input [x, y, z].
+    - Points falling outside volume_shape are skipped.
+    - Multiple points mapping to the same voxel simply set the same value.
+    - Uses floor division; if rounding is preferred, pre-process coordinates accordingly.
+    """
+    #Read json
+    points = pd.read_json(json_path, orient='index')
+    points.rename(columns={0: "points"}, inplace=True)
+    
+    #Create point volume
+    point_vol = np.zeros(volume_shape, dtype=np.uint8)  # Z, Y, X
+    
+    #Assign a value in the volume for each point
+    count = 0
+    for point in points['points']:
+        z_idx = int(point[2] // voxel_size[0])
+        y_idx = int(point[1] // voxel_size[1])
+        x_idx = int(point[0] // voxel_size[2])
+        if z_idx < volume_shape[0] and y_idx < volume_shape[1] and x_idx < volume_shape[2]:
+            point_vol[z_idx, y_idx, x_idx] = point_value
+            count += 1
+    #Save point volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, point_vol)
+
+    print(f'# of Points assigned to volume: {count}/{len(points["points"])}')
+    print(f"Volume successfully saved as {save_path}.")
+    return point_vol
+
+def calculate_entity_metrics(preds_path:str, points_path:str, nerve_ring_mask_path:str=None, verbose:bool=True) -> tuple[float, float, float, int, int, int]:
+    """
+    Compute detection metrics (F1, precision, recall) for predicted 3D entities against point annotations.
+
+    The function:
+    1. Loads predicted binary volume (preds_path) and ground-truth point volume (points_path).
+    2. Optionally masks predictions to a nerve ring mask (nerve_ring_mask_path).
+    3. Labels connected components (entities) in the masked prediction volume (26-connectivity).
+    4. Maps each ground-truth point to the entity label at its coordinate.
+    5. Derives counts:
+        - TP: number of distinct entity labels that contain ≥1 point.
+        - FP: number of entity labels with zero points.
+        - FN: number of points falling in background (label 0).
+    6. Calculates precision, recall, F1.
+
+    Parameters
+    ----------
+    preds_path : str
+        Path to .npy file containing binary predictions (foreground >0).
+    points_path : str
+        Path to .npy file containing point annotations (nonzero voxels are points).
+    nerve_ring_mask_path : str | None, default None
+        Optional .npy mask to restrict evaluation region. If provided, must match shape.
+    verbose : bool, default True
+        If True, prints TP/FP/FN and metric values.
+
+    Returns
+    -------
+    tuple[float, float, float, int, int, int]
+        (f1, precision, recall, tp, fp, fn)
+
+    Notes
+    -----
+    - All input volumes must share identical shape.
+    - Connected components use 26-connectivity (3D).
+    - If no points exist, returns zeros (f1=precision=recall=0, tp=fp=fn=0).
+    - Precision = TP / (TP + FP); Recall = TP / (TP + FN); F1 harmonic mean.
+    """
+    #Load volumes
+    preds = np.load(preds_path).astype(bool)
+    points = np.load(points_path).astype(bool)
+    nr_mask = np.load(nerve_ring_mask_path).astype(bool) if nerve_ring_mask_path is not None else None
+    
+    #If all shapes are the same proceed, else raise error
+    if nr_mask is not None:
+        if preds.shape != points.shape or preds.shape != nr_mask.shape:
+            raise ValueError(f"Shape mismatch: preds {preds.shape}, points {points.shape}, mask {nr_mask.shape}")
+    else:
+        if preds.shape != points.shape:
+            raise ValueError(f"Shape mismatch: preds {preds.shape}, points {points.shape}")
+    
+    #Get predictions only in nerve ring
+    nr_preds = preds & nr_mask if nr_mask is not None else preds
+    
+    #Transform predictions to entities
+    nr_preds_entities, max_entities = cc3d.connected_components(nr_preds, connectivity=26, return_N=True)
+    
+    #Create list of point coordinates
+    points_list = np.argwhere(points == 255)
+
+    #Get entity labels at point locations
+    points_coords = np.argwhere(points)
+    if len(points_coords) == 0:
+        print("WARNING: No points found in ground truth")
+        return 0.0, 0.0, 0.0, 0, max_entities, 0
+    
+    entity_labels_at_points = nr_preds_entities[points_coords[:, 0], 
+                                                points_coords[:, 1], 
+                                                points_coords[:, 2]]
+    
+    #TP: Entities that contain at least one point
+    tp_entities = set(entity_labels_at_points[entity_labels_at_points > 0])
+    tp = len(tp_entities)
+
+    #FP: Entities that don't contain any points
+    all_entities = set(range(1, max_entities + 1))
+    fp_entities = all_entities - tp_entities
+    fp = len(fp_entities)
+
+    #FN: Points that don't fall within any entity (in background)
+    fn = np.sum(entity_labels_at_points == 0)
+
+    #Metrics
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    
+    #Verbose output
+    if verbose:
+        print(f"TP (entities with points): {tp}")
+        print(f"FP (entities without points): {fp}")
+        print(f"FN (points not in any entity): {fn}")
+        print(f"Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}")
+    
+    return f1, precision, recall, tp, fp, fn
+
+def transform_points_to_nearby_entities(preds_path:str, points_path:str, radius:int=10, dust_size:int=6, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int]:
+    """
+    Transform a points array into an entity array by keeping only the closest entity to a point within a specified radius. 
+    This function performs a connected component analysis to identify entities, then computes a distance transform to find 
+    the closest Euclidian distance to every existing point.
+
+    This loads two 3D .npy volumes with shape (Z, Y, X):
+    - preds_path: predicted binary mask (non-zero = foreground).
+    - points_path: binary point annotations (non-zero = point locations).
+
+    Processing pipeline:
+    - Downsample both volumes in-plane by a factor of 2 using max pooling
+    (block_reduce(..., block_size=(1, 2, 2))) to reduce memory and noise.
+    - Remove small speckles from the predictions with cc3d.dust(threshold=dust_size, connectivity=26).
+    - Label remaining connected components (entities) with 26-connectivity (uint32 labels).
+    - Compute a Euclidean distance transform from the point mask.
+    - Keep only entity labels that intersect voxels within `radius` voxels of any point.
+
+    Parameters
+    - preds_path (str): Path to .npy file of the predicted binary volume.
+    - points_path (str): Path to .npy file of the point-annotation volume.
+    - radius (int, default=15): Neighborhood radius in voxels in the downsampled grid
+    (after the 2× downsampling in X and Y). Adjust accordingly if you need a radius
+    in the original resolution.
+    - dust_size (int, default=6): Minimum size of connected components to keep in preds.
+
+    Returns
+    - filtered_entity_array (np.ndarray): uint32 labeled volume (same shape as the
+    downsampled inputs) where only entities near points are retained; others set to 0.
+    - num_entities (int): Total number of connected components before filtering.
+
+    Notes
+    - Inputs are cast to uint8; any non-zero value is treated as foreground/point.
+    - Uses 26-connectivity for 3D components.
+    - np.load errors (e.g., missing files) will propagate.
+    """
+    #Relevant paths
+    points = np.load(points_path).astype(np.uint8)
+    preds = np.load(preds_path).astype(np.uint8)
+
+    #Convert preds to entity array
+    preds_filtered = cc3d.dust(preds, threshold=dust_size, connectivity=26, in_place=False)
+    entities, num_entities = cc3d.connected_components(preds_filtered, connectivity=26, return_N=True, out_dtype=np.uint32)
+    print("Entity array computed.")
+
+    #Convert points to boolean array
+    points_bool = (points > 0)
+
+    #Distance transform to distance array using inverse (bitwise NOT) of points mask
+    dist_to_points = distance_transform_edt(~points_bool).astype(np.float32)
+    print("Distance transform to points computed.")
+
+    #Create boolean mask of voxels within the specified radius of any point
+    near_points = dist_to_points <= radius
+
+    #Keep only entities that overlap with near_points
+    #Step 1: Get intersection of near_points and entity voxels (using boolean AND) and keep only those labels
+    keep_labels = np.unique(entities[near_points & (entities > 0)])
+    
+    #Step 2: Filter entity array to keep only labels found in Step 1
+    filtered_entity_array = np.where(np.isin(entities, keep_labels), entities, 0)
+    print("Filtered entity array computed.")
+    
+    #Save
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, filtered_entity_array)
+        
+    print(f"Filtered entity array saved as {save_path}.")
+    return filtered_entity_array, num_entities
+
+def move_points_to_junctions(preds_path:str, points_path:str, max_distance:int=35, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int, int]:
+    """
+    Move each annotated point to its nearest predicted gap junction voxel if within a
+    maximum Euclidean distance, producing a new volume of relocated points.
+
+    Workflow
+    1. Load prediction (junction) volume and point volume (shape: Z,Y,X; non-zero = foreground).
+    2. Compute distance transform on the inverse prediction mask with return_indices=True to get
+        nearest junction coordinates for every voxel.
+    3. Select original points whose nearest junction distance < max_distance.
+    4. Place moved points at those nearest junction coordinates in a new sparse volume (uint8 0/255).
+
+    Parameters
+    ----------
+    preds_path : str
+        Path to .npy prediction (junction) volume (binary or thresholded).
+    points_path : str
+        Path to .npy point-annotation volume (non-zero voxels are original points).
+    max_distance : int, default 35
+        Maximum allowed voxel distance for relocating a point; farther points are ignored.
+    save : bool, default True
+        If True, saves the moved point volume to save_path.
+    save_path : str | None
+        Output .npy path (required if save is True).
+
+    Returns
+    -------
+    tuple[np.ndarray, int, int]
+        moved_points : np.ndarray
+            Volume with moved points (uint8; 255 at moved point voxels).
+        num_points : int
+            Total number of original points detected.
+        num_moved_points : int
+            Number of points relocated (within max_distance before possible coordinate de-duplication).
+
+    Notes
+    -----
+    - Memory intensive: distance_transform_edt with return_indices creates large arrays; ensure RAM suffices.
+    - Multiple source points may map to the same junction voxel; duplicates collapse to one 255.
+    - No shape validation is performed; prediction and point volumes must match.
+    - Points beyond max_distance remain unmoved (not written to output volume).
+    """
+    #Load points and predictions (140GB RAM for 700x10000x10000 volume)
+    points = np.load(points_path).astype(np.uint8) #Should already be uint8
+    preds = np.load(preds_path).astype(np.uint8)
+    
+    #Convert to boolean masks (140GB RAM)
+    points_bool = (points > 0)
+    preds_bool = (preds > 0)
+    
+    #Compute distance transform from predicted gap junctions (280GB + 210GB RAM)
+    distance, nearest_indices = distance_transform_edt(~preds_bool, return_indices=True)
+    
+    #Transform points from 3D array to a list of points
+    points_list = np.argwhere(points_bool) #shape: (N_points, 3)
+    
+    #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
+    max_distance = max_distance
+    points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1], points_list[:,2]] < max_distance]
+    num_points = len(points_list)
+    num_moved_points = len(points_list_filtered)
+    
+    #For each point find its nearest predicted gap junction
+    #nearest_indices has shape (3, D, H, W) with [z, y, x] indices at each voxel
+    nearest_gap_junctions_list = nearest_indices[:, points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]].T
+    #nearest_gap_junctions now has shape (N_points, 3)
+
+    #Create an array of moved points (70GB RAM)
+    moved_points = np.zeros_like(points, dtype=np.uint8)
+    moved_points[nearest_gap_junctions_list[:,0], nearest_gap_junctions_list[:,1], nearest_gap_junctions_list[:,2]] = 255
+    
+    #Report statistics
+    distances_moved = distance[points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]]
+    #distances_moved has shape (N, 1)
+    print(f"Moved {len(points_list_filtered)} points to nearest blobs")
+    print(f"Mean distance moved: {distances_moved.mean():.2f} voxels")
+    print(f"Max distance moved: {distances_moved.max():.2f} voxels")
+    
+    #Save moved points
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, moved_points)
+        
+    print(f"Moved points saved as {save_path}.")    
+    return moved_points, num_points, num_moved_points
+
+def volume_to_slices(volume_path:str, output_dir:str) -> None:
+    """
+    Save each z-slice of a 3D NumPy volume (.npy) as a PNG image.
+
+    Parameters
+    ----------
+    volume_path : str
+        Path to a .npy file containing a 3D array with shape (Z, Y, X).
+    output_dir : str
+        Directory where PNG slices will be written. The directory is created
+        and cleared (existing contents removed) before saving.
+
+    Behavior
+    --------
+    - The volume is binarized: values > 0 become 255; others become 0, and
+      the result is saved as uint8 PNGs.
+    - Slices are named with zero-padded indices: slice_000.png, slice_001.png, ...
+    - I/O errors (e.g., unreadable file, unwritable directory) propagate.
+
+    Returns
+    -------
+    None
+    """
+    #Load volume
+    volume = np.load(volume_path)
+    
+    #Convert to boolean mask
+    volume[volume > 0] = 255
+    volume = volume.astype(np.uint8)
+    
+    #Ensure output directory is empty
+    check_output_directory(Path(output_dir), clear=True)
+    
+    #Save every slice in volume
+    for i in range(volume.shape[0]):
+        slice = volume[i,:,:]
+        cv2.imwrite(f"{output_dir}/slice_{i:03d}.png", slice)
+        
+    print(f"Finished slicing volume into {i+1} slices.")
+    print(f"Slices saved to {output_dir}")
+    
+if __name__ == "__main__":
+    pass
