@@ -136,7 +136,7 @@ def validate(dataloader, model, loss_fn, recall, precision, f1):
     return val_loss_per_epoch, val_recall, val_precision, val_f1
 
 def sweep(data_dir:str, output_dir:str, seed:int=40, epochs:int=50):
-    #Read wandb API key from secrets.txt
+    #Read WandB API key from secrets.txt
     with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
         lines = file.readlines()
         #WandB API key is on the fourth line

@@ -1,7 +1,7 @@
 """
 Inference for Gap Junction Segmentation API.
 Tommy Tang
-June 2, 2025
+October 8, 2025
 """
 
 #LIBRARIES

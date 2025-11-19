@@ -4,3 +4,4 @@ legacy/
 catmaid/
 **/wandb/
 **/__pycache__/
+secrets.txt
