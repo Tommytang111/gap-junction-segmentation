@@ -205,9 +205,9 @@ class TestDataset3D(torch.utils.data.Dataset):
 
             #Reconstruct volume from augmented slices
             #Note: When mask is provided, extra channel dimension is at end (dim = -1), when it's not provided, it is first (dim=0).
-            augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+            augmented_slices = [np.squeeze(augmented['image'], -1)]  # First slice, remove channel dimension
             for i in range(1, volume.shape[0]):
-                augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
+                augmented_slices.append(np.squeeze(augmented[f'image{i}'], -1))
 
             volume = np.stack(augmented_slices, axis=0)
 

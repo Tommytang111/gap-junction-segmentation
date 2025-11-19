@@ -185,6 +185,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
     # Extract augmentations
     train_aug_details = extract_augmentations(augmentations)
     
+    #Read wandb API key from secrets.txt
     with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
         lines = file.readlines()
         #WandB API key is on the fourth line
@@ -260,7 +261,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #mean=137.0 (0.54 normalized), std=46.2 (0.18 normalized) for 516imgs_sem_adult
     
-    #NEW AUGMENTATION TESTING
+    #NEW AUGMENTATION
     train_augmentation = A.Compose([
         #A.HorizontalFlip(p=0.5),
         A.SquareSymmetry(p=0.5),
@@ -279,7 +280,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         A.ToTensorV2()
     ])
     
-    #For validation without augmentation
+    #For 3D validation without augmentation
     valid_augmentation3D = A.Compose([
         #A.CenterCrop(height=256, width=256), CURRENTLY UNNECESSARY, IS NOT THE SAME AS POSTPROCESSING CROP AND STITCH
         #A.PadIfNeeded(min_height=512, min_width=512, position="center", border_mode=cv2.BORDER_CONSTANT, fill=0, fill_mask=0),

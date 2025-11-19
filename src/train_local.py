@@ -173,6 +173,7 @@ def wandb_init(run_name, epochs, batch_size, data):
     """
     WandB Initialization
     """
+    #Read wandb API key from secrets.txt
     with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
         lines = file.readlines()
         #WandB API key is on the fourth line

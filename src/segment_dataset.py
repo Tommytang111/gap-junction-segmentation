@@ -20,6 +20,7 @@ from pathlib import Path
 from tqdm import tqdm
 import time
 import scipy.ndimage as ndi
+from skimage.measure import block_reduce
 
 class GapJunctionSegmentationPipeline:
     def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, three=False, overlap=True, img_size=512, batch_size=8, num_workers=None):
@@ -124,16 +125,18 @@ class GapJunctionSegmentationPipeline:
         
     def downsample_volume(self):
         print("Downsampling volume...")
-        #Downsample the volume to max OpenGL size limit
-        downsampled_volume_file = ndi.zoom(self.volume_file, (1, 1024/self.volume_file.shape[1], 1024/self.volume_file.shape[2]), order=0).astype(np.uint8)
+        #Downsample the volume to max OpenGL size limit using interpolation order 0 (nearest neighbor)
+        #downsampled_volume_file = ndi.zoom(self.volume_file, (1, 1024/self.volume_file.shape[1], 1024/self.volume_file.shape[2]), order=0).astype(np.uint8)
+        #Downsample using block_reduce with max pooling
+        downsampled_volume_file = block_reduce(self.volume_file, block_size=(1, 8, 8), func=np.max)
         self.downsampled_volume = downsampled_volume_file
         
         #Save the downsampled volume
-        downsampled_volume_path = os.path.join(self.volume, "volume_downsampled.npy")
+        downsampled_volume_path = os.path.join(self.volume, "volume_block_downsampled.npy")
         np.save(downsampled_volume_path, downsampled_volume_file)
         
 def main():
-    #Count start time
+    #Count starting time
     start_time = time.time()
     
     #Get number of CPUs from Slurm environment or default to all available CPUs
@@ -189,6 +192,7 @@ def main():
         #Number of workers for data loading and processing, default is all available CPUs
         num_workers=num_workers
     )
+    
     print("Pipeline initialized with name:", pipeline.name)
     print()
 
