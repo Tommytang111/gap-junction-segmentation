@@ -118,14 +118,14 @@ def calculate_entity_metrics(preds:str|np.ndarray, points:str|np.ndarray, nerve_
     
     return f1, precision, recall, tp, fp, fn
     
-def downsample(object:str|np.ndarray, block_size:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
+def downsample(array:str|np.ndarray, block_size:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
     """
     Downsample a NumPy volume (e.g., image stack, mask, segmentation) by applying
     skimage.measure.block_reduce with a max aggregation.
 
     Parameters
     ----------
-    object : str | np.ndarray
+    array : str | np.ndarray
         Path to a .npy file or a .npy file containing the source array to downsample.
     block_size : tuple[int, ...]
         Block size per dimension; length must equal the array ndim.
@@ -146,35 +146,35 @@ def downsample(object:str|np.ndarray, block_size:tuple[int,...], save:bool=True,
     Uses np.max within each block (preserves foreground in binary/label volumes).
     Change func in block_reduce for different aggregation (e.g., np.mean).
     """
-    if isinstance(obj, str):
-        #Load object
-        obj = np.load(object)
+    if isinstance(array, str):
+        #Load array
+        array = np.load(array)
     else:
-        obj = object
+        array = array
     
     #Downsample
-    downsampled_obj = block_reduce(obj, block_size=block_size, func=np.max)
+    downsampled_array = block_reduce(array, block_size=block_size, func=np.max)
     
     #Save downsampled volume
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
-        np.save(save_path, downsampled_obj)
+        np.save(save_path, downsampled_array)
         
-    print(f"Object successfully downsampled and saved as {save_path}.")
-    return downsampled_obj
+    print(f"Array successfully downsampled and saved as {save_path}.")
+    return downsampled_array
 
-def enlarge(object:str, binary_structure:tuple[int,int]|None=None, iterations:int=1, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
+def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int=1, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
     """
     Morphologically enlarge (dilate) a binary or label volume.
 
     Parameters
     ----------
-    object : str | np.ndarray
+    array : str | np.ndarray
         Path to a .npy file or a .npy file containing the source array. Expected shape (Z, Y, X) or (Y, X).
     binary_structure : tuple[int, int] | None, default None
         (rank, connectivity) passed to scipy.ndimage.generate_binary_structure.
         If None, uses a 2D (rank=2, connectivity=2) structuring element broadcast along Z.
-        For true 3D dilation, pass (3, 2).
+        For true 3D dilation, pass (3, 3).
     iterations : int, default 1
         Number of dilation iterations. Each iteration expands boundaries once.
     save : bool, default True
@@ -196,11 +196,11 @@ def enlarge(object:str, binary_structure:tuple[int,int]|None=None, iterations:in
     - For 3D connectivity (link slices), supply structure_params=(3, 1 or 2).
     - Dilation can dramatically grow thin structures; tune iterations.
     """
-    if isinstance(obj, str):
-        #Load object
-        obj = np.load(object)
+    if isinstance(array, str):
+        #Load array
+        array = np.load(array)
     else:
-        obj = object
+        array = array
     
     #Structuring element
     if binary_structure is None:
@@ -210,18 +210,18 @@ def enlarge(object:str, binary_structure:tuple[int,int]|None=None, iterations:in
         structure = generate_binary_structure(binary_structure[0], binary_structure[1])
     
     #Dilate/enlarge
-    obj_enlarged = binary_dilation(obj, structure=structure, iterations=iterations)
+    array_enlarged = binary_dilation(array, structure=structure, iterations=iterations)
     
     #Convert to uint8 if specified
-    obj_enlarged = obj_enlarged.astype(np.uint8) * 255 if to_uint8 else obj_enlarged
+    array_enlarged = array_enlarged.astype(np.uint8) * 255 if to_uint8 else array_enlarged
     
     #Save enlarged volume
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
-        np.save(save_path, obj_enlarged)
+        np.save(save_path, array_enlarged)
 
-    print(f"Object successfully enlarged and saved as {save_path}.")
-    return obj_enlarged
+    print(f"Array successfully enlarged and saved as {save_path}.")
+    return array_enlarged
 
 def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
     """
@@ -537,13 +537,13 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
     print(f"Filtered entity array saved as {save_path}.")
     return filtered_entity_array, num_entities
 
-def upsample(object:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
+def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
     """
     Upsample a 3D NumPy array by integer factors using nearest-neighbor replication.
 
     Parameters
     ----------
-    object : str | np.ndarray
+    array : str | np.ndarray
         Path to a .npy file or actual .npy containing the source volume to upsample.
     scale_factors : tuple[int, ...]
         Integer scale per axis (z, y, x). Length must equal the array ndim (typically 3).
@@ -565,11 +565,11 @@ def upsample(object:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True
         skimage.transform.resize) to avoid blocky artifacts.
     - Assumes integer scale factors >= 1; no validation is performed here.
     """
-    #Load object
-    obj = np.load(object) if isinstance(object, str) else object
+    #Load array
+    array = np.load(array) if isinstance(array, str) else array
     
     #Upsample
-    upsampled_volume = np.repeat(np.repeat(np.repeat(obj, scale_factors[0], axis=0), scale_factors[1], axis=1), scale_factors[2], axis=2)
+    upsampled_volume = np.repeat(np.repeat(np.repeat(array, scale_factors[0], axis=0), scale_factors[1], axis=1), scale_factors[2], axis=2)
     
     #Save downsampled volume
     if save and save_path is not None:
@@ -622,30 +622,43 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     
 if __name__ == "__main__":
     start = time()
-    #Convert json to volume
-    cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
-                   volume_shape=(715, 19968, 11008),
-                   voxel_size=(30, 4, 4),
-                   point_value=255,
-                   save=False)
-    #Downsample by 4x for SEM Adult
-    downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
-    del cs_volume
     
-    #Get unfiltered neuron masks as volumes
-    #Adult
-    neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
-    downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
-    del neuron_adult
+    #Pipeline 0: Calculate Eentity metrics for GJs constrained in nerve ring
+    #SEM_adult
+    neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
+    neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
+    neuron_mask = neuron_volume_downsampled[neuron_volume_downsampled > 0] = 255
+    neuron_mask_enlarged = enlarge(neuron_mask, iterations=15, save=False)
+    neuron_mask_enlarged_downsampled = downsample(neuron_mask_enlarged, block_size=(1,2,2), save=False)
+    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled8x.npy",
+                            points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
+                            nerve_ring_mask=neuron_mask_enlarged_downsampled)
     
-    #Dauer 1
-    neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
-    downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
-    del neuron_dauer1
+    # Pipeline 1: Get Chemical Synapses for Erin
+    # #Convert json to volume
+    # cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
+    #                volume_shape=(715, 19968, 11008),
+    #                voxel_size=(30, 4, 4),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample by 4x for SEM Adult
+    # downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
+    # del cs_volume
     
-    #Dauer 2
-    neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
-    downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
+    # #Get unfiltered neuron masks as volumes
+    # #Adult
+    # neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
+    # downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
+    # del neuron_adult
+    
+    # #Dauer 1
+    # neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
+    # downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
+    # del neuron_dauer1
+    
+    # #Dauer 2
+    # neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
+    # downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
     
     end = time()
     
