@@ -159,8 +159,8 @@ def downsample(array:str|np.ndarray, block_size:tuple[int,...], save:bool=True, 
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, downsampled_array)
-        
-    print(f"Array successfully downsampled and saved as {save_path}.")
+        print(f"Array successfully downsampled and saved as {save_path}.")
+    
     return downsampled_array
 
 def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int=1, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
@@ -219,8 +219,8 @@ def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, array_enlarged)
-
-    print(f"Array successfully enlarged and saved as {save_path}.")
+        print(f"Array successfully enlarged and saved as {save_path}.")
+    
     return array_enlarged
 
 def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
@@ -266,6 +266,7 @@ def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int],
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         cv2.imwrite(save_path, mask_filtered)
+        print(f"Filtered mask successfully saved as {save_path}.")
         
 def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, save:bool=True, save_path:str=None) -> np.ndarray:
     """
@@ -322,9 +323,9 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, point_vol)
+        print(f"Volume successfully saved as {save_path}.")
 
     print(f'# of Points assigned to volume: {count}/{len(points["points"])}')
-    print(f"Volume successfully saved as {save_path}.")
     return point_vol
 
 def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_distance:int=35, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int, int]:
@@ -409,8 +410,8 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, moved_points)
+        print(f"Moved points saved as {save_path}.")    
         
-    print(f"Moved points saved as {save_path}.")    
     return moved_points, num_points, num_moved_points
 
 def stack_slices(slice_dir:str, multi_label:bool=True, save:bool=False, save_path:str=None, file_extension:str=".png") -> np.ndarray:
@@ -458,6 +459,7 @@ def stack_slices(slice_dir:str, multi_label:bool=True, save:bool=False, save_pat
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, volume)
+        print(f"Volume successfully saved as {save_path}.")
         
     print(f"Volume successfully stacked from slices in {slice_dir}.")
     return volume
@@ -533,8 +535,8 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, filtered_entity_array)
+        print(f"Filtered entity array saved as {save_path}.")
         
-    print(f"Filtered entity array saved as {save_path}.")
     return filtered_entity_array, num_entities
 
 def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
@@ -575,8 +577,8 @@ def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True,
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, upsampled_volume)
+        print(f"Object successfully upsampled and saved as {save_path}.")
         
-    print(f"Object successfully upsampled and saved as {save_path}.")
     return upsampled_volume
 
 def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
@@ -623,43 +625,44 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
-    #Pipeline 0: Calculate Eentity metrics for GJs constrained in nerve ring
-    #SEM_adult
-    neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
-    neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
-    neuron_mask = neuron_volume_downsampled[neuron_volume_downsampled > 0] = 255
-    neuron_mask_enlarged = enlarge(neuron_mask, iterations=15, save=False)
-    neuron_mask_enlarged_downsampled = downsample(neuron_mask_enlarged, block_size=(1,2,2), save=False)
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled8x.npy",
-                            points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
-                            nerve_ring_mask=neuron_mask_enlarged_downsampled)
+    # #Pipeline 0: Calculate Eentity metrics for GJs constrained in nerve ring
+    # #SEM_adult
+    # neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
+    # neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
+    # neuron_volume_downsampled[neuron_volume_downsampled > 0] = 255
+    # neuron_mask = neuron_volume_downsampled.astype(np.uint8)
+    # neuron_mask_enlarged = enlarge(neuron_mask, iterations=15, save=False)
+    # neuron_mask_enlarged_downsampled = downsample(neuron_mask_enlarged, block_size=(1,2,2), save=False)
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled8x.npy",
+    #                         points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
+    #                         nerve_ring_mask=neuron_mask_enlarged_downsampled)
     
-    # Pipeline 1: Get Chemical Synapses for Erin
-    # #Convert json to volume
-    # cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
-    #                volume_shape=(715, 19968, 11008),
-    #                voxel_size=(30, 4, 4),
-    #                point_value=255,
-    #                save=False)
-    # #Downsample by 4x for SEM Adult
-    # downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
-    # del cs_volume
+    #Pipeline 1: Get Chemical Synapses for Erin
+    #Convert json to volume
+    cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
+                   volume_shape=(715, 19968, 11008),
+                   voxel_size=(30, 4, 4),
+                   point_value=255,
+                   save=False)
+    #Downsample by 4x for SEM Adult
+    downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
+    del cs_volume
     
-    # #Get unfiltered neuron masks as volumes
-    # #Adult
-    # neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
-    # downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
-    # del neuron_adult
+    #Get unfiltered neuron masks as volumes
+    #Adult
+    neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
+    downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
+    del neuron_adult
     
-    # #Dauer 1
-    # neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
-    # downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
-    # del neuron_dauer1
+    #Dauer 1
+    neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
+    downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
+    del neuron_dauer1
     
-    # #Dauer 2
-    # neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
-    # downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
+    #Dauer 2
+    neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
+    downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
     
     end = time()
     
-    print(f"Job finished in {(end-start)/60:.2f minutes}")
+    print(f"Job finished in {(end-start)/60:.2f} minutes")
