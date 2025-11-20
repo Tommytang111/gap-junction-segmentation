@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from torchvision.transforms import ToTensor
 from utils import filter_pixels, resize_image
+from entities.entity_detection_2d import GapJunctionEntityDetector2D
 
 #DATASETS
 class TrainingDataset(torch.utils.data.Dataset):
@@ -571,39 +572,83 @@ class GenDLossEntity(nn.Module):
     def __init__(self):
         super(GenDLossEntity, self).__init__()
     
-    def forward(self, preds, targets, loss_mask=None, mito_mask=None, classes=3, **kwargs):
+    def forward(self, preds, targets, loss_mask=None, mito_mask=None, classes=2, **kwargs):
         """
         Compute Generalized Dice Loss for entities.
+        :param preds: Predicted logits from the model 
+        :param targets: Ground truth labels, shape 
         
         :return: Generalized Dice Loss value.
         """
-        # Apply sigmoid to predictions to get probabilities
-        preds = torch.sigmoid(preds)
+        entity_detector = GapJunctionEntityDetector2D()
+        pred_entities = entity_detector.extract_entities_2d(preds)
+        gt_entities = entity_detector.extract_entities_2d(targets)
+        
+        ## idea is to find matching entities, then separate predicted image and gt image into 2 channels:
+        ## - foreground channel = all pixels that belong to matched entities
+        ## - background channel = all other pixels (including unmatched entities -- so if the model detects an entity but
+        ##  it doesn't match to any gt entity, it's considered background)
 
-        # Flatten predictions and targets to (B, C, N) where N = H * W
-        preds = preds.view(preds.shape[0], preds.shape[1], -1)  # (B, C, N)
-        targets = targets.view(targets.shape[0], targets.shape[1], -1)  # (B, C, N)
+class GeneralizedIoULoss(nn.Module):
+    """
+        Compute Generalized IoU Loss for entities.
+        :param preds: Predicted logits from the model (tensor)
+        :param targets: Ground truth labels (tensor)
+        
+        :return: Generalized IoU Loss value.
+    """
+    def __init__(self):
+        super(GeneralizedIoULoss, self).__init__()
+    
+    def forward(self, inputs, targets, loss_mask=[], mito_mask=[], classes=2, **kwargs):
+        inputs = nn.Sigmoid()(inputs)
+        targets, inputs = targets.view(targets.shape[0], -1), inputs.view(inputs.shape[0], -1)
 
-        # Apply loss mask if provided
-        if loss_mask is not None:
-            loss_mask = loss_mask.view(loss_mask.shape[0], -1)  # (B, N)
-            preds = preds * loss_mask.unsqueeze(1)  # Mask predictions
-            targets = targets * loss_mask.unsqueeze(1)  # Mask targets
+        intersection = torch.sum(targets * inputs, dim=-1)
+        union = torch.sum(targets + inputs, dim=-1) - intersection
+        iou = intersection / (union + 1e-6)
 
-        # Compute class-specific weights
-        # Weights are inversely proportional to the square of the target sums
-        class_weights = 1 / (torch.sum(targets, dim=-1).pow(2) + 1e-6)  # (B, C)
+        # Compute enclosing box
+        enclosing_min = torch.min(targets, inputs)
+        enclosing_max = torch.max(targets, inputs)
+        enclosing_area = torch.sum(enclosing_max - enclosing_min, dim=-1)
 
-        # Compute intersection and union for each class
-        intersection = torch.sum(preds * targets, dim=-1)  # (B, C)
-        union = torch.sum(preds + targets, dim=-1)  # (B, C)
+        giou = iou - (enclosing_area - union) / (enclosing_area + 1e-6)
 
-        # Compute Generalized Dice Loss
-        numerator = 2 * torch.sum(class_weights * intersection, dim=-1)  # (B,)
-        denominator = torch.sum(class_weights * union, dim=-1)  # (B,)
-        gdl = 1 - numerator / (denominator + 1e-6)  # (B,)
+        return torch.mean(1 - giou)
 
-        return gdl.mean()  # Return the mean loss across the batch
+class DistanceIoULoss(nn.Module):
+    """
+        Compute Distance IoU Loss for entities.
+        :param preds: Predicted logits from the model 
+        :param targets: Ground truth labels 
+        
+        :return: Distance IoU Loss value.
+    """    
+    def __init__(self):
+        super(DistanceIoULoss, self).__init__()
+    
+    def forward(self, inputs, targets, loss_mask=[], mito_mask=[], classes=2, **kwargs):
+        inputs = nn.Sigmoid()(inputs)
+        targets, inputs = targets.view(targets.shape[0], -1), inputs.view(inputs.shape[0], -1)
+
+        intersection = torch.sum(targets * inputs, dim=-1)
+        union = torch.sum(targets + inputs, dim=-1) - intersection
+        iou = intersection / (union + 1e-6)
+
+        # Compute center points
+        targets_center = torch.mean(targets, dim=-1)
+        inputs_center = torch.mean(inputs, dim=-1)
+        center_distance = torch.sum((targets_center - inputs_center) ** 2, dim=-1)
+
+        # Compute enclosing box diagonal length
+        enclosing_min = torch.min(targets, inputs)
+        enclosing_max = torch.max(targets, inputs)
+        enclosing_diagonal = torch.sum((enclosing_max - enclosing_min) ** 2, dim=-1)
+
+        diou = iou - center_distance / (enclosing_diagonal + 1e-6)
+
+        return torch.mean(1 - diou)
 
 class MultiGenDLoss(nn.Module):
     def __init__(self):

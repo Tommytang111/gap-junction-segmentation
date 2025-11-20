@@ -129,6 +129,42 @@ class GapJunctionEntityDetector2D:
         # Return both indices and actual positions
         return shared_positions, metrics_dict, num_shared_entities
     
+    def entity_metrics_2d_batch(self, pred_imgs, gt_imgs):
+        """
+        Calculate entity-based metrics for a batch of 2D segmentation images.
+        
+        Args:
+            pred_imgs: List of 2D numpy arrays of predicted segmentations
+            gt_imgs: List of 2D numpy arrays of ground truth segmentations
+            
+        Returns:
+            avg_f1: Average F1 score across the batch
+            avg_precision: Average precision across the batch
+            avg_recall: Average recall across the batch
+            batch_metrics: List of metrics dictionaries for each image pair
+        """
+        if len(pred_imgs) != len(gt_imgs):
+            raise ValueError("Number of predicted images and ground truth images must be the same.")
+        
+        total_f1 = 0.0
+        total_precision = 0.0
+        total_recall = 0.0
+        batch_metrics = []
+        
+        for pred_img, gt_img in zip(pred_imgs, gt_imgs):
+            _, metrics_dict, _ = self.entity_metrics_2d(pred_img, gt_img)
+            total_f1 += metrics_dict['f1_score']
+            total_precision += metrics_dict['precision']
+            total_recall += metrics_dict['recall']
+            batch_metrics.append(metrics_dict)
+        
+        n = len(pred_imgs)
+        avg_f1 = total_f1 / n
+        avg_precision = total_precision / n
+        avg_recall = total_recall / n
+        
+        return avg_f1, avg_precision, avg_recall, batch_metrics
+    
     def visualize_matches(self, pred_img, gt_img):
         """
         Create visualization showing matched entities.
