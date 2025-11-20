@@ -21,7 +21,7 @@ import cv2
 import time
 #Custom Libraries
 from src.utils import seed_everything, worker_init_fn, create_dataset_splits
-from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss, GenDLossEntity, GeneralizedIoULoss
+from src.models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss, GenDLossEntity, GeneralizedIoULoss, DistanceIoULoss
 from entities.entity_detection_2d import GapJunctionEntityDetector2D
 from entities.entity_detection_2d_centroid import GapJunctionEntityDetector2DCentroid
 
@@ -397,7 +397,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
                 "batch_size": batch_size,
                 "epochs": epochs,
                 "image_size": (512, 512),
-                "loss_function": "Hungarian Entity Detection Script GIoU Loss",
+                "loss_function": "Hungarian Entity Detection Script DIoU Loss",
                 "optimizer": "SGD",
                 "momentum": 0.9,
                 "scheduler": "ReduceLROnPlateau",
@@ -540,7 +540,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
-    entity_loss_fn = GeneralizedIoULoss()
+    entity_loss_fn = DistanceIoULoss()
     optimizer = SGD(model.parameters(), lr=1e-2, momentum=0.9, weight_decay=1e-4)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, min_lr=1e-6)
     
@@ -567,10 +567,10 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
         print(f"Epoch {epoch+1}")
         
         #Training
-        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1, train_entity_loss  = train(train_dataloader, model, loss_fn, entity_loss_fn, optimizer, recall, precision, f1, three=three, entity_loss=False, centroid_detection=True)
+        train_loss, train_recall, train_precision, train_f1, train_entity_recall, train_entity_precision, train_entity_f1, train_entity_loss  = train(train_dataloader, model, loss_fn, entity_loss_fn, optimizer, recall, precision, f1, three=three, entity_loss=True, centroid_detection=True)
 
         #Validation
-        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1, val_entity_loss = validate(valid_dataloader, model, loss_fn, entity_loss_fn, recall, precision, f1, three=three, entity_loss=False, centroid_detection=True)
+        val_loss, val_recall, val_precision, val_f1, val_entity_recall, val_entity_precision, val_entity_f1, val_entity_loss = validate(valid_dataloader, model, loss_fn, entity_loss_fn, recall, precision, f1, three=three, entity_loss=True, centroid_detection=True)
 
         #Update learning rate scheduler
         scheduler.step(val_loss)
@@ -645,7 +645,7 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     
     # Evaluate on test set
     print("\nEvaluating on test set...")
-    test_metrics = test(model, test_dataloader, loss_fn, entity_loss_fn, device, three=three, entity_loss=False, centroid_detection=True)
+    test_metrics = test(model, test_dataloader, loss_fn, entity_loss_fn, device, three=three, entity_loss=True, centroid_detection=True)
     
     # Log test metrics to wandb
     wandb.log(test_metrics)

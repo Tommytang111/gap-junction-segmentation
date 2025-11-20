@@ -619,35 +619,36 @@ class GeneralizedIoULoss(nn.Module):
 
 class DistanceIoULoss(nn.Module):
     """
-        Compute Distance IoU Loss for entities.
-        :param preds: Predicted logits from the model 
-        :param targets: Ground truth labels 
-        
-        :return: Distance IoU Loss value.
+    Compute Distance IoU Loss for entities.
+    :param preds: Predicted logits from the model 
+    :param targets: Ground truth labels 
+    :return: Distance IoU Loss value.
     """    
     def __init__(self):
         super(DistanceIoULoss, self).__init__()
     
     def forward(self, inputs, targets, loss_mask=[], mito_mask=[], classes=2, **kwargs):
         inputs = nn.Sigmoid()(inputs)
+        
+        # Convert targets to float BEFORE reshaping
+        targets = targets.float()
+        
         targets, inputs = targets.view(targets.shape[0], -1), inputs.view(inputs.shape[0], -1)
-
         intersection = torch.sum(targets * inputs, dim=-1)
         union = torch.sum(targets + inputs, dim=-1) - intersection
         iou = intersection / (union + 1e-6)
-
+        
         # Compute center points
         targets_center = torch.mean(targets, dim=-1)
         inputs_center = torch.mean(inputs, dim=-1)
         center_distance = torch.sum((targets_center - inputs_center) ** 2, dim=-1)
-
+        
         # Compute enclosing box diagonal length
         enclosing_min = torch.min(targets, inputs)
         enclosing_max = torch.max(targets, inputs)
         enclosing_diagonal = torch.sum((enclosing_max - enclosing_min) ** 2, dim=-1)
-
+        
         diou = iou - center_distance / (enclosing_diagonal + 1e-6)
-
         return torch.mean(1 - diou)
 
 class MultiGenDLoss(nn.Module):
