@@ -507,6 +507,43 @@ def create_dataset_2d(imgs_dir, output_dir, seg_dir=None, img_size=512, image_to
             
 def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
     """
+    Generate per-tile 3D volumes from a stack of 2D section images.
+
+    For each 2D section image in imgs_dir (read as grayscale), the function:
+      1. Splits the section into 512x512 tiles via split_img (overlapping half‑stride if create_overlap=True).
+      2. For every tile index j, builds a depth volume by stacking 9 tiles: the tile at section i plus its
+         four predecessors and four successors (i+k, k in [-4..4]).
+         - Out-of-range sections are zero-padded (blank slices).
+         - Each slice is guaranteed 512x512 by padding if needed.
+      3. Saves each volume to output_dir/vols as .npy with naming:
+         original_name_s<zero_padded_section_index>_<tileName>.npy
+         (prefix constructed by replacing the trailing _s###.png pattern with _s).
+
+    Parameters
+    ----------
+    imgs_dir : str
+        Directory of source section images (.png). Expected naming with _s### pattern for ordering.
+    output_dir : str
+        Output root directory; recreated if it already exists. Volumes saved under output_dir/vols.
+    create_overlap : bool, default False
+        If True, tiles are created with half stride (tile_size//2) matching overlapping inference workflow.
+
+    Returns
+    -------
+    max_y : int
+        Number of tile rows (Y) for the last processed section.
+    max_x : int
+        Number of tile columns (X) for the last processed section.
+    n_sections : int
+        Total number of processed sections.
+    last_shape : tuple
+        Shape (H, W) of the last section image.
+
+    Notes
+    -----
+    - Volume depth is fixed at 9 (current ±4 slices).
+    - Zero-padding applied for boundary sections.
+    - Destructive: output_dir is cleared/recreated.
     """
     #Step 0: Setup directories
     #Safely remove/recreate the output directory
