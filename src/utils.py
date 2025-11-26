@@ -17,12 +17,15 @@ import time
 import subprocess
 from pathlib import Path
 import cv2
+from itertools import groupby
+from operator import itemgetter
 from tqdm import tqdm
 from PIL import Image
 import re
 import random
 from sklearn.model_selection import train_test_split
 from scipy.ndimage import label
+
 
 #DEPENDENCY FUNCTIONS
 def assemble_img(tile_dir:str, template:str, suffix:str, s_range:range, x_range:range, y_range:range, crop:bool=False):
@@ -91,7 +94,89 @@ def assemble_img(tile_dir:str, template:str, suffix:str, s_range:range, x_range:
             assembled_sections_names.append(template + out_infix + suffix)
 
     return assembled_sections, assembled_sections_names
-            
+
+def group_continuous_sections(root, glob="*.png"):
+    """
+    Group section image files into runs of consecutive slice indices per basename prefix.
+
+    This scans a directory (root) for files matching the pattern:
+        <prefix>_sNNN.<ext>
+    where:
+        - <prefix> is any text (may contain underscores)
+        - NNN is a zero‑padded (or non‑padded) integer slice index
+        - <ext> is one of: png, tif, tiff, jpg
+
+    Consecutive indices (e.g. s005, s006, s007) are merged into a run.
+
+    Args:
+        root (str | Path): Directory to search for section image files.
+        glob (str): Glob pattern to filter candidate files before regex matching (default "*.png").
+
+    Returns:
+        dict[str, list[dict]]: Mapping:
+            {
+              "<prefix>": [
+                  {
+                      "start": <int first index in run>,
+                      "end": <int last index in run>,
+                      "label": "sXXX-sYYY",          # zero‑padded start–end label
+                      "files": [Path(...), ...]      # Paths for each file in the run (ordered)
+                  },
+                  ...
+              ],
+              ...
+            }
+
+    Notes:
+        - Files not matching the pattern are ignored.
+        - Zero padding width is inferred from the first matching index for that prefix.
+        - Each run preserves original file order (sorted by index).
+        - Useful for splitting disjoint anatomical regions or interrupted acquisition sequences.
+        
+    Disclaimers: 
+        - This function was written by GPT-5.
+    """
+    # Compile regex to capture: prefix and numeric index (supports any extension in set)
+    rx = re.compile(r"^(?P<prefix>.+)_s(?P<idx>\d+)\.(?:png|tif|tiff|jpg)$", re.IGNORECASE)
+    parsed = []
+
+    # Iterate over candidate files (glob filter first for efficiency)
+    for p in sorted(Path(root).glob(glob)):
+        m = rx.match(p.name)
+        if not m:
+            continue  # Skip non‑matching filenames
+        prefix = m.group("prefix")
+        idx_s = m.group("idx")
+        # Store tuple: (prefix, numeric_index, index_width, Path)
+        parsed.append((prefix, int(idx_s), len(idx_s), p))
+
+    groups = {}
+    # Group by prefix, preserving ascending index order
+    for prefix, items in groupby(sorted(parsed, key=lambda t: (t[0], t[1])), key=itemgetter(0)):
+        items = list(items)
+        width = items[0][2]  # Zero‑pad width inferred from first item of this prefix
+        runs = []
+        run = [items[0]]  # Start first run with first item
+
+        # Build consecutive runs
+        for prev, cur in zip(items, items[1:]):
+            if cur[1] == prev[1] + 1:
+                run.append(cur)          # Still consecutive
+            else:
+                runs.append(run)         # Close current run
+                run = [cur]              # Start new run
+        runs.append(run)  # Append final accumulated run
+
+        # Transform runs into output dictionaries
+        groups[prefix] = [{
+            "start": r[0][1],
+            "end": r[-1][1],
+            "label": f"s{str(r[0][1]).zfill(width)}-s{str(r[-1][1]).zfill(width)}",
+            "files": [t[3] for t in r],  # Extract Path objects
+        } for r in runs]
+
+    return groups
+
 def sobel_filter(image_path, threshold_blur=35, threshold_artifact=25, verbose=False, apply_filter=False):
     """
     Assess image quality by evaluating sharpness and artifact level using the Sobel filter.
@@ -594,6 +679,143 @@ def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
             
     #        
     return sizes[0], sizes[1], i+1, section.shape
+
+import sys
+sys.path.insert(0, '/home/tommytang111/gap-junction-segmentation/code/src')
+import numpy as np
+import cv2
+from utils import check_output_directory, split_img
+import shutil as sh
+from pathlib import Path
+from tqdm import tqdm
+import re
+from collections import defaultdict
+
+def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, output_dir:str, remove_splits:bool=True, regions_split_path:str=None, gts_split_path:str=None) -> None:
+    """
+    Build a 3D (stack-of-tiles) dataset from discontinuous region slices.
+
+    Workflow:
+      1. Discover region image files under regions_path (expects PNGs named <prefix>_sNNN.png).
+      2. Group images into continuous runs per prefix (using group_continuous_sections).
+      3. For each slice, split image and its ground-truth mask into 512x512 tiles (mask must exist as <stem>_label.png in sibling gts folder).
+      4. Persist split tiles into regions_split_dir/imgs and regions_split_dir/gts.
+      5. For every tile position, assemble a 9-slice volume (current ±4 slices); out-of-range slices are zero-padded.
+      6. Save volumes as .npy to output_dir/vols and the corresponding 2D mask tiles to output_dir/gts.
+      7. Optionally delete the intermediate split tile directories (remove_splits=True).
+
+    Args:
+        regions_path (str): Directory containing region slice images (imgs).
+        regions_split_dir (str): Base directory to write temporary split tiles (creates imgs/ and gts/ subfolders).
+        output_dir (str): Destination directory for final volumes (vols/) and masks (gts/).
+        remove_splits (bool): If True, deletes the split imgs/gts directories after volume creation.
+        regions_split_path (str | None): Override path for split imgs directory (normally regions_split_dir/imgs).
+        gts_split_path (str | None): Override path for split gts directory (normally regions_split_dir/gts).
+
+    Requirements:
+        - Ground truth masks must reside in Path(regions_path).parent / 'gts' with filenames <image_stem>_label.png.
+        - All images load as grayscale; failure to load raises FileNotFoundError.
+        - Tiles are assumed divisible into 512x512 chunks; edges smaller than 512 are zero-padded only when stacking volumes.
+
+    Side Effects:
+        - Creates /vols and /gts subdirectories under output_dir if absent.
+        - Writes many .png and .npy files.
+        - May remove intermediate split directories when remove_splits=True.
+
+    Notes:
+        - Volumes have shape (9, 512, 512) with dtype uint8.
+        - Mask tiles are not stacked; only per-slice 2D masks saved.
+        - Continuity is per prefix; separate runs start a new sequence for volume context.
+        - To create/keep a 2D dataset of images, set remove_splits = False and just transfer the imgs/gts.
+
+    Returns:
+        None
+    """
+    #Step 1: Setup subpaths
+    regions_split = (Path(regions_split_dir) / "imgs") if regions_split_path == None else regions_split_path
+    gts_split = (Path(regions_split_dir) / "gts") if gts_split_path == None else gts_split_path
+    check_output_directory(str(regions_split), clear=False)
+    check_output_directory(str(gts_split), clear=False)
+    #Check gts has correct name with "labels"
+    labels = [str(p.stem) for p in gts_split.glob("*.png")]
+    for i in range(len(labels)):
+        assert "_label" in labels[i] 
+        
+    #Step 2: Group files together by both basename and continuity of sections
+    groups = group_continuous_sections(str(regions_path), glob="*.png")
+
+    #Step 3: Create dictionary of split images from each group. Type=dict[str:list[list[np.ndarray]]
+    #Make groups of split images as dicts
+    groups_split = defaultdict(list)
+    groups_split_gts = defaultdict(list)
+    #For basename in groups
+    for key in groups.keys():
+        #For continuous section in the group
+        for i in range(len(groups[key])):
+            name = f"{key}_{groups[key][i]['label']}"
+            #For each file name in group 
+            for img_path in groups[key][i]['files']:
+                #Read imgs and gts
+                read_img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+                gts = f"{Path(regions_path).parent / 'gts'}/{str(img_path.stem)}_label{str(img_path.suffix)}"
+                read_gts = cv2.imread(gts, cv2.IMREAD_GRAYSCALE)
+                #Split imgs and gts
+                split_imgs = split_img(read_img)
+                split_gts = split_img(read_gts) 
+                #Append to groups_split
+                groups_split[name].append(split_imgs)
+                groups_split_gts[name].append(split_gts)
+                #Write out imgs and gts
+                for i, split in enumerate(split_imgs):
+                    cv2.imwrite(f"{str(regions_split.parent)}/imgs/{img_path.stem}_part{i+1}{img_path.suffix}", split)
+                    cv2.imwrite(f"{str(regions_split.parent)}/gts/{img_path.stem}_part{i+1}_label{img_path.suffix}", split_gts[i])
+
+    #Step4: Create 3D volumes (9,512,512) from split regions
+    check_output_directory(f"{output_dir}/vols", clear=False)
+    check_output_directory(f"{output_dir}/gts", clear=False)
+    counter = 0
+    previous_key = ""
+    for key in groups_split.keys():
+        #Internal logic for resetting and keeping track of index values when the key changes but still has the same base name 
+        base_key = re.sub(r'_s.*','', key)
+        previous_base_key = re.sub(r'_s.*','', previous_key)
+        if base_key == previous_base_key:
+            counter += 1
+        else:
+            counter = 0
+        previous_key = key
+        #For each group
+        group = groups_split[key]
+        #For each section i in group
+        for i, section in tqdm(enumerate(group), total=len(group), desc=f"Creating 3D volumes for {key}"):
+            file_name = str(groups[base_key][counter]['files'][i].stem)
+            #For each tile in the section (Sections are same size -> same # of split tiles per section)
+            for j in range(len(section)):
+                #Start with a flat/empty volume    
+                volume = np.zeros((0, 512, 512), dtype=np.uint8)
+                #For each tile k surrounding the current tile (4 above and 4 below)
+                for k in range(-4, 5):
+                    #Index is a sum of the current section i and the iterable k
+                    idx = i + k
+                    #If index is negative or out of range, we pad with blank images
+                    if (idx < 0 or idx >= len(group)):
+                        tile = np.zeros((1, 512, 512), dtype=np.uint8)
+                        #Append tile to volume on z dimension
+                        volume = np.concatenate([volume, tile], axis=0)
+                    else:
+                        #Pad tile to 512x512 if smaller, only necessary for GJS pipeline
+                        src = groups_split[key][idx][j]
+                        tile = np.pad(src, ((0, 512 - src.shape[0]), (0, 512 - src.shape[1])))
+                        #Append tile to volume on z dimension
+                        volume = np.concatenate([volume, tile[None, ...]], axis=0)
+                #After volume is created, save it as a .npy file
+                prefix = re.sub(r'\.png', '', file_name)
+                np.save(Path(output_dir) / "vols" / f"{prefix}_part{j+1}.npy", volume)
+                cv2.imwrite(Path(output_dir) / "gts" / f"{prefix}_part{j+1}_label.png", groups_split_gts[key][i][j])
+                
+    #Step 5: Remove split directories to save space
+    sh.rmtree(str(regions_split), ignore_errors=True) if remove_splits else None
+    sh.rmtree(str(gts_split), ignore_errors=True) if remove_splits else None
 
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40, three=False):
     """
