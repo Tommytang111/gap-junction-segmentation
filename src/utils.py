@@ -25,6 +25,7 @@ import re
 import random
 from sklearn.model_selection import train_test_split
 from scipy.ndimage import label
+from collections import defaultdict
 
 
 #DEPENDENCY FUNCTIONS
@@ -680,17 +681,6 @@ def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
     #        
     return sizes[0], sizes[1], i+1, section.shape
 
-import sys
-sys.path.insert(0, '/home/tommytang111/gap-junction-segmentation/code/src')
-import numpy as np
-import cv2
-from utils import check_output_directory, split_img
-import shutil as sh
-from pathlib import Path
-from tqdm import tqdm
-import re
-from collections import defaultdict
-
 def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, output_dir:str, remove_splits:bool=True, regions_split_path:str=None, gts_split_path:str=None) -> None:
     """
     Build a 3D (stack-of-tiles) dataset from discontinuous region slices.
@@ -814,8 +804,8 @@ def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, outpu
                 cv2.imwrite(Path(output_dir) / "gts" / f"{prefix}_part{j+1}_label.png", groups_split_gts[key][i][j])
                 
     #Step 5: Remove split directories to save space
-    sh.rmtree(str(regions_split), ignore_errors=True) if remove_splits else None
-    sh.rmtree(str(gts_split), ignore_errors=True) if remove_splits else None
+    shutil.rmtree(str(regions_split), ignore_errors=True) if remove_splits else None
+    shutil.rmtree(str(gts_split), ignore_errors=True) if remove_splits else None
 
 def create_dataset_splits(source_img_dir, source_gt_dir, output_base_dir, filter=False, train_size=0.8, val_size=0.1, test_size=0.1, random_state=40, three=False):
     """
