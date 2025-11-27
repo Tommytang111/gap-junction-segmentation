@@ -186,7 +186,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
     train_aug_details = extract_augmentations(augmentations)
     
     #Read wandb API key from secrets.txt
-    with open("/home/tommytang111/gap-junction-segmentation/code/secrets.txt", "r") as file:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/secrets.txt", "r") as file:
         lines = file.readlines()
         #WandB API key is on the fourth line
         wandb_api_key = lines[3].strip()
@@ -442,11 +442,13 @@ def main(run_name:str, data_dir:str, output_path:str, batch_size:int=16, epochs:
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_3D2D_516vols_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/516vols_sem_adult",
+    main(run_name="unet_3D2D_972vols_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/972vols_sem_adult",
          seed=40,
          epochs=200,
          batch_size=4, #16 for 2D, 4 for 3D-2D
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
          three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 
+    
+    #Don't forget to supply wandb secrets.txt key
