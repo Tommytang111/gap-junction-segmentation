@@ -640,7 +640,7 @@ if __name__ == "__main__":
     #Pipeline 1: Get Chemical Synapses for Erin
     #Convert json to volume
     cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
-                   volume_shape=(715, 19968, 11008),
+                   volume_shape=(700, 11008, 19968),
                    voxel_size=(30, 4, 4),
                    point_value=255,
                    save=False)
@@ -651,16 +651,19 @@ if __name__ == "__main__":
     #Get unfiltered neuron masks as volumes
     #Adult
     neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
+    neuron_adult[neuron_adult > 0] = 255
     downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
     del neuron_adult
     
     #Dauer 1
     neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
+    neuron_dauer1[neuron_dauer1 > 0] = 255
     downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
     del neuron_dauer1
     
     #Dauer 2
     neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
+    neuron_dauer2[neuron_dauer2 > 0] = 255
     downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
     
     end = time()
