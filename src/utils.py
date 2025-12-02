@@ -1294,53 +1294,6 @@ def single_image_inference(image:np.ndarray, model_path:str, model, augmentation
     
     return pred
     
-def single_volume_inference(volume, model_path, model, augmentation):
-    """
-    Run inference on a 3D volume (D,H,W) and return a single 2D prediction (H,W).
-    Assumes the model takes (B, C=1, D, H, W) and outputs (B, C=1, H, W).
-    """
-    import torch
-    import numpy as np
-    import albumentations as A
-
-    # Load weights
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
-    model.eval()
-
-    # Prepare augmentation across D slices
-    add_targets = {f"image{i}": "image" for i in range(1, volume.shape[0])}
-    aug = A.Compose(augmentation.transforms, additional_targets=add_targets) if augmentation else None
-
-    if aug:
-        data_in = {"image": volume[0]}
-        for i in range(1, volume.shape[0]):
-            data_in[f"image{i}"] = volume[i]
-        augmented = aug(**data_in)
-        slices = [augmented["image"]] + [augmented[f"image{i}"] for i in range(1, volume.shape[0])]
-        vol_proc = np.stack(slices, axis=0)  # (D,H,W)
-    else:
-        vol_proc = volume  # (D,H,W)
-
-    # To tensor: (1,1,D,H,W)
-    vol_tensor = torch.from_numpy(vol_proc).unsqueeze(0).unsqueeze(0).float()
-
-    with torch.no_grad():
-        pred = model(vol_tensor)
-
-    # Extract single 2D image
-    out = pred.detach().cpu().numpy()
-    if out.ndim == 4:         # (B,C,H,W)
-        img = out[0, 0]
-    elif out.ndim == 3:       # (B,H,W)
-        img = out[0]
-    else:                     # fallback
-        img = np.squeeze(out)
-
-    # Convert to uint8 if float
-    if img.dtype != np.uint8:
-        img = (img * 255).clip(0, 255).astype(np.uint8)
-    return img
-    
 def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentation=None):
     """
     This documentation needs to be updated
@@ -1410,9 +1363,9 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
         print("Shape of augmented image:", augmented['image'].shape)
 
         #Reconstruct volume from augmented slices
-        augmented_slices = [np.squeeze(augmented['image'], 0)]  # First slice, remove channel dimension
+        augmented_slices = [np.squeeze(augmented['image'], 2)]  # First slice, remove channel dimension #PROBLEM ON THIS LINE
         for i in range(1, volume.shape[0]):
-            augmented_slices.append(np.squeeze(augmented[f'image{i}'], 0))
+            augmented_slices.append(np.squeeze(augmented[f'image{i}'], 2))
 
         volume = np.stack(augmented_slices, axis=0)
         volume = torch.from_numpy(volume.astype(np.float32))
@@ -1423,7 +1376,7 @@ def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentati
 
     #Inference
     with torch.no_grad():
-        print("Shape of volume before model:", volume.shape)
+        print("Shape of volume:", volume.shape)
         pred = model(volume.to('cuda')) 
         pred = nn.Sigmoid()(pred) >= 0.5 #Binarize with sigmoid activation function
         pred = pred.squeeze(0).squeeze(0).squeeze(0).detach().cpu().numpy().astype("uint8") #Convert from tensor back to image
