@@ -1296,42 +1296,39 @@ def single_image_inference(image:np.ndarray, model_path:str, model, augmentation
     
 def single_volume_inference(volume:np.ndarray, model_path:str, model, augmentation=None):
     """
-    This documentation needs to be updated
-    Performs inference on a single volume using a trained PyTorch model.
-    
-    This function loads a trained model from a checkpoint, preprocesses the input volume,
-    runs inference, and returns a binary segmentation mask.
-    
+    Run inference on a single 3D stack of 2D slices and return one 2D segmentation image.
+
+    Designed for 3D-2D UNet architectures that take (B, C=1, D, H, W) and output (B, C=1, H, W).
+    The function:
+      - Loads model weights and sets the model to eval mode (CUDA if available).
+      - Optionally applies Albumentations per-slice by adding additional_targets for each slice:
+        {'image1': 'image', 'image2': 'image', ...}. Each slice is passed as (H, W, 1), then squeezed back.
+      - Stacks augmented slices into a (D, H, W) volume and converts to a tensor shaped (1, 1, D, H, W).
+      - Runs the model, applies sigmoid with 0.5 threshold, and returns a binary 2D mask.
+
     Args:
-        image (np.ndarray): Input grayscale image as a NumPy array with shape (H, W).
-                           Expected to have pixel values in range [0, 255].
-        model_path (str): Path to the saved PyTorch model checkpoint (.pt file).
-        model: PyTorch model instance (e.g., UNet) to load the state dict into.
-               The model architecture should match the saved checkpoint.
-        augmentation (callable, optional): Optional augmentation function to apply to the image.
-    
+        volume (np.ndarray): Input volume of shape (D, H, W), typically uint8 in [0, 255].
+                             D is the number of slices (e.g., 9 for ±4 context).
+        model_path (str): Path to the saved checkpoint (.pt) to load into the provided model instance.
+        model (torch.nn.Module): Instantiated model (e.g., UNet with three=True) whose state_dict will be loaded.
+        augmentation (albumentations.Compose | None): Optional Albumentations pipeline applied independently
+                             to each slice. Do not use transforms that change spatial size inconsistently across slices.
+
     Returns:
-        np.ndarray: Binary segmentation mask as uint8 NumPy array with shape (H, W).
-                   Values are 0 (background) or 1 (foreground/gap junction).
-    
-    Note:
-        - Input image is automatically normalized to [0, 1] range.
-        - Uses sigmoid activation with 0.5 threshold for binarization.
-        - Model is automatically set to evaluation mode.
-    
+        np.ndarray: Binary segmentation mask as uint8 array with shape (H, W). Values are {0, 1}.
+
+    Notes:
+        - Slice order is preserved: volume[d] corresponds to the d-th slice used for context.
+        - When augmentation is provided, each slice is temporarily expanded to (H, W, 1) and then squeezed back.
+        - Prediction is thresholded with sigmoid >= 0.5.
+        - Model/device management is internal; outputs are moved to CPU and converted to NumPy.
+
     Example:
-        >>> import cv2
-        >>> from models import UNet
-        >>> 
-        >>> # Load image and model
-        >>> image = cv2.imread('input.png', cv2.IMREAD_GRAYSCALE)
-        >>> model = UNet()
-        >>> 
-        >>> # Run inference
-        >>> mask = single_volume_inference(image, 'model.pt', model, valid_augmentation)
-        >>> 
-        >>> # Save result
-        >>> cv2.imwrite('mask.png', mask * 255)
+        >>> import albumentations as A
+        >>> vol = np.load('sample_volume.npy')  # (D, H, W)
+        >>> aug = A.Compose([A.Normalize(mean=0, std=1)])
+        >>> pred2d = single_volume_inference(vol, 'model.pt', UNet(classes=1, three=True), aug)
+        >>> cv2.imwrite('mask.png', pred2d * 255)
     """
     #Setup model
     model.load_state_dict(torch.load(model_path))
