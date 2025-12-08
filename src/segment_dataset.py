@@ -1,7 +1,7 @@
 """
 Split, predict and stitch volumetric pipeline for gap junction segmentation.
 Tommy Tang
-Last Updated: Oct 8, 2025
+Last Updated: Dec 8, 2025
 """
 
 #Requirements:
@@ -124,7 +124,7 @@ class GapJunctionSegmentationPipeline:
         np.save(volume_path, pred_3d)
         
     def downsample_volume(self):
-        print("Downsampling volume...")
+        print("Downsampling volume 8x...")
         #Downsample the volume to max OpenGL size limit using interpolation order 0 (nearest neighbor)
         #downsampled_volume_file = ndi.zoom(self.volume_file, (1, 1024/self.volume_file.shape[1], 1024/self.volume_file.shape[2]), order=0).astype(np.uint8)
         #Downsample using block_reduce with max pooling
@@ -132,7 +132,7 @@ class GapJunctionSegmentationPipeline:
         self.downsampled_volume = downsampled_volume_file
         
         #Save the downsampled volume
-        downsampled_volume_path = os.path.join(self.volume, "volume_block_downsampled.npy")
+        downsampled_volume_path = os.path.join(self.volume, "volume_block_downsampled8x.npy")
         np.save(downsampled_volume_path, downsampled_volume_file)
         
 def main():

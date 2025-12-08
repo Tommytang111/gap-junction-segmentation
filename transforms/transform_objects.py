@@ -624,8 +624,26 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     
 if __name__ == "__main__":
     start = time()
+    #Pipeline 2: Generate dilated GJ points as sections for SEM_adult
+    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
+                   volume_shape=(700, 11008, 19968),
+                   voxel_size=(30, 4, 4),
+                   point_value=255,
+                   save=False)
     
-    # #Pipeline 0: Calculate Eentity metrics for GJs constrained in nerve ring
+    downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy")
+    
+    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
+                                                                          points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
+                                                                          save=False)
+    print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
+    moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
+    
+    enlarged_point_volume = enlarge(moved_points, iterations=5, save=False)
+    
+    volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
+    
+    # #Pipeline 0: Calculate Entity metrics for GJs constrained in nerve ring
     # #SEM_adult
     # neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
     # neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
@@ -637,35 +655,35 @@ if __name__ == "__main__":
     #                         points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
     #                         nerve_ring_mask=neuron_mask_enlarged_downsampled)
     
-    #Pipeline 1: Get Chemical Synapses for Erin
-    #Convert json to volume
-    cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
-                   volume_shape=(700, 11008, 19968),
-                   voxel_size=(30, 4, 4),
-                   point_value=255,
-                   save=False)
-    #Downsample by 4x for SEM Adult
-    downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
-    del cs_volume
+    # #Pipeline 1: Get Chemical Synapses for Erin
+    # #Convert json to volume
+    # cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
+    #                volume_shape=(700, 11008, 19968),
+    #                voxel_size=(30, 4, 4),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample by 4x for SEM Adult
+    # downsample(cs_volume, block_size=(1,8,8), save_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs_block_downsampled8x.npy")
+    # del cs_volume
     
-    #Get unfiltered neuron masks as volumes
-    #Adult
-    neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
-    neuron_adult[neuron_adult > 0] = 255
-    downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
-    del neuron_adult
+    # #Get unfiltered neuron masks as volumes
+    # #Adult
+    # neuron_adult = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult", save=False)
+    # neuron_adult[neuron_adult > 0] = 255
+    # downsample(neuron_adult, block_size=(1,8,8), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_unfiltered_block_downsampled8x.npy")
+    # del neuron_adult
     
-    #Dauer 1
-    neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
-    neuron_dauer1[neuron_dauer1 > 0] = 255
-    downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
-    del neuron_dauer1
+    # #Dauer 1
+    # neuron_dauer1 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_1", save=False)
+    # neuron_dauer1[neuron_dauer1 > 0] = 255
+    # downsample(neuron_dauer1, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1_neurons_unfiltered_block_downsampled4x.npy")
+    # del neuron_dauer1
     
-    #Dauer 2
-    neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
-    neuron_dauer2[neuron_dauer2 > 0] = 255
-    downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
+    # #Dauer 2
+    # neuron_dauer2 = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_dauer_2", save=False)
+    # neuron_dauer2[neuron_dauer2 > 0] = 255
+    # downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
     
-    end = time()
+    # end = time()
     
-    print(f"Job finished in {(end-start)/60:.2f} minutes")
+    # print(f"Job finished in {(end-start)/60:.2f} minutes")

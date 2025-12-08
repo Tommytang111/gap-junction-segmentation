@@ -229,7 +229,6 @@ class TestDataset3D(torch.utils.data.Dataset):
 #Models and Building Blocks
 class DoubleConv(nn.Module):
     """Double convolution block used in UNet"""
-    
     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
         super().__init__()
         if not mid_channels:
@@ -251,7 +250,6 @@ class DoubleConv(nn.Module):
 
 class TripleConv(nn.Module):
     """Triple convolution block used in UNet."""
-
     def __init__(self, in_channels, out_channels, mid_channels=None, three=False, dropout=0):
         super().__init__()
         if not mid_channels:
@@ -275,7 +273,6 @@ class TripleConv(nn.Module):
 
 class DownBlock(nn.Module):
     """Double convolution followed by max pooling"""
-
     def __init__(self, in_channels, out_channels, three=False, dropout=0):
         super().__init__()
         self.double_conv = DoubleConv(in_channels, out_channels, three=three, dropout=dropout)
@@ -289,7 +286,6 @@ class DownBlock(nn.Module):
 
 class UpBlock(nn.Module):
     """Upsampling followed by double convolution"""
-
     def __init__(self, in_channels, out_channels, up_sample_mode, three=False, dropout=0):
         super().__init__()
 
@@ -337,10 +333,10 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
-
+    
 class UNet(nn.Module):
     """
-    UNet model for image segmentation
+    UNet base model for image segmentation
     
     Args:
         n_channels (int): Number of input channels
@@ -367,7 +363,7 @@ class UNet(nn.Module):
         self.up2 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
         self.up3 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
         self.up4 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
-
+        
         # Output Layer
         self.output = OutConv(64, classes=classes, three=three)
 
@@ -377,29 +373,158 @@ class UNet(nn.Module):
         x has dimensions (batch_size, n_channels, height, width) for 2D or (batch_size, n_channels, depth, height, width) for 3D.
         """
         # Encoder
-        x1, skip_x = self.down1(x)
+        x1, skip_x1 = self.down1(x)
         #print("x1:", x1.shape, "skip_x:", skip_x.shape)
-        x2, skip_x1 = self.down2(x1)
+        x2, skip_x2 = self.down2(x1)
         #print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
-        x3, skip_x2 = self.down3(x2)
+        x3, skip_x3 = self.down3(x2)
         #print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
-        x4, skip_x3 = self.down4(x3)
+        x4, skip_x4 = self.down4(x3)
         #print("x4:", x4.shape, "skip_x3:", skip_x3.shape)
         
         # Bottleneck
         x5 = self.bottleneck(x4)
-        #print("x5 (bottleneck):", x5.shape)
+        #print("x6 (bottleneck):", x6.shape)
         
         # Decoder with skip connections
-        x6 = self.up1(x5, skip_x3)
-        #print("x6:", x6.shape)
-        x7 = self.up2(x6, skip_x2)
+        x6 = self.up1(x5, skip_x4)
         #print("x7:", x7.shape)
-        x8 = self.up3(x7, skip_x1)
+        x7 = self.up2(x6, skip_x3)
         #print("x8:", x8.shape)
-        x9 = self.up4(x8, skip_x)
+        x8 = self.up3(x7, skip_x2)
         #print("x9:", x9.shape)
+        x9 = self.up4(x8, skip_x1)
+        #print("x10:", x10.shape)
         logits = self.output(x9)
+        #print("logits:", logits.shape)
+        return logits
+
+class UNet4L(nn.Module):
+    """
+    UNet base model with 4 encoder/decoder layers for image segmentation
+    
+    Args:
+        n_channels (int): Number of input channels
+        classes (int): Number of output classes
+        up_sample_mode (str): Upsampling mode, either 'conv_transpose' or 'bilinear'
+        three (bool): If True, uses 3D convolutions; otherwise, uses 2D convolutions
+        dropout (float): Dropout rate for regularization
+    """
+
+    def __init__(self, n_channels=1, classes=2, up_sample_mode='conv_transpose', three=False, dropout=0):
+        super(UNet, self).__init__()
+
+        # Encoder (Contracting Path)
+        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
+        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
+        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
+
+        # Bottleneck
+        self.bottleneck = DoubleConv(256, 512, three=three, dropout=dropout)
+        
+        # Decoder (Expansive Path)
+        self.up1 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
+        
+        # Output Layer
+        self.output = OutConv(64, classes=classes, three=three)
+
+    def forward(self, x):
+        """
+        Forward pass through the UNet model.
+        x has dimensions (batch_size, n_channels, height, width) for 2D or (batch_size, n_channels, depth, height, width) for 3D.
+        """
+        # Encoder
+        x1, skip_x1 = self.down1(x)
+        #print("x1:", x1.shape, "skip_x:", skip_x.shape)
+        x2, skip_x2 = self.down2(x1)
+        #print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
+        x3, skip_x3 = self.down3(x2)
+        #print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
+        
+        # Bottleneck
+        x4 = self.bottleneck(x3)
+        #print("x6 (bottleneck):", x6.shape)
+        
+        # Decoder with skip connections
+        x5 = self.up1(x4, skip_x3)
+        #print("x8:", x8.shape)
+        x6 = self.up2(x5, skip_x2)
+        #print("x9:", x9.shape)
+        x7 = self.up3(x6, skip_x1)
+        #print("x10:", x10.shape)
+        logits = self.output(x7)
+        #print("logits:", logits.shape)
+        return logits
+
+class UNet6L(nn.Module):
+    """
+    UNet base model with 6 encoder/decoder layers for image segmentation
+    
+    Args:
+        n_channels (int): Number of input channels
+        classes (int): Number of output classes
+        up_sample_mode (str): Upsampling mode, either 'conv_transpose' or 'bilinear'
+        three (bool): If True, uses 3D convolutions; otherwise, uses 2D convolutions
+        dropout (float): Dropout rate for regularization
+    """
+
+    def __init__(self, n_channels=1, classes=2, up_sample_mode='conv_transpose', three=False, dropout=0):
+        super(UNet, self).__init__()
+
+        # Encoder (Contracting Path)
+        self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
+        self.down2 = DownBlock(64, 128, three=three, dropout=dropout)
+        self.down3 = DownBlock(128, 256, three=three, dropout=dropout)
+        self.down4 = DownBlock(256, 512, three=three, dropout=dropout)
+        self.down5 = DownBlock(512, 1024, three=three, dropout=dropout) # Extra
+
+        # Bottleneck
+        self.bottleneck = DoubleConv(1024, 2048, three=three, dropout=dropout)
+        
+        # Decoder (Expansive Path)
+        self.up1 = UpBlock((1024 if up_sample_mode == 'conv_transpose' else 2048) + 1024, 1024, up_sample_mode, three=three, dropout=dropout)
+        self.up2 = UpBlock((512 if up_sample_mode == 'conv_transpose' else 1024) + 512, 512, up_sample_mode, three=three, dropout=dropout)
+        self.up3 = UpBlock((256 if up_sample_mode == 'conv_transpose' else 512) + 256, 256, up_sample_mode, three=three, dropout=dropout)
+        self.up4 = UpBlock((128 if up_sample_mode == 'conv_transpose' else 256) + 128, 128, up_sample_mode, three=three, dropout=dropout)
+        self.up5 = UpBlock((64 if up_sample_mode == 'conv_transpose' else 128) + 64, 64, up_sample_mode, three=three, dropout=dropout)
+        
+        # Output Layer
+        self.output = OutConv(64, classes=classes, three=three)
+
+    def forward(self, x):
+        """
+        Forward pass through the UNet model.
+        x has dimensions (batch_size, n_channels, height, width) for 2D or (batch_size, n_channels, depth, height, width) for 3D.
+        """
+        # Encoder
+        x1, skip_x1 = self.down1(x)
+        #print("x1:", x1.shape, "skip_x:", skip_x.shape)
+        x2, skip_x2 = self.down2(x1)
+        #print("x2:", x2.shape, "skip_x1:", skip_x1.shape)
+        x3, skip_x3 = self.down3(x2)
+        #print("x3:", x3.shape, "skip_x2:", skip_x2.shape)
+        x4, skip_x4 = self.down4(x3)
+        #print("x4:", x4.shape, "skip_x3:", skip_x3.shape)
+        x5, skip_x5 = self.down5(x4)
+        
+        # Bottleneck
+        x6 = self.bottleneck(x5)
+        #print("x6 (bottleneck):", x6.shape)
+        
+        # Decoder with skip connections
+        x7 = self.up1(x6, skip_x5)
+        #print("x7:", x7.shape)
+        x8 = self.up2(x7, skip_x4)
+        #print("x8:", x8.shape)
+        x9 = self.up3(x8, skip_x3)
+        #print("x9:", x9.shape)
+        x10 = self.up4(x9, skip_x2)
+        #print("x10:", x10.shape)
+        x11 = self.up5(x10, skip_x1)
+        #print("x11:", x11.shape)
+        logits = self.output(x11)
         #print("logits:", logits.shape)
         return logits
 
