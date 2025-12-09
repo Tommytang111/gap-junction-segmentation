@@ -624,7 +624,7 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     
 if __name__ == "__main__":
     start = time()
-    #Pipeline 2: Generate dilated GJ points as sections for SEM_adult
+    #Task 2: Generate dilated GJ points as sections for SEM_adult
     point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
                    volume_shape=(700, 11008, 19968),
                    voxel_size=(30, 4, 4),
@@ -639,11 +639,11 @@ if __name__ == "__main__":
     print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
     moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
     
-    enlarged_point_volume = enlarge(moved_points, iterations=5, save=False)
+    enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
     
     volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
     
-    # #Pipeline 0: Calculate Entity metrics for GJs constrained in nerve ring
+    # #Task 0: Calculate Entity metrics for GJs constrained in nerve ring
     # #SEM_adult
     # neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
     # neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
@@ -655,7 +655,7 @@ if __name__ == "__main__":
     #                         points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
     #                         nerve_ring_mask=neuron_mask_enlarged_downsampled)
     
-    # #Pipeline 1: Get Chemical Synapses for Erin
+    # #Task 1: Get Chemical Synapses for Erin
     # #Convert json to volume
     # cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
     #                volume_shape=(700, 11008, 19968),
