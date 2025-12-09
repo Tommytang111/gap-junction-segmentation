@@ -18,7 +18,7 @@ import cv2
 import time
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
-from models import TrainingDataset, TrainingDataset3D, UNet4L, GenDLoss 
+from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss 
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -200,7 +200,7 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
             reinit=True,
             config={
                 "dataset": data,
-                "model": "UNet_4layers",
+                "model": "UNet_base",
                 "learning_rate": 0.0025,
                 "batch_size": batch_size,
                 "epochs": epochs,
@@ -345,7 +345,7 @@ def main(run_name:str, data_dir:str, output_path:str, data_shape:tuple[int,int]=
 
     #Set device and model
     device = torch.device("cuda")    
-    model = UNet4L(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose', dropout=dropout).to(device)
+    model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose', dropout=dropout).to(device)
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()
@@ -445,7 +445,7 @@ def main(run_name:str, data_dir:str, output_path:str, data_shape:tuple[int,int]=
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_4layers_129imgs_sem_adult",
+    main(run_name="unet_base_129imgs_sem_adult",
          data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/129imgs_sem_adult",
          seed=40,
          epochs=200,
