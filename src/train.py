@@ -14,11 +14,11 @@ from pathlib import Path
 from tqdm import tqdm 
 import copy
 import wandb
-import cv2 # type: ignore
+import cv2 
 import time
 #Custom Libraries
 from utils import seed_everything, worker_init_fn, create_dataset_splits
-from models import TrainingDataset, TrainingDataset3D, UNet, GenDLoss # type: ignore
+from models import TrainingDataset, TrainingDataset3D, UNet4L, GenDLoss 
 
 #Set Global Seed
 GLOBAL_SEED = 40
@@ -345,7 +345,7 @@ def main(run_name:str, data_dir:str, output_path:str, data_shape:tuple[int,int]=
 
     #Set device and model
     device = torch.device("cuda")    
-    model = UNet(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose', dropout=dropout).to(device)
+    model = UNet4L(three=three, n_channels=1, classes=1, up_sample_mode='conv_transpose', dropout=dropout).to(device)
     
     #Set loss function, optimizer, and scheduler
     loss_fn = GenDLoss()

@@ -412,7 +412,7 @@ class UNet4L(nn.Module):
     """
 
     def __init__(self, n_channels=1, classes=2, up_sample_mode='conv_transpose', three=False, dropout=0):
-        super(UNet, self).__init__()
+        super(UNet4L, self).__init__()
 
         # Encoder (Contracting Path)
         self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
@@ -471,7 +471,7 @@ class UNet6L(nn.Module):
     """
 
     def __init__(self, n_channels=1, classes=2, up_sample_mode='conv_transpose', three=False, dropout=0):
-        super(UNet, self).__init__()
+        super(UNet6L, self).__init__()
 
         # Encoder (Contracting Path)
         self.down1 = DownBlock(n_channels, 64, three=three, dropout=dropout)
