@@ -13,7 +13,8 @@ import gc
 from pathlib import Path
 from time import time
 from skimage.measure import block_reduce
-from scipy.ndimage import binary_dilation, generate_binary_structure, distance_transform_edt
+from skimage.morphology import ball, remove_small_holes
+from scipy.ndimage import binary_dilation, generate_binary_structure, distance_transform_edt, binary_fill_holes, binary_closing
 import cc3d
 from src.utils import check_output_directory
 
@@ -223,7 +224,7 @@ def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int
     
     return array_enlarged
 
-def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
+def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
     """
     Keep only specified label IDs in a labeled mask; set all other pixels to 0.
 
@@ -231,8 +232,6 @@ def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int],
     ----------
     img : str | np.ndarray
         Image, or path to the input mask/image file (typically single-channel label image).
-    output_path : str
-        Unused parameter (kept for API compatibility). Use save_path to control output location.
     labels_to_keep : list[int]
         Label values to retain. Pixels whose value is not in this list are set to 0.
     save : bool, default True
@@ -267,6 +266,74 @@ def filter_labels(img:str|np.ndarray, output_path:str, labels_to_keep:list[int],
         check_output_directory(Path(save_path).parent, clear=False)
         cv2.imwrite(save_path, mask_filtered)
         print(f"Filtered mask successfully saved as {save_path}.")
+        
+    return mask_filtered
+        
+def generate_mask(volume:np.ndarray, dilation_radius:int=25, min_hole_size:int=100, save:bool=True, save_path:str=None) -> np.ndarray:
+    """
+    Generate an enclosing binary ROI mask from a labeled/segmented 3D volume.
+
+    The mask is created by treating all non-zero voxels in `volume` as foreground and then
+    applying 3D morphological operations to smooth the region, bridge small gaps, and fill
+    holes. The final output is returned as a uint8 array with values in {0, 255}.
+
+    Processing steps
+    ----------------
+    1) Binarize: foreground = (volume > 0).
+    2) 3D morphological closing using a spherical structuring element (`skimage.morphology.ball`)
+       with radius `dilation_radius`.
+    3) Fill small holes using `skimage.morphology.remove_small_holes` with threshold
+       `min_hole_size` (in voxels).
+    4) Fill remaining enclosed holes using `scipy.ndimage.binary_fill_holes`.
+    5) Convert boolean mask to uint8 (0/255). Optionally save as a .npy file.
+
+    Parameters
+    ----------
+    volume : np.ndarray
+        Input volume (typically shape (Z, Y, X)). Any value > 0 is treated as foreground.
+    dilation_radius : int, default 25
+        Radius (in voxels) of the spherical structuring element used for the closing step.
+        Larger values connect more distant regions but can over-smooth boundaries.
+    min_hole_size : int, default 100
+        Minimum hole size (in voxels) to fill during the `remove_small_holes` step.
+    save : bool, default True
+        If True and `save_path` is provided, saves the resulting mask as a .npy file.
+    save_path : str | None, default None
+        Output path for saving the mask when `save` is True.
+
+    Returns
+    -------
+    np.ndarray
+        A uint8 mask with the same shape as `volume`, where background is 0 and the ROI is 255.
+
+    Notes
+    -----
+    - Intended for 3D inputs; `ball(...)` produces a 3D structuring element.
+    - If `volume` contains no foreground (all zeros), the returned mask will be all zeros.
+    """
+    #Binarize neuron labels
+    binary_neurons = (volume > 0).astype(np.uint8)
+    
+    #Create structuring element
+    struct_elem = ball(radius=dilation_radius)
+    
+    #Close gaps between neurons smaller than structuring element
+    closed = binary_closing(binary_neurons, structure=struct_elem)
+    
+    #Remove small holes that might be intentional gaps
+    filled = remove_small_holes(closed, area_threshold=min_hole_size)
+    
+    #Fill any holes surrounded by positive class
+    final_mask = binary_fill_holes(filled)
+    
+    final_mask = (final_mask * 255).astype(np.uint8)
+    
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, final_mask)
+        print(f"Volume successfully saved as {save_path}.")
+    
+    return final_mask
         
 def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, save:bool=True, save_path:str=None) -> np.ndarray:
     """
@@ -624,24 +691,52 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     
 if __name__ == "__main__":
     start = time()
-    #Task 2: Generate dilated GJ points as sections for SEM_adult
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
-                   volume_shape=(700, 11008, 19968),
-                   voxel_size=(30, 4, 4),
-                   point_value=255,
-                   save=False)
     
-    downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy")
+    #Task 3: Filter neuron segmentation mask by neuron-only labels in SEM_adult
+    #Read neuron labels
+    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
+    sem_adult_neuron_ids = df[df['adult']>0]['adult'].tolist()
     
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
-                                                                          points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
-                                                                          save=False)
-    print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
-    moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
+    #Clear output directory if it exists
+    check_output_directory("/home/tommy111/scratch/Neurons/SEM_adult_filtered/", clear=True)
     
-    enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
+    #Filter neuron mask by labels in sem adult
+    dir = Path("/home/tommy111/scratch/Neurons/SEM_adult")
+    for img in dir.glob("*.png"):
+        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
+        filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path="/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
+        
+    #Task 4: Generate a more accurate neuron mask by using neuron IDs
+    #Stack into volume
+    dir = Path("/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
+    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in dir.glob("*.png")], axis=0)
+    vol[vol > 0] = 255
+    #Downsample
+    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
     
-    volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
+    #Task 5: Generate the final neuron mask by binary_closing and hole filling
+    neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
+    nr_volume = generate_mask(neuron_volume, save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled4x.npy")
+    downsample(nr_volume, block_size=(1,2,2), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled8x.npy")
+    
+    # #Task 2: Generate dilated GJ points as sections for SEM_adult
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
+    #                volume_shape=(700, 11008, 19968),
+    #                voxel_size=(30, 4, 4),
+    #                point_value=255,
+    #                save=False)
+    
+    # downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy")
+    
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
+    #                                                                       points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
+    #                                                                       save=False)
+    # print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
+    # moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
+    
+    # enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
+    
+    # volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
     
     # #Task 0: Calculate Entity metrics for GJs constrained in nerve ring
     # #SEM_adult
@@ -684,6 +779,6 @@ if __name__ == "__main__":
     # neuron_dauer2[neuron_dauer2 > 0] = 255
     # downsample(neuron_dauer2, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2_neurons_unfiltered_block_downsampled4x.npy")
     
-    # end = time()
+    end = time()
     
-    # print(f"Job finished in {(end-start)/60:.2f} minutes")
+    print(f"Job finished in {(end-start)/60:.2f} minutes")
