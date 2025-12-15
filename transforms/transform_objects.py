@@ -42,7 +42,7 @@ def calculate_entity_metrics(preds:str|np.ndarray, points:str|np.ndarray, nerve_
     nerve_ring_mask : str | np.ndarray | None, default None
         Optional .npy mask to restrict evaluation region. If provided, must match shape.
     verbose : bool, default True
-        If True, prints TP/FP/FN and metric values.
+        If True, prints TP/FP/FN and all other returned values.
 
     Returns
     -------
@@ -256,7 +256,7 @@ def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, 
         #Read img/mask
         mask = cv2.imread(img, cv2.IMREAD_UNCHANGED)
     else:
-        img=img
+        mask=img
     
     #Filter mask
     mask_filtered = np.where(np.isin(mask, labels_to_keep), mask, 0)
@@ -718,6 +718,22 @@ if __name__ == "__main__":
     neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
     nr_volume = generate_mask(neuron_volume, save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled4x.npy")
     downsample(nr_volume, block_size=(1,2,2), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled8x.npy")
+    
+    #Task 6: Constrain predictions to within the neuron mask and calculate entity metrics
+    preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
+    nr_preds = preds & nr_volume
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    
+    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
+                             points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
+                             nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled4x.npy")
+    
+    #Task 7: Generate full-sized images for NR mask and constrained predictions and 
+    #1. Get volume
+    #2. Upsample by 4x in each dimension except z
+    #3. Volume to slices
+    #4. Transfer to DL computer and upload to VAST
+    #5. Export as vsseg file
     
     # #Task 2: Generate dilated GJ points as sections for SEM_adult
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
