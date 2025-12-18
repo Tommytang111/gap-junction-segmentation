@@ -704,7 +704,7 @@ if __name__ == "__main__":
     dir = Path("/home/tommy111/scratch/Neurons/SEM_adult")
     for img in dir.glob("*.png"):
         img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-        filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path="/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
+        filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_adult_filtered/{str(img.name)}")
         
     #Task 4: Generate a more accurate neuron mask by using neuron IDs
     #Stack into volume
