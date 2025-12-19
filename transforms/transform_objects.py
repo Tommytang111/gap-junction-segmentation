@@ -1,7 +1,7 @@
 """
 A class to transform volumes, masks, points and other objects for 2D/3D visualization or quantatitive analysis. 
 Tommy Tang
-Last Updated: Nov 17th, 2025
+Last Updated: Dec 16th, 2025
 """
 
 #Libraries
@@ -13,7 +13,7 @@ import gc
 from pathlib import Path
 from time import time
 from skimage.measure import block_reduce
-from skimage.morphology import ball, remove_small_holes
+from skimage.morphology import remove_small_holes, disk
 from scipy.ndimage import binary_dilation, generate_binary_structure, distance_transform_edt, binary_fill_holes, binary_closing
 import cc3d
 from src.utils import check_output_directory
@@ -79,9 +79,6 @@ def calculate_entity_metrics(preds:str|np.ndarray, points:str|np.ndarray, nerve_
     
     #Transform predictions to entities
     nr_preds_entities, max_entities = cc3d.connected_components(nr_preds, connectivity=26, return_N=True)
-    
-    #Create list of point coordinates
-    points_list = np.argwhere(points == 255)
 
     #Get entity labels at point locations
     points_coords = np.argwhere(points)
@@ -271,20 +268,20 @@ def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, 
         
 def generate_mask(volume:np.ndarray, dilation_radius:int=25, min_hole_size:int=100, save:bool=True, save_path:str=None) -> np.ndarray:
     """
-    Generate an enclosing binary ROI mask from a labeled/segmented 3D volume.
+    Generate an enclosing binary ROI mask from a labeled/segmented 3D volume,
+    **computed independently per Z-slice (2D per section)**.
 
-    The mask is created by treating all non-zero voxels in `volume` as foreground and then
-    applying 3D morphological operations to smooth the region, bridge small gaps, and fill
-    holes. The final output is returned as a uint8 array with values in {0, 255}.
+    This is intended for cases where you want a per-section nerve-ring/ROI envelope and
+    do *not* want morphology to connect structures across adjacent slices.
 
-    Processing steps
-    ----------------
-    1) Binarize: foreground = (volume > 0).
-    2) 3D morphological closing using a spherical structuring element (`skimage.morphology.ball`)
-       with radius `dilation_radius`.
+    Processing steps (per z-slice)
+    ------------------------------
+    1) Binarize: foreground = (volume[z] > 0).
+    2) 2D morphological closing with a disk structuring element of radius `dilation_radius`.
+       (bridges small gaps and smooths boundaries in-plane only)
     3) Fill small holes using `skimage.morphology.remove_small_holes` with threshold
-       `min_hole_size` (in voxels).
-    4) Fill remaining enclosed holes using `scipy.ndimage.binary_fill_holes`.
+       `min_hole_size` (in pixels; per-slice).
+    4) Fill remaining enclosed holes using `scipy.ndimage.binary_fill_holes` (per-slice).
     5) Convert boolean mask to uint8 (0/255). Optionally save as a .npy file.
 
     Parameters
@@ -292,10 +289,9 @@ def generate_mask(volume:np.ndarray, dilation_radius:int=25, min_hole_size:int=1
     volume : np.ndarray
         Input volume (typically shape (Z, Y, X)). Any value > 0 is treated as foreground.
     dilation_radius : int, default 25
-        Radius (in voxels) of the spherical structuring element used for the closing step.
-        Larger values connect more distant regions but can over-smooth boundaries.
+        Radius (in pixels) of the 2D disk structuring element used for closing (per slice).
     min_hole_size : int, default 100
-        Minimum hole size (in voxels) to fill during the `remove_small_holes` step.
+        Minimum hole size (in pixels) to fill during the `remove_small_holes` step (per slice).
     save : bool, default True
         If True and `save_path` is provided, saves the resulting mask as a .npy file.
     save_path : str | None, default None
@@ -304,35 +300,40 @@ def generate_mask(volume:np.ndarray, dilation_radius:int=25, min_hole_size:int=1
     Returns
     -------
     np.ndarray
-        A uint8 mask with the same shape as `volume`, where background is 0 and the ROI is 255.
+        A uint8 mask with the same shape as `volume`, where background is 0 and ROI is 255.
 
     Notes
     -----
-    - Intended for 3D inputs; `ball(...)` produces a 3D structuring element.
+    - This function intentionally does not use 3D structuring elements (e.g., `ball`).
     - If `volume` contains no foreground (all zeros), the returned mask will be all zeros.
     """
-    #Binarize neuron labels
-    binary_neurons = (volume > 0).astype(np.uint8)
-    
-    #Create structuring element
-    struct_elem = ball(radius=dilation_radius)
-    
-    #Close gaps between neurons smaller than structuring element
-    closed = binary_closing(binary_neurons, structure=struct_elem)
-    
-    #Remove small holes that might be intentional gaps
-    filled = remove_small_holes(closed, area_threshold=min_hole_size)
-    
-    #Fill any holes surrounded by positive class
-    final_mask = binary_fill_holes(filled)
-    
-    final_mask = (final_mask * 255).astype(np.uint8)
-    
+    # Binarize once (bool saves memory and is what ndimage expects)
+    vol_bool = (volume > 0)
+
+    # 2D structuring element (per-slice)
+    struct_elem_2d = disk(dilation_radius)
+
+    out = np.zeros_like(vol_bool, dtype=bool)
+
+    for z in range(vol_bool.shape[0]):
+        sl = vol_bool[z]
+
+        # 2D closing (no inter-slice connectivity)
+        sl = binary_closing(sl, structure=struct_elem_2d)
+
+        # Fill holes per-slice
+        sl = remove_small_holes(sl, area_threshold=min_hole_size)
+        sl = binary_fill_holes(sl)
+
+        out[z] = sl
+
+    final_mask = (out.astype(np.uint8) * 255)
+
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, final_mask)
         print(f"Volume successfully saved as {save_path}.")
-    
+
     return final_mask
         
 def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, save:bool=True, save_path:str=None) -> np.ndarray:
@@ -395,91 +396,146 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
     print(f'# of Points assigned to volume: {count}/{len(points["points"])}')
     return point_vol
 
-def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_distance:int=35, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int, int]:
-    """
-    Move each annotated point to its nearest predicted gap junction voxel if within a
-    maximum Euclidean distance, producing a new volume of relocated points.
+def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_distance:int=35, three:bool=False, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int, int]:
+    """Snap point annotations onto the nearest predicted junction voxel.
 
-    Workflow
-    1. Load prediction (junction) volume and point volume (shape: Z,Y,X; non-zero = foreground).
-    2. Compute distance transform on the inverse prediction mask with return_indices=True to get
-        nearest junction coordinates for every voxel.
-    3. Select original points whose nearest junction distance < max_distance.
-    4. Place moved points at those nearest junction coordinates in a new sparse volume (uint8 0/255).
+    This function takes a binary/label prediction volume (gap junctions) and a sparse point
+    volume (annotations) and relocates each point to the nearest predicted foreground voxel,
+    provided the nearest-foreground distance is below ``max_distance`` (in voxels). The
+    output is a new sparse uint8 volume containing only the relocated points (255).
+
+    Two modes are supported via ``three``:
+    - ``three=True``: a full 3D Euclidean distance transform is computed once over the entire
+      volume and points may move across slices.
+    - ``three=False`` (default): distance transforms are computed per Z-slice (2D), so points
+      only move within their original slice.
 
     Parameters
     ----------
-    preds : str
-        Path to .npy or actual .npy prediction (junction) volume (binary or thresholded).
-    points : str
-        Path to .npy or actual .npy point-annotation volume (non-zero voxels are original points).
+    preds : str | np.ndarray
+        Predicted junction volume or path to a ``.npy`` file. Any value ``> 0`` is treated as
+        junction foreground.
+    points : str | np.ndarray
+        Point annotation volume or path to a ``.npy`` file. Any value ``> 0`` is treated as a
+        point.
     max_distance : int, default 35
-        Maximum allowed voxel distance for relocating a point; farther points are ignored.
+        Maximum allowed Euclidean distance (in voxels) from a point to its nearest predicted
+        junction voxel. Points farther than this threshold are dropped (not written to output).
+    three : bool, default False
+        If True, compute a single 3D distance transform; if False, compute per-slice 2D
+        distance transforms.
     save : bool, default True
-        If True, saves the moved point volume to save_path.
-    save_path : str | None
-        Output .npy path (required if save is True).
+        If True and ``save_path`` is provided, saves the moved point volume to disk as ``.npy``.
+    save_path : str | None, default None
+        Destination path for saving when ``save=True``.
 
     Returns
     -------
     tuple[np.ndarray, int, int]
         moved_points : np.ndarray
-            Volume with moved points (uint8; 255 at moved point voxels).
-        num_points : int
-            Total number of original points detected.
-        num_moved_points : int
-            Number of points relocated (within max_distance before possible coordinate de-duplication).
+            A uint8 volume (same shape as inputs) containing relocated points with value 255.
+        total_points : int
+            Number of original point voxels detected.
+        total_moved_points : int
+            Number of original points that were within ``max_distance`` (before de-duplication).
 
     Notes
     -----
-    - Memory intensive: distance_transform_edt with return_indices creates large arrays; ensure RAM suffices.
-    - Multiple source points may map to the same junction voxel; duplicates collapse to one 255.
-    - No shape validation is performed; prediction and point volumes must match.
-    - Points beyond max_distance remain unmoved (not written to output volume).
+    - Inputs must be 3D arrays and are expected to have the same shape (no explicit shape check).
+    - Multiple points can map to the same junction voxel; the output stores a single 255 at that
+      location.
+    - ``distance_transform_edt(..., return_indices=True)`` can be extremely memory-intensive,
+      especially in ``three=True`` mode.
     """
     #Load points and predictions (140GB RAM for 700x10000x10000 volume)
     points = np.load(points).astype(np.uint8) if isinstance(points, str) else points #Should already be uint8
     preds = np.load(preds).astype(np.uint8) if isinstance(preds, str) else preds
     
+    #Check that both inputs are 3 dimensional
+    if points.ndim != 3 or preds.ndim != 3:
+        raise ValueError(f"Both points and preds must be 3D arrays. Got points.ndim={points.ndim}, preds.ndim={preds.ndim}")
+    
     #Convert to boolean masks (140GB RAM)
     points_bool = (points > 0)
     preds_bool = (preds > 0)
     
-    #Compute distance transform from predicted gap junctions (280GB + 210GB RAM)
-    distance, nearest_indices = distance_transform_edt(~preds_bool, return_indices=True)
-    
-    #Transform points from 3D array to a list of points
-    points_list = np.argwhere(points_bool) #shape: (N_points, 3)
-    
-    #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
-    max_distance = max_distance
-    points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1], points_list[:,2]] < max_distance]
-    num_points = len(points_list)
-    num_moved_points = len(points_list_filtered)
-    
-    #For each point find its nearest predicted gap junction
-    #nearest_indices has shape (3, D, H, W) with [z, y, x] indices at each voxel
-    nearest_gap_junctions_list = nearest_indices[:, points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]].T
-    #nearest_gap_junctions now has shape (N_points, 3)
+    if three:
+        #Compute distance transform from predicted gap junctions (280GB + 210GB RAM)
+        distance, nearest_indices = distance_transform_edt(~preds_bool, return_indices=True)
 
-    #Create an array of moved points (70GB RAM)
-    moved_points = np.zeros_like(points, dtype=np.uint8)
-    moved_points[nearest_gap_junctions_list[:,0], nearest_gap_junctions_list[:,1], nearest_gap_junctions_list[:,2]] = 255
-    
-    #Report statistics
-    distances_moved = distance[points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]]
-    #distances_moved has shape (N, 1)
-    print(f"Moved {len(points_list_filtered)} points to nearest blobs")
-    print(f"Mean distance moved: {distances_moved.mean():.2f} voxels")
-    print(f"Max distance moved: {distances_moved.max():.2f} voxels")
-    
+        #Transform points from 3D array to a list of points
+        points_list = np.argwhere(points_bool) #shape: (N_points, 3)
+
+        #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
+        points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1], points_list[:,2]] < max_distance]
+        total_points = len(points_list)
+        total_moved_points = len(points_list_filtered)
+
+        #For each point find its nearest predicted gap junction
+        #nearest_indices has shape (3, D, H, W) with [z, y, x] indices at each voxel
+        nearest_gap_junctions_list = nearest_indices[:, points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]].T
+        #nearest_gap_junctions now has shape (N_points, 3)
+
+        #Create an array of moved points (70GB RAM)
+        moved_points = np.zeros_like(points, dtype=np.uint8)
+        moved_points[nearest_gap_junctions_list[:,0], nearest_gap_junctions_list[:,1], nearest_gap_junctions_list[:,2]] = 255
+
+        #Report statistics
+        distances_moved = distance[points_list_filtered[:,0], points_list_filtered[:,1], points_list_filtered[:,2]]
+        #distances_moved has shape (N, 1)
+        print(f"Moved {total_moved_points} points to nearest blobs")
+        print(f"Mean distance moved: {distances_moved.mean():.2f} voxels")
+        print(f"Max distance moved: {distances_moved.max():.2f} voxels")
+        
+    else:
+        #2D CALCULATIONS
+        moved_points = np.zeros_like(points, dtype=np.uint8)
+        total_points = 0
+        total_moved_points = 0
+        distance_list = []
+        for i in range(preds.shape[0]):
+            #Take image slice from volume
+            img_pred = preds_bool[i,:,:]
+            img_points = points_bool[i,:,:]
+            
+            #Compute distance transform from predicted gap junctions
+            distance, nearest_indices = distance_transform_edt(~img_pred, return_indices=True)
+            
+            #Transform points from 2D array to a list of points
+            points_list = np.argwhere(img_points) #shape: (N_points, 2)
+            
+            #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
+            points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1]] < max_distance]
+            num_points = len(points_list)
+            num_moved_points = len(points_list_filtered)
+            
+            #For each point find its nearest predicted gap junction
+            #nearest_indices has shape (2, D, H, W) with [z, y, x] indices at each voxel
+            nearest_gap_junctions_list = nearest_indices[:, points_list_filtered[:,0], points_list_filtered[:,1]].T
+            
+            #Update the moved points volume and metrics
+            moved_points[i, nearest_gap_junctions_list[:,0], nearest_gap_junctions_list[:,1]] = 255
+            total_points += num_points
+            total_moved_points += num_moved_points
+            
+            #Report statistics
+            distances_moved = distance[points_list_filtered[:,0], points_list_filtered[:,1]]
+            #distances_moved has shape (N, 1)
+            distance_list.append(distances_moved)
+        np.vstack(distance_list)
+        
+        #Print statistics
+        print(f"Moved {total_moved_points} points to nearest blobs")
+        print(f"Mean distance moved: {distance_list.mean():.2f} voxels")
+        print(f"Max distance moved: {distance_list.max():.2f} voxels")
+            
     #Save moved points
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
         np.save(save_path, moved_points)
         print(f"Moved points saved as {save_path}.")    
         
-    return moved_points, num_points, num_moved_points
+    return moved_points, total_points, total_moved_points
 
 def stack_slices(slice_dir:str, multi_label:bool=True, save:bool=False, save_path:str=None, file_extension:str=".png") -> np.ndarray:
     """
@@ -692,48 +748,61 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
-    #Task 3: Filter neuron segmentation mask by neuron-only labels in SEM_adult
-    #Read neuron labels
-    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    sem_adult_neuron_ids = df[df['adult']>0]['adult'].tolist()
+    # #Task 3: Filter neuron segmentation mask by neuron-only labels in SEM_adult
+    # #Read neuron labels
+    # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
+    # sem_adult_neuron_ids = df[df['adult']>0]['adult'].tolist()
     
-    #Clear output directory if it exists
-    check_output_directory("/home/tommy111/scratch/Neurons/SEM_adult_filtered/", clear=True)
+    # #Clear output directory if it exists
+    # check_output_directory("/home/tommy111/scratch/Neurons/SEM_adult_filtered/", clear=True)
     
-    #Filter neuron mask by labels in sem adult
-    dir = Path("/home/tommy111/scratch/Neurons/SEM_adult")
-    for img in dir.glob("*.png"):
-        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-        filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_adult_filtered/{str(img.name)}")
-        
-    #Task 4: Generate a more accurate neuron mask by using neuron IDs
-    #Stack into volume
-    dir = Path("/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
-    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in dir.glob("*.png")], axis=0)
-    vol[vol > 0] = 255
-    #Downsample
-    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
+    # #Filter neuron mask by labels in sem adult
+    # data = Path("/home/tommy111/scratch/Neurons/SEM_adult")
+    # for img in data.glob("*.png"):
+    #     img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
+    #     filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_adult_filtered/{str(img.name)}")
+    # print("Task 3 finished.")
     
-    #Task 5: Generate the final neuron mask by binary_closing and hole filling
-    neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
-    nr_volume = generate_mask(neuron_volume, save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled4x.npy")
-    downsample(nr_volume, block_size=(1,2,2), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled8x.npy")
+    # #Task 4: Generate a more accurate neuron mask by using neuron IDs
+    # #Stack into volume
+    # data = Path("/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
+    # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in data.glob("*.png")], axis=0)
+    # vol[vol > 0] = 255
+    # #Downsample
+    # downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
+    # print("Task 4 finished.")
+    
+    # #Task 5: Generate the final neuron mask by binary_closing and hole filling
+    # neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
+    # nr_volume = generate_mask(neuron_volume, dilation_radius=15, save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    # downsample(nr_volume, block_size=(1,2,2), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled8x.npy")
+    # print("Task 5 finished.")
     
     #Task 6: Constrain predictions to within the neuron mask and calculate entity metrics
+    nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
     preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
     nr_preds = preds & nr_volume
-    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
     
+    #Need to move points again but only in x and y, so will recalculate points volume.
+    move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
+                             preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
+                             save=True,
+                             save_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
     calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
                              points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
-                             nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask_block_downsampled4x.npy")
+                             nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    print("Task 6 finished.")
     
-    #Task 7: Generate full-sized images for NR mask and constrained predictions and 
-    #1. Get volume
-    #2. Upsample by 4x in each dimension except z
-    #3. Volume to slices
-    #4. Transfer to DL computer and upload to VAST
-    #5. Export as vsseg file
+    # #Task 7: Generate full-sized images for NR mask and constrained predictions and 
+    # #1. Get volume
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy")
+    # #2. Upsample by 4x in each dimension except z
+    # vol_upsampled = upsample(vol, scale_factors=(1,4,4), save=False)
+    # #3. Volume to slices
+    # volume_to_slices(volume=vol_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_NR_predictions/")
+    # #4. Transfer to DL computer and upload to VAST
+    # #5. Export as vsseg file
     
     # #Task 2: Generate dilated GJ points as sections for SEM_adult
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
