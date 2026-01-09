@@ -9,6 +9,8 @@ from pathlib import Path
 import os
 import re
 import numpy as np
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import random as rd
 import cv2
@@ -25,7 +27,6 @@ from models import UNet, TestDataset, TestDataset3D
 from utils import filter_pixels, resize_image, assemble_imgs, split_img, check_output_directory, create_dataset_2d, single_image_inference, single_volume_inference
 
 #FUNCTIONS
-
 def predict_multiple_models(model1_path, model2_path, model3_path, data_dir):
     """
     Compare predictions from three different UNet models on a randomly selected image.
@@ -200,7 +201,7 @@ def inference(model_path:str, dataset:torch.utils.data.Dataset, input_dir:str, o
                     os.remove(Path(input_dir) / ("vols" if three else "imgs") / (vols[i_num] if three else imgs[i_num]))
                 i_num += 1
 
-def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True) -> plt.Figure:
+def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, random:bool=True, figsize:tuple=(15,5), gt:bool=True, three:bool=False) -> plt.Figure:
     """
     Visualizes segmentation model predictions through custom plots comparing original images, predictions, and ground truth.
 
@@ -235,8 +236,12 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
     """
     #Check if input directory has the required subdirectories
     data = os.listdir(data_dir)
-    if not ("imgs" in data):
-        raise ValueError("Input directory must contain 'imgs' subdirectory.")
+    if three:
+        if not ("vols" in data):
+            raise ValueError("Input directory must contain 'vols' subdirectory.")
+    else:
+        if not ("imgs" in data):
+            raise ValueError("Input directory must contain 'imgs' subdirectory.")
 
     #Plotting functions
     def plot1(img, pred, gts, double_overlay, figsize=figsize):
@@ -263,28 +268,45 @@ def visualize(data_dir:str, pred_dir:str, base_name:str=None, style:int=1, rando
         
     if random:
         #Data Source
-        imgs = [i for i in sorted(os.listdir(Path(data_dir) / "imgs"))] 
+        if three:
+            names = [i for i in sorted(os.listdir(Path(data_dir) / "vols"))] 
+        else:
+            names = [i for i in sorted(os.listdir(Path(data_dir) / "imgs"))] 
 
         #Test a random image, prediction, and label from the dataset
-        random_path = rd.choice(imgs)
-        
+        name = rd.choice(names)
     else:
         assert base_name is not None, "base_name must be provided if random is False."
+        name = base_name
     
-    #Image of interest 
-    name = random_path if random else base_name
+    if three:
+        #Image
+        data_path = Path(data_dir) / "vols" / name
+        img = np.load(data_path)[4,:,:]
+        #Ground Truth
+        if gt:
+            gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.npy$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
+            gts[gts > 0] = 255 #Binarize to 0 and 255
+        else:
+            gts = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8) #Empty ground truth
+        #Prediction
+        pred = cv2.imread(str(Path(pred_dir) / re.sub(r'.npy$', r'_pred.png', str(name))), cv2.IMREAD_GRAYSCALE)
     
-    #Image, ground truth (optional), and prediction
-    img = cv2.imread(Path(data_dir) / "imgs" / name)
-    if gt:
-        gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
-        gts[gts > 0] = 255 #Binarize to 0 and 255
     else:
-        gts = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8) #Empty ground truth
-    pred = cv2.imread(str(Path(pred_dir) / re.sub(r'.png$', r'_pred.png', str(name))), cv2.IMREAD_GRAYSCALE)
+        #Image
+        data_path = Path(data_dir) / "vols" / name
+        img = cv2.imread(data_path)
+        #Ground Truth
+        if gt:
+            gts = cv2.imread(Path(data_dir) / "gts" / re.sub(r'.png$', r'_label.png', str(name)), cv2.IMREAD_GRAYSCALE)
+            gts[gts > 0] = 255 #Binarize to 0 and 255
+        else:
+            gts = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8) #Empty ground truth
+        #Prediction
+        pred = cv2.imread(str(Path(pred_dir) / re.sub(r'.png$', r'_pred.png', str(name))), cv2.IMREAD_GRAYSCALE)
 
     #Resize image to (X, Y) if needed
-    resized_img = img.copy() if img.shape[:2] == (512, 512) else np.array(resize_image(Path(data_dir) / "imgs" / name, 512, 512, (0,0,0), channels=True))
+    resized_img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR) if img.shape[:2] == (512, 512) else np.array(resize_image(data_path, 512, 512, (0,0,0), channels=True))
 
     #Make overlays
     pred2 = cv2.cvtColor(pred, cv2.COLOR_GRAY2BGR)
@@ -421,9 +443,9 @@ def evaluate(data_dir:str, pred_dir:str, figsize=(10, 6), title:str="Model X Pos
     
 def main():
     #Data and Model
-    model_path = "/home/tommytang111/gap-junction-segmentation/models/best_models/unet_base_516imgs_sem_adult_8jkuifab.pt"
-    data_dir = "/home/tommytang111/gap-junction-segmentation/data/sem_adult/SEM_split/s000-699"
-    pred_dir = "/home/tommytang111/gap-junction-segmentation/outputs/inference_results/unet_8jkuifab/sem_adult_s000-699"
+    model_path = "/home/tommy111/gap-junction-segmentation/models/unet_3D2D_516vols_sem_adult_p03lmvzp.pt"
+    data_dir = "/home/tommy111/gap-junction-segmentation/data/516vols_sem_adult"
+    pred_dir = "/home/tommy111/gap-junction-segmentation/outputs/inference_results/unet_p03lmvzp/sem_adult_regions"
 
     #Augmentation
     valid_augmentation = A.Compose([
@@ -431,22 +453,30 @@ def main():
         A.ToTensorV2()
     ])
     
-    #Run inference
-    inference(model_path=model_path,
-              dataset=TestDataset,
-              input_dir=data_dir,
-              output_dir=pred_dir,
-              augmentation=valid_augmentation,
-              clear=False,
-              filter=True
-              )
+    valid_augmentation3D = A.Compose([
+        A.Normalize(mean=0, std=1) #Specific to the dataset
+    ])
     
-    # #Visualize results
-    # for i in range(1):
-    #     fig = visualize(data_dir=data_dir,
-    #                     pred_dir=pred_dir,
-    #                     style=1, random=True, base_name="SEM_dauer_2_image_export_s032_Y9_X15.png")
-    #     plt.show()
+    #Run inference
+    # inference(model_path=model_path,
+    #           dataset=TestDataset3D,
+    #           input_dir=data_dir,
+    #           output_dir=pred_dir,
+    #           augmentation=valid_augmentation3D,
+    #           clear=False,
+    #           filter=True,
+    #           three=True,
+    #           batch_size=2
+    #           )
+    
+    #Visualize results
+    for i in range(10):
+        fig = visualize(data_dir=data_dir,
+                        pred_dir=pred_dir,
+                        style=2, 
+                        random=True,
+                        three=True)
+        plt.show()
 
     # #Evaluate model performance
     # performance_plot = evaluate(data_dir=data_dir,
