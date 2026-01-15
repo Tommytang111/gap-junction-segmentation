@@ -681,12 +681,12 @@ def create_dataset_3d(imgs_dir, output_dir, create_overlap=False):
     #        
     return sizes[0], sizes[1], i+1, section.shape
 
-def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, output_dir:str, remove_splits:bool=True, regions_split_path:str=None, gts_split_path:str=None) -> None:
+def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, output_dir:str, remove_splits:bool=True) -> None:
     """
     Build a 3D (stack-of-tiles) dataset from discontinuous region slices.
 
     Workflow:
-      1. Discover region image files under regions_path (expects PNGs named <prefix>_sNNN.png).
+      1. Discover region image files under regions_path / imgs (expects PNGs named <prefix>_sNNN.png).
       2. Group images into continuous runs per prefix (using group_continuous_sections).
       3. For each slice, split image and its ground-truth mask into 512x512 tiles (mask must exist as <stem>_label.png in sibling gts folder).
       4. Persist split tiles into regions_split_dir/imgs and regions_split_dir/gts.
@@ -695,12 +695,10 @@ def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, outpu
       7. Optionally delete the intermediate split tile directories (remove_splits=True).
 
     Args:
-        regions_path (str): Directory containing region slice images (imgs).
+        regions_path (str): Directory containing region imgs and gts subdirectories.
         regions_split_dir (str): Base directory to write temporary split tiles (creates imgs/ and gts/ subfolders).
         output_dir (str): Destination directory for final volumes (vols/) and masks (gts/).
         remove_splits (bool): If True, deletes the split imgs/gts directories after volume creation.
-        regions_split_path (str | None): Override path for split imgs directory (normally regions_split_dir/imgs).
-        gts_split_path (str | None): Override path for split gts directory (normally regions_split_dir/gts).
 
     Requirements:
         - Ground truth masks must reside in Path(regions_path).parent / 'gts' with filenames <image_stem>_label.png.
@@ -722,8 +720,8 @@ def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, outpu
         None
     """
     #Step 1: Setup subpaths
-    regions_split = (Path(regions_split_dir) / "imgs") if regions_split_path == None else regions_split_path
-    gts_split = (Path(regions_split_dir) / "gts") if gts_split_path == None else gts_split_path
+    regions_split = (Path(regions_split_dir) / "imgs")
+    gts_split = (Path(regions_split_dir) / "gts")
     check_output_directory(str(regions_split), clear=False)
     check_output_directory(str(gts_split), clear=False)
     #Check gts has correct name with "labels"
@@ -732,7 +730,7 @@ def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, outpu
         assert "_label" in labels[i] 
         
     #Step 2: Group files together by both basename and continuity of sections
-    groups = group_continuous_sections(str(regions_path), glob="*.png")
+    groups = group_continuous_sections(Path(regions_path) / "imgs", glob="*.png")
 
     #Step 3: Create dictionary of split images from each group. Type=dict[str:list[list[np.ndarray]]
     #Make groups of split images as dicts
@@ -747,7 +745,7 @@ def create_dataset_3d_from_region(regions_path:str, regions_split_dir:str, outpu
             for img_path in groups[key][i]['files']:
                 #Read imgs and gts
                 read_img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-                gts = f"{Path(regions_path).parent / 'gts'}/{str(img_path.stem)}_label{str(img_path.suffix)}"
+                gts = f"{Path(regions_path) / 'gts'}/{str(img_path.stem)}_label{str(img_path.suffix)}"
                 read_gts = cv2.imread(gts, cv2.IMREAD_GRAYSCALE)
                 #Split imgs and gts
                 split_imgs = split_img(read_img)

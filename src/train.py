@@ -200,11 +200,11 @@ def wandb_init(run_name, epochs, batch_size, data, augmentations):
             reinit=True,
             config={
                 "dataset": data,
-                "model": "UNet_base",
-                "learning_rate": 0.0025,
+                "model": "UNet3D-2D",
+                "learning_rate": 0.01,
                 "batch_size": batch_size,
                 "epochs": epochs,
-                "image_size": (1024, 1024),
+                "image_size": (512, 512),
                 "loss_function": "Generalized Dice Loss",
                 "optimizer": "SGD",
                 "momentum": 0.9,
@@ -445,14 +445,14 @@ def main(run_name:str, data_dir:str, output_path:str, data_shape:tuple[int,int]=
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_base_129imgs_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/129imgs_sem_adult",
+    main(run_name="unet_3D2D_972vols_sem_adult",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/972vols_sem_adult",
          seed=40,
          epochs=200,
-         data_shape=(1024, 1024),
+         data_shape=(512, 512),
          batch_size=4, #16 for 2D, 4 for 3D-2D
          output_path="/home/tommy111/projects/def-mzhen/tommy111/models",
-         three=False,  # Set to True for 3D-2D U-Net, False for 2D U-Net
+         three=True,  # Set to True for 3D-2D U-Net, False for 2D U-Net
          dropout=0) 
     
     #Don't forget to supply wandb secrets.txt key

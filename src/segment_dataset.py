@@ -164,9 +164,9 @@ def main():
     #Step 0: Create pipeline
     pipeline = GapJunctionSegmentationPipeline(
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
-        name="unet_u4lqcs5g_sem_adult_s000-699_segmentation_volume",
+        name="unet_p03lmvzp_sem_adult_s000-699_segmentation_volume",
         #Path to model
-        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_3D2D_516vols_sem_adult_u4lqcs5g.pt",
+        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_3D2D_516vols_sem_adult_p03lmvzp.pt",
         #Whether not model is 3D
         three=True,
         #Dataset class (How to process data for the model)
@@ -178,9 +178,9 @@ def main():
         #Path to where to save predictions
         pred_dir= Path(tmpdir) / "outputs/inference_results/unet_u4lqcs5g/sem_adult_s000-699",
         #Path to where to save assembled results
-        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_u4lqcs5g/sem_adult_s000-699",
+        assembled_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_p03lmvzp/sem_adult_s000-699",
         #Path to where to save volume and downsampled volume results
-        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699",
+        volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699",
         #Template name for images and masks, edit as needed
         template="SEM_adult_image_export_",
         #Augmentations to use for inference, edit above as needed
