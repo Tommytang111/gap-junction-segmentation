@@ -9,8 +9,6 @@ from pathlib import Path
 import os
 import re
 import numpy as np
-import matplotlib
-matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import random as rd
 import cv2

@@ -166,7 +166,7 @@ def main():
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
         name="unet_p03lmvzp_sem_adult_s000-699_segmentation_volume",
         #Path to model
-        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/best_models/unet_3D2D_516vols_sem_adult_p03lmvzp.pt",
+        model_path="/home/tommy111/projects/def-mzhen/tommy111/models/newest_models/unet_3D2D_516vols_sem_adult_p03lmvzp.pt",
         #Whether not model is 3D
         three=True,
         #Dataset class (How to process data for the model)
