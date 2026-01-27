@@ -504,10 +504,17 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
             #Transform points from 2D array to a list of points
             points_list = np.argwhere(img_points) #shape: (N_points, 2)
             
+            if points_list.size == 0:
+                continue
+            
             #Refine points_list to only include points with distance < 70 voxels to nearest gap junction entity
             points_list_filtered = points_list[distance[points_list[:,0], points_list[:,1]] < max_distance]
             num_points = len(points_list)
             num_moved_points = len(points_list_filtered)
+            
+            if num_moved_points == 0:
+                total_points += num_points
+                continue
             
             #For each point find its nearest predicted gap junction
             #nearest_indices has shape (2, D, H, W) with [z, y, x] indices at each voxel
@@ -522,13 +529,17 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
             distances_moved = distance[points_list_filtered[:,0], points_list_filtered[:,1]]
             #distances_moved has shape (N, 1)
             distance_list.append(distances_moved)
-        np.vstack(distance_list)
         
         #Print statistics
-        print(f"Moved {total_moved_points} points to nearest blobs")
-        print(f"Mean distance moved: {distance_list.mean():.2f} voxels")
-        print(f"Max distance moved: {distance_list.max():.2f} voxels")
-            
+        if distance_list:
+            dist_all = np.concatenate(distance_list, axis=0)
+            print(f"Moved {total_moved_points} points to nearest blobs")
+            print(f"Mean distance moved: {dist_all.mean():.2f} voxels")
+            print(f"Max distance moved: {dist_all.max():.2f} voxels")
+        else:
+            print(f"Moved {total_moved_points} points to nearest blobs")
+            print("No points were within max_distance; no distance statistics available.")
+
     #Save moved points
     if save and save_path is not None:
         check_output_directory(Path(save_path).parent, clear=False)
@@ -779,12 +790,13 @@ if __name__ == "__main__":
     # print("Task 5 finished.")
     
     #Task 6: Constrain predictions to within the neuron mask and calculate entity metrics
-    nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
-    nr_preds = preds & nr_volume
-    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
+    # nr_preds = preds & nr_volume
+    # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
     
     #Need to move points again but only in x and y, so will recalculate points volume.
+    print("Calculating entity metrics from points moved only in x & y.")
     move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
                              preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
                              save=True,
