@@ -759,6 +759,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
+    vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
+    #2. Upsample by 4x in each dimension except z
+    vol_upsampled = upsample(vol, scale_factors=(1,4,4), save=False)
+    #3. Volume to slices
+    volume_to_slices(volume=vol_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_moved_GJs_downsampled4x/")
+    
     # #Task 3: Filter neuron segmentation mask by neuron-only labels in SEM_adult
     # #Read neuron labels
     # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
@@ -796,15 +802,15 @@ if __name__ == "__main__":
     # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
     
     #Need to move points again but only in x and y, so will recalculate points volume.
-    print("Calculating entity metrics from points moved only in x & y.")
-    move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
-                             preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
-                             save=True,
-                             save_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
-                             points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
-                             nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    print("Task 6 finished.")
+    # print("Calculating entity metrics from points moved only in x & y.")
+    # move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
+    #                          preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
+    #                          save=True,
+    #                          save_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
+    #                          points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
+    #                          nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    # print("Task 6 finished.")
     
     # #Task 7: Generate full-sized images for NR mask and constrained predictions and 
     # #1. Get volume
