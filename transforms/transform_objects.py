@@ -759,13 +759,15 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
-    vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
-    #2. Upsample by 4x in each dimension except z
-    vol_upsampled = upsample(vol, scale_factors=(1,4,4), save=False)
-    #3. Volume to slices
-    volume_to_slices(volume=vol_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_moved_GJs_downsampled4x/")
     
-    # #Task 3: Filter neuron segmentation mask by neuron-only labels in SEM_adult
+    
+    
+    
+    
+    
+    
+    
+    # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
     # #Read neuron labels
     # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
     # sem_adult_neuron_ids = df[df['adult']>0]['adult'].tolist()
@@ -780,7 +782,7 @@ if __name__ == "__main__":
     #     filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_adult_filtered/{str(img.name)}")
     # print("Task 3 finished.")
     
-    # #Task 4: Generate a more accurate neuron mask by using neuron IDs
+    # #Task: Generate a more accurate neuron mask by using neuron IDs
     # #Stack into volume
     # data = Path("/home/tommy111/scratch/Neurons/SEM_adult_filtered/")
     # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in data.glob("*.png")], axis=0)
@@ -789,13 +791,13 @@ if __name__ == "__main__":
     # downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
     # print("Task 4 finished.")
     
-    # #Task 5: Generate the final neuron mask by binary_closing and hole filling
+    # #Task: Generate the final neuron mask by binary_closing and hole filling
     # neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
     # nr_volume = generate_mask(neuron_volume, dilation_radius=15, save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
     # downsample(nr_volume, block_size=(1,2,2), save_path="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled8x.npy")
     # print("Task 5 finished.")
     
-    #Task 6: Constrain predictions to within the neuron mask and calculate entity metrics
+    # #Task: Constrain predictions to within the neuron mask and calculate entity metrics
     # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
     # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
     # nr_preds = preds & nr_volume
@@ -812,7 +814,7 @@ if __name__ == "__main__":
     #                          nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
     # print("Task 6 finished.")
     
-    # #Task 7: Generate full-sized images for NR mask and constrained predictions and 
+    # #Task: Generate full-sized images for NR mask and constrained predictions and 
     # #1. Get volume
     # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy")
     # #2. Upsample by 4x in each dimension except z
@@ -822,7 +824,7 @@ if __name__ == "__main__":
     # #4. Transfer to DL computer and upload to VAST
     # #5. Export as vsseg file
     
-    # #Task 2: Generate dilated GJ points as sections for SEM_adult
+    # #Task: Generate dilated GJ points as sections for SEM_adult
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_GJs.json",
     #                volume_shape=(700, 11008, 19968),
     #                voxel_size=(30, 4, 4),
@@ -841,7 +843,7 @@ if __name__ == "__main__":
     
     # volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
     
-    # #Task 0: Calculate Entity metrics for GJs constrained in nerve ring
+    # #Task: Calculate Entity metrics for GJs constrained in nerve ring
     # #SEM_adult
     # neuron_volume = stack_slices(slice_dir="/home/tommy111/scratch/Neurons/SEM_adult")
     # neuron_volume_downsampled = downsample(neuron_volume, block_size=(1,4,4), save=False)
@@ -853,7 +855,7 @@ if __name__ == "__main__":
     #                         points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled8x.npy",
     #                         nerve_ring_mask=neuron_mask_enlarged_downsampled)
     
-    # #Task 1: Get Chemical Synapses for Erin
+    # #Task: Get Chemical Synapses for Erin
     # #Convert json to volume
     # cs_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/cs_point_annotations/sem_adult_CSs.json",
     #                volume_shape=(700, 11008, 19968),
