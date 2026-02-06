@@ -10,18 +10,59 @@ neurons = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_d
 #print(np.unique(neurons, return_counts=True))
 #print(np.unique(neuron_labels, return_counts=True))
 
-#Get membrane 
-def extract_membranes(neurons:np.ndarray | str) -> np.ndarray:
-    from scipy.ndimage import grey_erosion
+#FUNCTIONS 
+def extract_membranes(neurons: np.ndarray | str, radius: int = 1) -> np.ndarray:
+    """
+    Dilation-based membrane: return the 1-pixel-thick (or thin) ring created by dilation.
+    Works for 2D images or 3D stacks (dilates each z-slice in 2D).
+    """
+    from skimage.morphology import disk
+    from scipy.ndimage import binary_dilation
+    
+    #Load neuron mask
+    neurons = np.load(neurons) if isinstance(neurons, str) else neurons
+    neurons_bin = neurons.astype(bool)
+
+    se = disk(radius)
+
+    if neurons_bin.ndim == 2:
+        dilated = binary_dilation(neurons_bin, structure=se)
+        membrane = np.logical_xor(neurons_bin, dilated)
+        return membrane.astype(np.uint8) * 255
+
+    if neurons_bin.ndim == 3:
+        membrane = np.zeros_like(neurons_bin, dtype=np.uint8)
+        for z in range(neurons_bin.shape[0]):
+            dilated = binary_dilation(neurons_bin[z], structure=se)
+            membrane[z] = np.logical_xor(neurons_bin[z], dilated).astype(np.uint8) * 255
+        return membrane
+
+    raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
+
+def extract_membranes_gradient(neurons: np.ndarray | str, threshold: float = 0,) -> np.ndarray:
+    """Extract membrane using Sobel gradient (thin edges). Works for 2D or 3D (slice-wise)."""
+    from scipy.ndimage import sobel
+    import numpy as np
     
     neurons = np.load(neurons) if isinstance(neurons, str) else neurons
-    
-    membrane = np.zeros_like(neurons, dtype=np.uint8)
-    for z in range(neurons.shape[0]):
-        eroded = grey_erosion(neurons[z], size=3)
-        membrane[z] = (neurons[z] != eroded).astype(np.uint8) * 255
-        
-    return membrane
+    arr = neurons.astype(float)
+
+    def _membrane_2d(img2d: np.ndarray) -> np.ndarray:
+        sx = sobel(img2d, axis=0)
+        sy = sobel(img2d, axis=1)
+        grad = np.hypot(sx, sy)
+        return (grad > threshold).astype(np.uint8) * 255
+
+    if arr.ndim == 2:
+        return _membrane_2d(arr)
+
+    if arr.ndim == 3:
+        membrane = np.zeros_like(arr, dtype=np.uint8)
+        for z in range(arr.shape[0]):
+            arr[z] = _membrane_2d(arr[z])
+        return membrane
+
+    raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
 
 def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, 
                           neuron_labels: np.ndarray, 
@@ -193,7 +234,7 @@ if __name__ == "__main__":
     start = time.time()
     
     # #Task 1: Extract membrane
-    # membrane = extract_membranes(neurons)
+    # membrane = extract_membrane_gradient(neurons)
     # np.save("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", membrane)
     
     # #Task 2: Calculate gap junctions per neuron and write output
