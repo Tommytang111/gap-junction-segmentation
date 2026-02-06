@@ -759,14 +759,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
+    print("Converting neuron membrane volume to slices for VAST")
+    volume = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
+    volume_upsampled = upsample(volume, scale_factors=(1,4,4), save=False)
+    volume_to_slices(volume_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_neuron_membrane")
     
-    
-    
-    
-    
-    
-    
-    
+
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
     # #Read neuron labels
     # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
