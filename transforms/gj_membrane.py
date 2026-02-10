@@ -5,12 +5,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-#Load data
-neurons = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_block_downsampled4x.npy")
-#neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy")
-#print(np.unique(neurons, return_counts=True))
-#print(np.unique(neuron_labels, return_counts=True))
-
 #FUNCTIONS 
 def extract_membranes(neurons: np.ndarray | str, radius: int = 1) -> np.ndarray:
     """
@@ -101,7 +95,8 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str,
     se = disk(1)
     
     # Process each z-slice independently
-    for z in tqdm(range(expanded_labels.shape[0]), total=expanded_labels.shape[0], desc="Expanding neurons to membrane"):
+    slices = expanded_labels.shape[0]
+    for z in tqdm(range(slices), total=slices, desc="Expanding neurons to membrane"):
         labels_slice = expanded_labels[z]
         membrane_slice = membrane_binary[z]
         
@@ -186,7 +181,7 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray,
     results = {}
     
     # Process slice by slice along z-axis (axis 0)
-    for z in range(neuron_membrane_mask.shape[0]):
+    for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Analyzing neuron gjs per slice"):
         # Get current slice for all masks
         membrane_slice = neuron_membrane_mask[z]
         labels_slice = neuron_labels[z]
@@ -429,25 +424,35 @@ if __name__ == "__main__":
     start = time.time()
     
     print("Calculating gap junctions per neuron\n")
+    
+    #Load data
+    #neurons = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_block_downsampled4x.npy")
+    #neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy")
+    #print(np.unique(neurons, return_counts=True))
+    #print(np.unique(neuron_labels, return_counts=True))
     membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
     
     # #Task 1: Extract membrane
     # membrane = extract_membranes_with_gradient(neurons)
     # np.save("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", membrane)
     
-    #Task 2: Expand neurons to membrane
-    expanded_neurons = expand_neurons_to_membrane(neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
-                                                  membrane_mask=membrane)
-    np.save("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
+    # #Task 2: Expand neurons to membrane
+    # expanded_neurons = expand_neurons_to_membrane(neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
+    #                                               membrane_mask=membrane)
+    # np.save("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
-    # #Task 3: Calculate gap junctions per neuron and write output
-    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask=membrane, 
-    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-    #                                          gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy")
+    #Task 3: Calculate gap junctions per neuron and write output
+    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask=membrane, 
+                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+                                             gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy")
     
-    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_p03lmvzp.txt", "wb") as f:
-    #     for neuron_label, stats in neuronal_gj_dict.items():
-    #         f.write(f"Neuron {neuron_label}: Total Membrane Voxels = {stats['total_voxels']}, Gap Junction Voxels = {stats['gj_voxels']}, Gap Junction Fraction = {stats['gj_fraction']:.6f}\n".encode())
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.txt", "wb") as f:
+        for neuron_label, stats in neuronal_gj_dict.items():
+            f.write(f"Neuron {neuron_label}: Total Membrane Voxels = {stats['total_voxels']}, Gap Junction Voxels = {stats['gj_voxels']}, Gap Junction Fraction = {stats['gj_fraction']:.6f}\n".encode())
+            
+    import pickle
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.pkl", "wb") as f:
+        pickle.dump(neuronal_gj_dict, f)
     
     # #Task 4: Calculate electrical connectivity matrix
     # connectivity_matrix = get_electrical_connectivity(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 

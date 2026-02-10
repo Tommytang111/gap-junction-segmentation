@@ -7,6 +7,7 @@ Last Updated: Dec 16th, 2025
 #Libraries
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 import cv2
 import os
 import gc
@@ -715,7 +716,7 @@ def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True,
         
     return upsampled_volume
 
-def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
+def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) -> None:
     """
     Save each z-slice of a 3D NumPy volume (.npy) as a PNG image.
 
@@ -726,13 +727,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     output_dir : str
         Directory where PNG slices will be written. The directory is created
         and cleared (existing contents removed) before saving.
+    binary : bool, default=True
+        Saves the slices as binary masks of uint8 type (0 and 255). If False, saves the original values and data type.
 
     Behavior
     --------
-    - The volume is binarized: values > 0 become 255; others become 0, and
-      the result is saved as uint8 PNGs.
     - Slices are named with zero-padded indices: slice_000.png, slice_001.png, ...
-    - I/O errors (e.g., unreadable file, unwritable directory) propagate.
 
     Returns
     -------
@@ -741,15 +741,16 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
     #Load volume
     volume = np.load(volume) if isinstance(volume, str) else volume
     
-    #Convert to boolean mask
-    volume[volume > 0] = 255
-    volume = volume.astype(np.uint8)
+    if binary:
+        #Convert to boolean mask
+        volume[volume > 0] = 255
+        volume = volume.astype(np.uint8)
     
     #Ensure output directory is empty
     check_output_directory(Path(output_dir), clear=True)
     
     #Save every slice in volume
-    for i in range(volume.shape[0]):
+    for i in tqdm(range(volume.shape[0]), desc="Saving slices"):
         slice = volume[i,:,:]
         cv2.imwrite(f"{output_dir}/slice_{i:03d}.png", slice)
         
@@ -759,10 +760,10 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str) -> None:
 if __name__ == "__main__":
     start = time()
     
-    print("Converting neuron membrane volume to slices for VAST")
-    volume = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
+    print("Converting expanded neuron volume to slices for VAST")
+    volume = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/neurons/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy")
     volume_upsampled = upsample(volume, scale_factors=(1,4,4), save=False)
-    volume_to_slices(volume_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_neuron_membrane")
+    volume_to_slices(volume_upsampled, binary=False, output_dir="/home/tommy111/scratch/split_volumes/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x")
     
 
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
