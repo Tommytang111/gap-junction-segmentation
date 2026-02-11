@@ -338,8 +338,8 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
                                 neuron_labels: np.ndarray,
                                 gj_segmentation: np.ndarray):
     """
-    Calculate gap junction voxel connectivity between pairs of neurons using 
-    connected components analysis to identify gap junction entities.
+    Calculate gap junction voxel connectivity between pairs of neurons and the contactome
+    (total shared membrane voxels between touching neuron pairs).
     
     Parameters:
     -----------
@@ -352,10 +352,11 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
     
     Returns:
     --------
-    pd.DataFrame
-        Connectivity matrix as a pandas DataFrame with neuron labels as both 
-        row and column indices. DataFrame.loc[i, j] contains the number of gap 
-        junction voxels connecting neurons i and j. The matrix is symmetric.
+    tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
+        Three connectivity matrices:
+        1. Contactome matrix: total number of shared membrane voxels between neuron pairs
+        2. Gap junction connectivity matrix: number of gap junction voxels between neuron pairs
+        3. Normalized gap junction matrix: gap junction connectivity / contactome (fraction)
     """
     import pandas as pd
     from scipy.ndimage import label as connected_components
@@ -369,8 +370,14 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
     all_neuron_labels = np.unique(neuron_labels)
     all_neuron_labels = all_neuron_labels[all_neuron_labels > 0].astype(int)
     
-    # Initialize connectivity matrix using pandas DataFrame
-    connectivity_matrix = pd.DataFrame(
+    # Initialize connectivity matrices using pandas DataFrame
+    contactome_matrix = pd.DataFrame(
+        0, 
+        index=all_neuron_labels, 
+        columns=all_neuron_labels, 
+        dtype=np.int32
+    )
+    gj_connectivity_matrix = pd.DataFrame(
         0, 
         index=all_neuron_labels, 
         columns=all_neuron_labels, 
@@ -378,7 +385,7 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
     )
     
     # Process slice by slice along z-axis (axis 0)
-    for z in range(neuron_membrane_mask.shape[0]):
+    for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Calculating electrical connectivity"):
         # Get current slice for all masks
         membrane_slice = neuron_membrane_mask[z]
         labels_slice = neuron_labels[z]
@@ -387,18 +394,47 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
         # Get gap junction on membranes (binary mask)
         gj_on_membrane = (gj_slice > 0) & (membrane_slice > 0)
         
-        # Skip if no gap junctions in this slice
+        # Get intersection: membrane pixels with neuron labels
+        neuron_membrane_intersection = labels_slice * (membrane_slice > 0)
+        
+        # Process contactome: find all membrane voxels shared by touching neuron pairs
+        # Get membrane voxels for each neuron
+        membrane_voxels = neuron_membrane_intersection > 0
+        
+        if np.any(membrane_voxels):
+            # Perform connected components on all membrane voxels
+            labeled_membrane, num_membrane_entities = connected_components(membrane_voxels, structure=np.ones((3, 3)))
+            
+            # Process each membrane entity to find contactome
+            for entity_id in range(1, num_membrane_entities + 1):
+                entity_mask = (labeled_membrane == entity_id)
+                
+                # Get neuron labels that this membrane entity touches
+                # The neuron_membrane_intersection is an array of expanded neuron labels only at the membrane
+                neuron_labels_at_entity = neuron_membrane_intersection[entity_mask]
+                unique_neurons = np.unique(neuron_labels_at_entity)
+                unique_neurons = unique_neurons[unique_neurons > 0]  # Exclude background
+                
+                # Check if entity connects exactly two different neurons (contactome)
+                if len(unique_neurons) == 2:
+                    neuron1, neuron2 = int(unique_neurons[0]), int(unique_neurons[1])
+                    
+                    # Count voxels of this entity (shared membrane voxels)
+                    entity_voxel_count = np.sum(entity_mask)
+                    
+                    # Add to contactome matrix (symmetric)
+                    contactome_matrix.loc[neuron1, neuron2] += entity_voxel_count
+                    contactome_matrix.loc[neuron2, neuron1] += entity_voxel_count
+        
+        # Skip gap junction processing if no gap junctions in this slice
         if not np.any(gj_on_membrane):
             continue
         
         # Perform 2D connected components analysis on gap junction mask
-        labeled_gj, num_entities = connected_components(gj_on_membrane)
-        
-        # Get intersection: membrane pixels with neuron labels
-        neuron_membrane_intersection = labels_slice * (membrane_slice > 0)
+        labeled_gj, num_gj_entities = connected_components(gj_on_membrane, structure=np.ones((3, 3)))
         
         # Process each gap junction entity
-        for entity_id in range(1, num_entities + 1):
+        for entity_id in range(1, num_gj_entities + 1):
             # Get mask for this entity
             entity_mask = (labeled_gj == entity_id)
             
@@ -414,23 +450,33 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
                 # Count voxels of this entity on the membrane of both neurons
                 entity_voxel_count = np.sum(entity_mask)
                 
-                # Add to connectivity matrix (symmetric)
-                connectivity_matrix.loc[neuron1, neuron2] += entity_voxel_count
-                connectivity_matrix.loc[neuron2, neuron1] += entity_voxel_count
+                # Add to gap junction connectivity matrix (symmetric)
+                gj_connectivity_matrix.loc[neuron1, neuron2] += entity_voxel_count
+                gj_connectivity_matrix.loc[neuron2, neuron1] += entity_voxel_count
     
-    return connectivity_matrix
+    # Calculate normalized gap junction matrix (GJ / contactome)
+    normalized_gj_matrix = gj_connectivity_matrix.copy().astype(float)
+    for i in normalized_gj_matrix.index:
+        for j in normalized_gj_matrix.columns:
+            contactome = contactome_matrix.loc[i, j]
+            if contactome > 0:
+                normalized_gj_matrix.loc[i, j] = gj_connectivity_matrix.loc[i, j] / contactome
+            else:
+                normalized_gj_matrix.loc[i, j] = 0.0
+    
+    return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
 if __name__ == "__main__": 
     start = time.time()
     
-    print("Calculating gap junctions per neuron\n")
+    print("Calculating neuronal GJ connectivity\n")
     
     #Load data
     #neurons = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_block_downsampled4x.npy")
     #neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy")
     #print(np.unique(neurons, return_counts=True))
     #print(np.unique(neuron_labels, return_counts=True))
-    membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
+    #membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
     
     # #Task 1: Extract membrane
     # membrane = extract_membranes_with_gradient(neurons)
@@ -441,37 +487,78 @@ if __name__ == "__main__":
     #                                               membrane_mask=membrane)
     # np.save("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
-    #Task 3: Calculate gap junctions per neuron and write output
-    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask=membrane, 
-                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-                                             gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy")
+    # #Task 3: Calculate gap junctions per neuron and write output
+    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask=membrane, 
+    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+    #                                          gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy")
     
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.txt", "wb") as f:
-        for neuron_label, stats in neuronal_gj_dict.items():
-            f.write(f"Neuron {neuron_label}: Total Membrane Voxels = {stats['total_voxels']}, Gap Junction Voxels = {stats['gj_voxels']}, Gap Junction Fraction = {stats['gj_fraction']:.6f}\n".encode())
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.txt", "wb") as f:
+    #     for neuron_label, stats in neuronal_gj_dict.items():
+    #         f.write(f"Neuron {neuron_label}: Total Membrane Voxels = {stats['total_voxels']}, Gap Junction Voxels = {stats['gj_voxels']}, Gap Junction Fraction = {stats['gj_fraction']:.6f}\n".encode())
             
-    import pickle
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.pkl", "wb") as f:
-        pickle.dump(neuronal_gj_dict, f)
-    
-    # #Task 4: Calculate electrical connectivity matrix
-    # connectivity_matrix = get_electrical_connectivity(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy", 
-    #                                          gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy")
-    
-    # #Write out to pickle and text
     # import pickle
-    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_p03lmvzp.pkl", "wb") as f:
-    #     pickle.dump(connectivity_matrix, f)
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.pkl", "wb") as f:
+    #     pickle.dump(neuronal_gj_dict, f)
     
-    # plt.figure(figsize=(12, 10))
-    # sns.heatmap(connectivity_matrix, annot=False, cmap='viridis', square=True)
-    # plt.title('Neuronal Gap Junction Connectivity')
-    # plt.xlabel('Neuron ID')
-    # plt.ylabel('Neuron ID')
-    # plt.show()
-    # plt.savefig("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_heatmap_p03lmvzp.png", dpi=300)
-            
+    #Task 4: Calculate electrical connectivity matrix 
+    #MODEL p03lmvzp 
+    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
+        neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+        gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
+    )
+    
+    #Write out to pickle
+    import pickle
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_p03lmvzp.pkl", "wb") as f:
+        pickle.dump(contactome_matrix, f)
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_p03lmvzp.pkl", "wb") as f:
+        pickle.dump(gj_connectivity_matrix, f)
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_p03lmvzp.pkl", "wb") as f:
+        pickle.dump(normalized_gj_matrix, f)
+    
+    # Create heatmaps for all three matrices
+    fig, axes = plt.subplots(1, 3, figsize=(36, 10))
+    
+    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', square=True, ax=axes[0])
+    axes[0].set_title('Contactome (Shared Membrane Voxels)')
+    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', square=True, ax=axes[1])
+    axes[1].set_title('Gap Junction Connectivity')
+    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', square=True, ax=axes[2])
+    axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
+    
+    plt.tight_layout()
+    plt.savefig("/home/tommy111/scratch/Membranes/SEM_adult_connectivity_matrices_p03lmvzp.png", dpi=300)
+    
+    #MODEL u4lqcs5g
+    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
+        neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+        gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
+    )
+    
+    #Write out to pickle
+    import pickle
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_u4lqcs5g.pkl", "wb") as f:
+        pickle.dump(contactome_matrix, f)
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
+        pickle.dump(gj_connectivity_matrix, f)
+    with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
+        pickle.dump(normalized_gj_matrix, f)
+    
+    # Create heatmaps for all three matrices
+    fig, axes = plt.subplots(1, 3, figsize=(36, 10))
+    
+    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', square=True, ax=axes[0])
+    axes[0].set_title('Contactome (Shared Membrane Voxels)')
+    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', square=True, ax=axes[1])
+    axes[1].set_title('Gap Junction Connectivity')
+    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', square=True, ax=axes[2])
+    axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
+    
+    plt.tight_layout()
+    plt.savefig("/home/tommy111/scratch/Membranes/SEM_adult_connectivity_matrices_u4lqcs5g.png", dpi=300)
+    
     end = time.time()
     print("Job completed.")
     print(f"Total runtime: {(end - start)/60:.2f} minutes")
