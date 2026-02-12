@@ -402,7 +402,7 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
         membrane_voxels = neuron_membrane_intersection > 0
         
         if np.any(membrane_voxels):
-            # Perform connected components on all membrane voxels
+            # Perform connected components on all membrane voxels (LITERALLY NO POINT OF DOING THIS, NEED TO CHANGE)
             labeled_membrane, num_membrane_entities = connected_components(membrane_voxels, structure=np.ones((3, 3)))
             
             # Process each membrane entity to find contactome
