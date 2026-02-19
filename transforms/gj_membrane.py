@@ -228,241 +228,252 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray,
     
     return results
 
-def get_contactome_and_gj_connectivity(neuron_membrane_mask: np.ndarray,
-                                       neuron_labels: np.ndarray,
-                                       gj_segmentation: np.ndarray):
+#THE FUNCTION BELOW USES DILATION BASED METHOD TO COUNT CONTACTOME VOXELS, NOT ADVISED
+# def get_contactome_and_gj_connectivity(neuron_membrane_mask: np.ndarray,
+#                                        neuron_labels: np.ndarray,
+#                                        gj_segmentation: np.ndarray):
+#     """
+#     Calculate contactome (membrane contact voxels) and gap junction connectivity 
+#     between neuron pairs, then compute the ratio of GJ voxels to contact voxels.
+    
+#     Parameters:
+#     -----------
+#     neuron_membrane_mask : np.ndarray
+#         Binary mask of neuron membranes (shape: Z, Y, X)
+#     neuron_labels : np.ndarray
+#         Mask with different labels for each neuron (shape: Z, Y, X)
+#     gj_segmentation : np.ndarray
+#         Segmentation prediction mask for gap junction proteins (shape: Z, Y, X)
+    
+#     Returns:
+#     --------
+#     tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
+#         Three DataFrames:
+#         1. Contactome matrix: number of membrane contact voxels between neuron pairs
+#         2. GJ connectivity matrix: number of gap junction voxels between neuron pairs
+#         3. GJ/Contactome ratio matrix: fraction of contact voxels that are gap junctions
+#     """
+#     import pandas as pd
+#     from scipy.ndimage import binary_dilation
+#     from skimage.morphology import disk
+    
+#     # Load data if paths are given
+#     neuron_membrane_mask = np.load(neuron_membrane_mask) if isinstance(neuron_membrane_mask, str) else neuron_membrane_mask
+#     neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
+#     gj_segmentation = np.load(gj_segmentation) if isinstance(gj_segmentation, str) else gj_segmentation
+    
+#     # Find all unique neuron labels (excluding background)
+#     all_neuron_labels = np.unique(neuron_labels)
+#     all_neuron_labels = all_neuron_labels[all_neuron_labels > 0].astype(int)
+    
+#     # Initialize matrices
+#     contactome_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
+#     gj_connectivity_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
+    
+#     # Structuring element for dilation (to detect contact)
+#     se = disk(5)
+    
+#     # Process slice by slice along z-axis
+#     for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Calculating contactome and GJ connectivity"):
+#         # Get current slice for all masks
+#         membrane_slice = neuron_membrane_mask[z] > 0
+#         labels_slice = neuron_labels[z]
+#         gj_slice = gj_segmentation[z] > 0
+        
+#         # Get neuron labels at membrane locations
+#         membrane_label = labels_slice * membrane_slice
+        
+#         # Get unique neurons in this slice
+#         unique_neurons = np.unique(membrane_label)
+#         unique_neurons = unique_neurons[unique_neurons > 0]
+        
+#         # For each neuron, find contacts with other neurons
+#         for neuron_id in unique_neurons:
+#             # Get this neuron's membrane pixels
+#             neuron_membrane = (membrane_label == neuron_id)
+            
+#             # Dilate by 1 pixel to find potential contacts
+#             dilated = binary_dilation(neuron_membrane, structure=se)
+            
+#             # Find which other neurons are in the dilated region
+#             potential_contacts = labels_slice * dilated * membrane_slice
+            
+#             # Get unique neighbor neurons (excluding self and background)
+#             neighbor_neurons = np.unique(potential_contacts)
+#             neighbor_neurons = neighbor_neurons[(neighbor_neurons > 0) & (neighbor_neurons != neuron_id)]
+            
+#             # For each neighbor, count contact voxels and GJ voxels
+#             for neighbor_id in neighbor_neurons:
+#                 # Get neighbor's membrane pixels
+#                 neighbor_membrane = (membrane_label == neighbor_id)
+                
+#                 # Find contact region: where dilated neuron overlaps with neighbor's membrane
+#                 contact_region = dilated & neighbor_membrane
+                
+#                 # Count contact voxels
+#                 contact_voxels = np.sum(contact_region)
+                
+#                 # Count gap junction voxels in contact region
+#                 gj_voxels = np.sum(contact_region & gj_slice)
+                
+#                 # Update matrices (symmetric)
+#                 neuron_id_int = int(neuron_id)
+#                 neighbor_id_int = int(neighbor_id)
+                
+#                 contactome_matrix.loc[neuron_id_int, neighbor_id_int] += contact_voxels
+#                 gj_connectivity_matrix.loc[neuron_id_int, neighbor_id_int] += gj_voxels
+    
+#     # Calculate ratio matrix
+#     gj_ratio_matrix = gj_connectivity_matrix.copy().astype(float)
+#     for i in gj_ratio_matrix.index:
+#         for j in gj_ratio_matrix.columns:
+#             contact = contactome_matrix.loc[i, j]
+#             if contact > 0:
+#                 gj_ratio_matrix.loc[i, j] = gj_connectivity_matrix.loc[i, j] / contact
+#             else:
+#                 gj_ratio_matrix.loc[i, j] = 0.0
+    
+#     return contactome_matrix, gj_connectivity_matrix, gj_ratio_matrix
+
+def get_electrical_connectivity(
+    neuron_membrane_mask: np.ndarray | str,
+    neuron_labels: np.ndarray | str,
+    gj_segmentation: np.ndarray | str,
+    *,
+    contact_connectivity: int = 8,
+):
     """
-    Calculate contactome (membrane contact voxels) and gap junction connectivity 
-    between neuron pairs, then compute the ratio of GJ voxels to contact voxels.
-    
-    Parameters:
-    -----------
-    neuron_membrane_mask : np.ndarray
-        Binary mask of neuron membranes (shape: Z, Y, X)
-    neuron_labels : np.ndarray
-        Mask with different labels for each neuron (shape: Z, Y, X)
-    gj_segmentation : np.ndarray
-        Segmentation prediction mask for gap junction proteins (shape: Z, Y, X)
-    
-    Returns:
-    --------
-    tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
-        Three DataFrames:
-        1. Contactome matrix: number of membrane contact voxels between neuron pairs
-        2. GJ connectivity matrix: number of gap junction voxels between neuron pairs
-        3. GJ/Contactome ratio matrix: fraction of contact voxels that are gap junctions
+    Calculate:
+      1) Contactome connectivity between neuron pairs:
+         total number of membrane-adjacency "contact voxels" between touching neuron pairs.
+         (Computed from label adjacencies restricted to membrane pixels.)
+
+      2) Gap junction voxel connectivity between neuron pairs:
+         number of border adjacency pairs where at least one pixel is a GJ pixel.
+         Uses the same adjacency logic as the contactome, so GJ ≤ contactome always.
+
+      3) Normalized GJ connectivity:
+         GJ connectivity / contactome (fraction), elementwise.
+
+    Parameters
+    ----------
+    neuron_membrane_mask : np.ndarray or str
+        Binary/uint8 membrane mask (Z, Y, X). Non-zero means membrane.
+    neuron_labels : np.ndarray or str
+        Integer neuron instance labels (Z, Y, X). 0 is background.
+    gj_segmentation : np.ndarray or str
+        Binary/uint8 GJ prediction (Z, Y, X). Non-zero means GJ.
+    contact_connectivity : int
+        4 or 8. If 8, diagonal adjacencies also contribute to contactome.
+
+    Returns
+    -------
+    (contactome_df, gj_df, normalized_df) : tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
     """
     import pandas as pd
-    from scipy.ndimage import binary_dilation
-    from skimage.morphology import disk
-    
+
+    if contact_connectivity not in (4, 8):
+        raise ValueError(f"contact_connectivity must be 4 or 8, got {contact_connectivity}")
+
     # Load data if paths are given
     neuron_membrane_mask = np.load(neuron_membrane_mask) if isinstance(neuron_membrane_mask, str) else neuron_membrane_mask
     neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
     gj_segmentation = np.load(gj_segmentation) if isinstance(gj_segmentation, str) else gj_segmentation
-    
-    # Find all unique neuron labels (excluding background)
+
+    # All neuron ids
     all_neuron_labels = np.unique(neuron_labels)
     all_neuron_labels = all_neuron_labels[all_neuron_labels > 0].astype(int)
-    
-    # Initialize matrices
+
+    #Initialize connectivity matrix
     contactome_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
     gj_connectivity_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
-    
-    # Structuring element for dilation (to detect contact)
-    se = disk(1)
-    
-    # Process slice by slice along z-axis
-    for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Calculating contactome and GJ connectivity"):
-        # Get current slice for all masks
-        membrane_slice = neuron_membrane_mask[z] > 0
-        labels_slice = neuron_labels[z]
-        gj_slice = gj_segmentation[z] > 0
-        
-        # Get neuron labels at membrane locations
-        neuron_membrane_intersection = labels_slice * membrane_slice
-        
-        # Get unique neurons in this slice
-        unique_neurons = np.unique(neuron_membrane_intersection)
-        unique_neurons = unique_neurons[unique_neurons > 0]
-        
-        # For each neuron, find contacts with other neurons
-        for neuron_id in unique_neurons:
-            # Get this neuron's membrane pixels
-            neuron_membrane = (neuron_membrane_intersection == neuron_id)
-            
-            # Dilate by 1 pixel to find potential contacts
-            dilated = binary_dilation(neuron_membrane, structure=se)
-            
-            # Find which other neurons are in the dilated region
-            potential_contacts = labels_slice * dilated * membrane_slice
-            
-            # Get unique neighbor neurons (excluding self and background)
-            neighbor_neurons = np.unique(potential_contacts)
-            neighbor_neurons = neighbor_neurons[(neighbor_neurons > 0) & (neighbor_neurons != neuron_id)]
-            
-            # For each neighbor, count contact voxels and GJ voxels
-            for neighbor_id in neighbor_neurons:
-                # Get neighbor's membrane pixels
-                neighbor_membrane = (neuron_membrane_intersection == neighbor_id)
-                
-                # Find contact region: where dilated neuron overlaps with neighbor's membrane
-                contact_region = dilated & neighbor_membrane
-                
-                # Count contact voxels
-                contact_voxels = np.sum(contact_region)
-                
-                # Count gap junction voxels in contact region
-                gj_voxels = np.sum(contact_region & gj_slice)
-                
-                # Update matrices (symmetric)
-                neuron_id_int = int(neuron_id)
-                neighbor_id_int = int(neighbor_id)
-                
-                contactome_matrix.loc[neuron_id_int, neighbor_id_int] += contact_voxels
-                gj_connectivity_matrix.loc[neuron_id_int, neighbor_id_int] += gj_voxels
-    
-    # Calculate ratio matrix
-    gj_ratio_matrix = gj_connectivity_matrix.copy().astype(float)
-    for i in gj_ratio_matrix.index:
-        for j in gj_ratio_matrix.columns:
-            contact = contactome_matrix.loc[i, j]
-            if contact > 0:
-                gj_ratio_matrix.loc[i, j] = gj_connectivity_matrix.loc[i, j] / contact
-            else:
-                gj_ratio_matrix.loc[i, j] = 0.0
-    
-    return contactome_matrix, gj_connectivity_matrix, gj_ratio_matrix
 
-def get_electrical_connectivity(neuron_membrane_mask: np.ndarray,
-                                neuron_labels: np.ndarray,
-                                gj_segmentation: np.ndarray):
-    """
-    Calculate gap junction voxel connectivity between pairs of neurons and the contactome
-    (total shared membrane voxels between touching neuron pairs).
-    
-    Parameters:
-    -----------
-    neuron_membrane_mask : np.ndarray
-        Binary mask of neuron membranes (shape: Z, Y, X)
-    neuron_labels : np.ndarray
-        Mask with different labels for each neuron (shape: Z, Y, X)
-    gj_segmentation : np.ndarray
-        Segmentation prediction mask for gap junction proteins (shape: Z, Y, X)
-    
-    Returns:
-    --------
-    tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
-        Three connectivity matrices:
-        1. Contactome matrix: total number of shared membrane voxels between neuron pairs
-        2. Gap junction connectivity matrix: number of gap junction voxels between neuron pairs
-        3. Normalized gap junction matrix: gap junction connectivity / contactome (fraction)
-    """
-    import pandas as pd
-    from scipy.ndimage import label as connected_components
-    
-    # Load data if paths are given
-    neuron_membrane_mask = np.load(neuron_membrane_mask) if isinstance(neuron_membrane_mask, str) else neuron_membrane_mask
-    neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
-    gj_segmentation = np.load(gj_segmentation) if isinstance(gj_segmentation, str) else gj_segmentation
-    
-    # Find all unique neuron labels (excluding background)
-    all_neuron_labels = np.unique(neuron_labels)
-    all_neuron_labels = all_neuron_labels[all_neuron_labels > 0].astype(int)
-    
-    # Initialize connectivity matrices using pandas DataFrame
-    contactome_matrix = pd.DataFrame(
-        0, 
-        index=all_neuron_labels, 
-        columns=all_neuron_labels, 
-        dtype=np.int32
-    )
-    gj_connectivity_matrix = pd.DataFrame(
-        0, 
-        index=all_neuron_labels, 
-        columns=all_neuron_labels, 
-        dtype=np.int32
-    )
-    
-    # Process slice by slice along z-axis (axis 0)
-    for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Calculating electrical connectivity"):
-        # Get current slice for all masks
-        membrane_slice = neuron_membrane_mask[z]
-        labels_slice = neuron_labels[z]
-        gj_slice = gj_segmentation[z]
+    def _accumulate_undirected_pairs(mat: pd.DataFrame, a: np.ndarray, b: np.ndarray):
+        """
+        Given two same-length arrays a,b of neuron ids for adjacent pixels,
+        accumulate counts into mat symmetrically for undirected pairs.
+        """
+        if a.size == 0:
+            return
+
+        lo = np.minimum(a, b).astype(int, copy=False)
+        hi = np.maximum(a, b).astype(int, copy=False)
+
+        pairs = np.stack([lo, hi], axis=1)
+        uniq_pairs, counts = np.unique(pairs, axis=0, return_counts=True)
+
+        for (i, j), c in zip(uniq_pairs, counts):
+            # i != j always by construction of adjacency mask, but keep safe
+            if i == j:
+                continue
+            mat.at[i, j] += int(c)
+            mat.at[j, i] += int(c)
+
+    z_slices = neuron_membrane_mask.shape[0]
+    for z in tqdm(range(z_slices), total=z_slices, desc="Calculating electrical connectivity"):
+        #Get current slice for all masks
+        membrane_slice = neuron_membrane_mask[z] > 0
+        labels_slice = neuron_labels[z].astype(np.int32, copy=False)
+        gj_slice = gj_segmentation[z] > 0
+
+        # Neuron id at membrane locations, else 0
+        L = labels_slice * membrane_slice
+
+        # Contactome (adjacency-based)
+        # Count label disagreements across neighbor pairs, restricted to membrane pixels (both sides must be membrane-labeled)
+        # Horizontal neighbors
+        left = L[:, :-1]  # All pixels except the rightmost column
+        right = L[:, 1:]  # All pixels except the leftmost column
         
-        # Get gap junction on membranes (binary mask)
-        gj_on_membrane = (gj_slice > 0) & (membrane_slice > 0)
-        
-        # Get intersection: membrane pixels with neuron labels
-        neuron_membrane_intersection = labels_slice * (membrane_slice > 0)
-        
-        # Process contactome: find all membrane voxels shared by touching neuron pairs
-        # Get membrane voxels for each neuron
-        membrane_voxels = neuron_membrane_intersection > 0
-        
-        if np.any(membrane_voxels):
-            # Perform connected components on all membrane voxels (LITERALLY NO POINT OF DOING THIS, NEED TO CHANGE)
-            labeled_membrane, num_membrane_entities = connected_components(membrane_voxels, structure=np.ones((3, 3)))
-            
-            # Process each membrane entity to find contactome
-            for entity_id in range(1, num_membrane_entities + 1):
-                entity_mask = (labeled_membrane == entity_id)
-                
-                # Get neuron labels that this membrane entity touches
-                # The neuron_membrane_intersection is an array of expanded neuron labels only at the membrane
-                neuron_labels_at_entity = neuron_membrane_intersection[entity_mask]
-                unique_neurons = np.unique(neuron_labels_at_entity)
-                unique_neurons = unique_neurons[unique_neurons > 0]  # Exclude background
-                
-                # Check if entity connects exactly two different neurons (contactome)
-                if len(unique_neurons) == 2:
-                    neuron1, neuron2 = int(unique_neurons[0]), int(unique_neurons[1])
-                    
-                    # Count voxels of this entity (shared membrane voxels)
-                    entity_voxel_count = np.sum(entity_mask)
-                    
-                    # Add to contactome matrix (symmetric)
-                    contactome_matrix.loc[neuron1, neuron2] += entity_voxel_count
-                    contactome_matrix.loc[neuron2, neuron1] += entity_voxel_count
-        
-        # Skip gap junction processing if no gap junctions in this slice
-        if not np.any(gj_on_membrane):
-            continue
-        
-        # Perform 2D connected components analysis on gap junction mask
-        labeled_gj, num_gj_entities = connected_components(gj_on_membrane, structure=np.ones((3, 3)))
-        
-        # Process each gap junction entity
-        for entity_id in range(1, num_gj_entities + 1):
-            # Get mask for this entity
-            entity_mask = (labeled_gj == entity_id)
-            
-            # Get neuron labels that this entity touches
-            neuron_labels_at_entity = neuron_membrane_intersection[entity_mask]
-            unique_neurons = np.unique(neuron_labels_at_entity)
-            unique_neurons = unique_neurons[unique_neurons > 0]  # Exclude background
-            
-            # Check if entity connects exactly two different neurons
-            if len(unique_neurons) == 2:
-                neuron1, neuron2 = int(unique_neurons[0]), int(unique_neurons[1])
-                
-                # Count voxels of this entity on the membrane of both neurons
-                entity_voxel_count = np.sum(entity_mask)
-                
-                # Add to gap junction connectivity matrix (symmetric)
-                gj_connectivity_matrix.loc[neuron1, neuron2] += entity_voxel_count
-                gj_connectivity_matrix.loc[neuron2, neuron1] += entity_voxel_count
-    
-    # Calculate normalized gap junction matrix (GJ / contactome)
-    normalized_gj_matrix = gj_connectivity_matrix.copy().astype(float)
-    for i in normalized_gj_matrix.index:
-        for j in normalized_gj_matrix.columns:
-            contactome = contactome_matrix.loc[i, j]
-            if contactome > 0:
-                normalized_gj_matrix.loc[i, j] = gj_connectivity_matrix.loc[i, j] / contactome
-            else:
-                normalized_gj_matrix.loc[i, j] = 0.0
+        #Get all pixels where two different neurons are touching
+        m = (left > 0) & (right > 0) & (left != right)
+        _accumulate_undirected_pairs(contactome_matrix, left[m], right[m])
+
+        # Vertical neighbors
+        up = L[:-1, :]
+        down = L[1:, :]
+        m = (up > 0) & (down > 0) & (up != down)
+        _accumulate_undirected_pairs(contactome_matrix, up[m], down[m])
+
+        if contact_connectivity == 8:
+            # Diagonal down-right
+            ul = L[:-1, :-1]
+            dr = L[1:, 1:]
+            m = (ul > 0) & (dr > 0) & (ul != dr)
+            _accumulate_undirected_pairs(contactome_matrix, ul[m], dr[m])
+
+            # Diagonal down-left
+            ur = L[:-1, 1:]
+            dl = L[1:, :-1]
+            m = (ur > 0) & (dl > 0) & (ur != dl)
+            _accumulate_undirected_pairs(contactome_matrix, ur[m], dl[m])
+
+        # Gap junction connectivity (adjacency-based, same logic as contactome)
+        # A GJ contact pair: two adjacent membrane pixels belonging to different neurons,
+        # where at least one of the two pixels is a GJ pixel.
+        # This ensures GJ counts are a strict subset of contactome counts.
+        if np.any(gj_slice):
+            G = gj_slice  # boolean GJ mask for this slice
+
+            # Horizontal
+            m = (left > 0) & (right > 0) & (left != right) & (G[:, :-1] | G[:, 1:])
+            _accumulate_undirected_pairs(gj_connectivity_matrix, left[m], right[m])
+
+            # Vertical
+            m = (up > 0) & (down > 0) & (up != down) & (G[:-1, :] | G[1:, :])
+            _accumulate_undirected_pairs(gj_connectivity_matrix, up[m], down[m])
+
+            if contact_connectivity == 8:
+                # Diagonal down-right
+                m = (ul > 0) & (dr > 0) & (ul != dr) & (G[:-1, :-1] | G[1:, 1:])
+                _accumulate_undirected_pairs(gj_connectivity_matrix, ul[m], dr[m])
+
+                # Diagonal down-left
+                m = (ur > 0) & (dl > 0) & (ur != dl) & (G[:-1, 1:] | G[1:, :-1])
+                _accumulate_undirected_pairs(gj_connectivity_matrix, ur[m], dl[m])
+
+    # Normalized GJ = GJ / contactome (elementwise), 0 where no contact
+    normalized_gj_matrix = gj_connectivity_matrix.div(contactome_matrix.where(contactome_matrix > 0), fill_value=0.0).astype(float)
     
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
@@ -520,11 +531,13 @@ if __name__ == "__main__":
     # Create heatmaps for all three matrices
     fig, axes = plt.subplots(1, 3, figsize=(36, 10))
     
-    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', square=True, ax=axes[0])
+    step = 20
+    
+    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[0])
     axes[0].set_title('Contactome (Shared Membrane Voxels)')
-    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', square=True, ax=axes[1])
+    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[1])
     axes[1].set_title('Gap Junction Connectivity')
-    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', square=True, ax=axes[2])
+    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[2])
     axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
     
     plt.tight_layout()
@@ -549,11 +562,11 @@ if __name__ == "__main__":
     # Create heatmaps for all three matrices
     fig, axes = plt.subplots(1, 3, figsize=(36, 10))
     
-    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', square=True, ax=axes[0])
+    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[0])
     axes[0].set_title('Contactome (Shared Membrane Voxels)')
-    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', square=True, ax=axes[1])
+    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[1])
     axes[1].set_title('Gap Junction Connectivity')
-    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', square=True, ax=axes[2])
+    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[2])
     axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
     
     plt.tight_layout()
