@@ -59,9 +59,7 @@ def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float 
 
     raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
 
-def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, 
-                                membrane_mask: np.ndarray | str,
-                                max_iterations: int = 100) -> np.ndarray:
+def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100) -> np.ndarray:
     """
     Expand labeled neuron regions until they reach and overlap 1 pixel into the membrane boundary.
     Each neuron expands locally - different edges can expand at different rates until they hit membrane.
@@ -149,9 +147,7 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str,
     
     return expanded_labels
 
-def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, 
-                          neuron_labels: np.ndarray, 
-                          gj_segmentation: np.ndarray) -> dict:
+def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.ndarray, gj_segmentation: np.ndarray) -> dict:
     """
     Analyze gap junction proteins on each neuron's membrane slice by slice.
     
@@ -228,120 +224,7 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray,
     
     return results
 
-#THE FUNCTION BELOW USES DILATION BASED METHOD TO COUNT CONTACTOME VOXELS, NOT ADVISED
-# def get_contactome_and_gj_connectivity(neuron_membrane_mask: np.ndarray,
-#                                        neuron_labels: np.ndarray,
-#                                        gj_segmentation: np.ndarray):
-#     """
-#     Calculate contactome (membrane contact voxels) and gap junction connectivity 
-#     between neuron pairs, then compute the ratio of GJ voxels to contact voxels.
-    
-#     Parameters:
-#     -----------
-#     neuron_membrane_mask : np.ndarray
-#         Binary mask of neuron membranes (shape: Z, Y, X)
-#     neuron_labels : np.ndarray
-#         Mask with different labels for each neuron (shape: Z, Y, X)
-#     gj_segmentation : np.ndarray
-#         Segmentation prediction mask for gap junction proteins (shape: Z, Y, X)
-    
-#     Returns:
-#     --------
-#     tuple of (pd.DataFrame, pd.DataFrame, pd.DataFrame)
-#         Three DataFrames:
-#         1. Contactome matrix: number of membrane contact voxels between neuron pairs
-#         2. GJ connectivity matrix: number of gap junction voxels between neuron pairs
-#         3. GJ/Contactome ratio matrix: fraction of contact voxels that are gap junctions
-#     """
-#     import pandas as pd
-#     from scipy.ndimage import binary_dilation
-#     from skimage.morphology import disk
-    
-#     # Load data if paths are given
-#     neuron_membrane_mask = np.load(neuron_membrane_mask) if isinstance(neuron_membrane_mask, str) else neuron_membrane_mask
-#     neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
-#     gj_segmentation = np.load(gj_segmentation) if isinstance(gj_segmentation, str) else gj_segmentation
-    
-#     # Find all unique neuron labels (excluding background)
-#     all_neuron_labels = np.unique(neuron_labels)
-#     all_neuron_labels = all_neuron_labels[all_neuron_labels > 0].astype(int)
-    
-#     # Initialize matrices
-#     contactome_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
-#     gj_connectivity_matrix = pd.DataFrame(0, index=all_neuron_labels, columns=all_neuron_labels, dtype=np.int32)
-    
-#     # Structuring element for dilation (to detect contact)
-#     se = disk(5)
-    
-#     # Process slice by slice along z-axis
-#     for z in tqdm(range(neuron_membrane_mask.shape[0]), total=neuron_membrane_mask.shape[0], desc="Calculating contactome and GJ connectivity"):
-#         # Get current slice for all masks
-#         membrane_slice = neuron_membrane_mask[z] > 0
-#         labels_slice = neuron_labels[z]
-#         gj_slice = gj_segmentation[z] > 0
-        
-#         # Get neuron labels at membrane locations
-#         membrane_label = labels_slice * membrane_slice
-        
-#         # Get unique neurons in this slice
-#         unique_neurons = np.unique(membrane_label)
-#         unique_neurons = unique_neurons[unique_neurons > 0]
-        
-#         # For each neuron, find contacts with other neurons
-#         for neuron_id in unique_neurons:
-#             # Get this neuron's membrane pixels
-#             neuron_membrane = (membrane_label == neuron_id)
-            
-#             # Dilate by 1 pixel to find potential contacts
-#             dilated = binary_dilation(neuron_membrane, structure=se)
-            
-#             # Find which other neurons are in the dilated region
-#             potential_contacts = labels_slice * dilated * membrane_slice
-            
-#             # Get unique neighbor neurons (excluding self and background)
-#             neighbor_neurons = np.unique(potential_contacts)
-#             neighbor_neurons = neighbor_neurons[(neighbor_neurons > 0) & (neighbor_neurons != neuron_id)]
-            
-#             # For each neighbor, count contact voxels and GJ voxels
-#             for neighbor_id in neighbor_neurons:
-#                 # Get neighbor's membrane pixels
-#                 neighbor_membrane = (membrane_label == neighbor_id)
-                
-#                 # Find contact region: where dilated neuron overlaps with neighbor's membrane
-#                 contact_region = dilated & neighbor_membrane
-                
-#                 # Count contact voxels
-#                 contact_voxels = np.sum(contact_region)
-                
-#                 # Count gap junction voxels in contact region
-#                 gj_voxels = np.sum(contact_region & gj_slice)
-                
-#                 # Update matrices (symmetric)
-#                 neuron_id_int = int(neuron_id)
-#                 neighbor_id_int = int(neighbor_id)
-                
-#                 contactome_matrix.loc[neuron_id_int, neighbor_id_int] += contact_voxels
-#                 gj_connectivity_matrix.loc[neuron_id_int, neighbor_id_int] += gj_voxels
-    
-#     # Calculate ratio matrix
-#     gj_ratio_matrix = gj_connectivity_matrix.copy().astype(float)
-#     for i in gj_ratio_matrix.index:
-#         for j in gj_ratio_matrix.columns:
-#             contact = contactome_matrix.loc[i, j]
-#             if contact > 0:
-#                 gj_ratio_matrix.loc[i, j] = gj_connectivity_matrix.loc[i, j] / contact
-#             else:
-#                 gj_ratio_matrix.loc[i, j] = 0.0
-    
-#     return contactome_matrix, gj_connectivity_matrix, gj_ratio_matrix
-
-def get_electrical_connectivity(
-    neuron_membrane_mask: np.ndarray | str,
-    neuron_labels: np.ndarray | str,
-    gj_segmentation: np.ndarray | str,
-    *,
-    contact_connectivity: int = 8,
-):
+def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8,):
     """
     Calculate:
       1) Contactome connectivity between neuron pairs:
