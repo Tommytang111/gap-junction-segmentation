@@ -762,11 +762,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     
-    print("Converting expanded neuron volume to slices for VAST")
-    volume = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/neurons/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy")
-    volume_upsampled = upsample(volume, scale_factors=(1,4,4), save=False)
-    volume_to_slices(volume_upsampled, binary=False, output_dir="/home/tommy111/scratch/split_volumes/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x")
-    
+    print("Get nerve ring constrained slices for VAST from GJS_segmentation pipeline output")
+    volume = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume.npy").astype(bool)
+    nr_mask = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    nr_mask_upsampled = upsample(nr_mask, scale_factors=(1,4,4), save=False)
+    volume_constrained = volume & nr_mask_upsampled
+    volume_to_slices(volume_constrained.astype(np.uint8), output_dir="/home/tommy111/scratch/split_volumes/unet_u4lqcs5g/sem_adult_NR_predictions")
 
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
     # #Read neuron labels

@@ -13,7 +13,6 @@ from inference import inference
 from models import TestDataset, TestDataset3D
 import albumentations as A
 import os
-import cv2
 import numpy as np
 import multiprocessing
 from pathlib import Path

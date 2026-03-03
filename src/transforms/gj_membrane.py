@@ -4,9 +4,11 @@ import time
 import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from pathlib import Path
+
 
 #FUNCTIONS 
-def extract_membranes(neurons: np.ndarray | str, radius: int = 1) -> np.ndarray:
+def extract_membranes(neurons:np.ndarray|str, radius:int=1) -> np.ndarray:
     """
     Dilation-based membrane: return the 1-pixel-thick (or thin) ring created by dilation.
     Works for 2D images or 3D stacks (dilates each z-slice in 2D).
@@ -34,7 +36,7 @@ def extract_membranes(neurons: np.ndarray | str, radius: int = 1) -> np.ndarray:
 
     raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
 
-def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float = 0,) -> np.ndarray:
+def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float = 0, save:bool=False, save_path:str=None) -> np.ndarray:
     """Extract membrane using Sobel gradient (thin edges). Works for 2D or 3D (slice-wise)."""
     from scipy.ndimage import sobel
     import numpy as np
@@ -49,17 +51,24 @@ def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float 
         return (grad > threshold).astype(np.uint8) * 255
 
     if arr.ndim == 2:
-        return _membrane_2d(arr)
+        final_membrane = _membrane_2d(arr)
 
     if arr.ndim == 3:
         membrane = np.zeros_like(arr, dtype=np.uint8)
         for z in range(arr.shape[0]):
             membrane[z] = _membrane_2d(arr[z])
-        return membrane
+        final_membrane = membrane
+        
+    #Optionally save membrane 
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, final_membrane)
+        print(f"Membrane saved as {save_path}.")
+        
+    return final_membrane
 
-    raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
 
-def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100) -> np.ndarray:
+def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, save:bool=False, save_path:str=None) -> np.ndarray:
     """
     Expand labeled neuron regions until they reach and overlap 1 pixel into the membrane boundary.
     Each neuron expands locally - different edges can expand at different rates until they hit membrane.
@@ -144,6 +153,12 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
                     reached_membrane |= membrane_region & neuron_mask
         
         expanded_labels[z] = labels_slice
+        
+    #Optionally save expanded labels 
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, expanded_labels)
+        print(f"Expanded labels saved as {save_path}.")
     
     return expanded_labels
 
