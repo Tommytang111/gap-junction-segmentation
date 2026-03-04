@@ -5,7 +5,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pathlib import Path
-
+import pickle
+import sys
+sys.path.append("/home/tommy111/projects/def-mzhen/tommy111/code/")
+from src.utils import check_output_directory
 
 #FUNCTIONS 
 def extract_membranes(neurons:np.ndarray|str, radius:int=1) -> np.ndarray:
@@ -162,7 +165,7 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
     
     return expanded_labels
 
-def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.ndarray, gj_segmentation: np.ndarray) -> dict:
+def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.ndarray, gj_segmentation: np.ndarray, save:bool=True, save_path:str=None) -> dict:
     """
     Analyze gap junction proteins on each neuron's membrane slice by slice.
     
@@ -231,15 +234,22 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.nd
             results[label]['total_voxels'] += total_voxels
             results[label]['gj_voxels'] += gj_voxels
     
-    # Calculate fractions for each neuron
+    #Calculate fractions for each neuron
     for label in results:
         total = results[label]['total_voxels']
         gj = results[label]['gj_voxels']
         results[label]['gj_fraction'] = gj / total if total > 0 else 0.0
     
+    #Optionally save analysis results 
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        with open(save_path, "wb") as f:
+            pickle.dump(results, f)
+        print(f"Neuronal analysis results saved as {save_path}.")
+
     return results
 
-def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8,):
+def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8, save:bool=True, save_path:str=None):
     """
     Calculate:
       1) Contactome connectivity between neuron pairs:
@@ -373,6 +383,18 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
     # Normalized GJ = GJ / contactome (elementwise), 0 where no contact
     normalized_gj_matrix = gj_connectivity_matrix.div(contactome_matrix.where(contactome_matrix > 0), fill_value=0.0).astype(float)
     
+    #Optionally save analysis results 
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        with open(Path(save_path) / "contactome" .pkl, "wb") as f:
+            pickle.dump(contactome_matrix, f)
+        with open(Path(save_path) / "gj_connectivity" / .pkl, "wb") as f:
+            pickle.dump(gj_connectivity_matrix, f)
+        with open(Path(save_path) / "normalized_gj_connectivity" / .pkl, "wb") as f:
+            pickle.dump(normalized_gj_matrix, f)
+            
+        print(f"Neuronal analysis results saved as {save_path}.")
+        
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
 if __name__ == "__main__": 
@@ -409,66 +431,36 @@ if __name__ == "__main__":
     # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_analysis_u4lqcs5g.pkl", "wb") as f:
     #     pickle.dump(neuronal_gj_dict, f)
     
-    #Task 4: Calculate electrical connectivity matrix 
-    #MODEL p03lmvzp 
-    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
-        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-        neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-        gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
-    )
+    # #Task 4: Calculate electrical connectivity matrix 
+    # #MODEL p03lmvzp 
+    # contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+    #     neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
+    #     neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+    #     gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
+    # )
     
-    #Write out to pickle
-    import pickle
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_p03lmvzp.pkl", "wb") as f:
-        pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_p03lmvzp.pkl", "wb") as f:
-        pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_p03lmvzp.pkl", "wb") as f:
-        pickle.dump(normalized_gj_matrix, f)
+    # #Write out to pickle
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_p03lmvzp.pkl", "wb") as f:
+    #     pickle.dump(contactome_matrix, f)
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_p03lmvzp.pkl", "wb") as f:
+    #     pickle.dump(gj_connectivity_matrix, f)
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_p03lmvzp.pkl", "wb") as f:
+    #     pickle.dump(normalized_gj_matrix, f)
     
-    # Create heatmaps for all three matrices
-    fig, axes = plt.subplots(1, 3, figsize=(36, 10))
+    # #MODEL u4lqcs5g
+    # contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+    #     neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
+    #     neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+    #     gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
+    # )
     
-    step = 20
-    
-    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[0])
-    axes[0].set_title('Contactome (Shared Membrane Voxels)')
-    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[1])
-    axes[1].set_title('Gap Junction Connectivity')
-    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[2])
-    axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
-    
-    plt.tight_layout()
-    plt.savefig("/home/tommy111/scratch/Membranes/SEM_adult_connectivity_matrices_p03lmvzp.png", dpi=300)
-    
-    #MODEL u4lqcs5g
-    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
-        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-        neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-        gj_segmentation="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy"
-    )
-    
-    #Write out to pickle
-    import pickle
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_u4lqcs5g.pkl", "wb") as f:
-        pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
-        pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
-        pickle.dump(normalized_gj_matrix, f)
-    
-    # Create heatmaps for all three matrices
-    fig, axes = plt.subplots(1, 3, figsize=(36, 10))
-    
-    sns.heatmap(contactome_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[0])
-    axes[0].set_title('Contactome (Shared Membrane Voxels)')
-    sns.heatmap(gj_connectivity_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[1])
-    axes[1].set_title('Gap Junction Connectivity')
-    sns.heatmap(normalized_gj_matrix, annot=False, cmap='viridis', vmin=0, xticklabels=step, yticklabels=step, square=True, ax=axes[2])
-    axes[2].set_title('Normalized GJ Connectivity (GJ/Contactome)')
-    
-    plt.tight_layout()
-    plt.savefig("/home/tommy111/scratch/Membranes/SEM_adult_connectivity_matrices_u4lqcs5g.png", dpi=300)
+    # #Write out to pickle
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_contactome_u4lqcs5g.pkl", "wb") as f:
+    #     pickle.dump(contactome_matrix, f)
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_neuronal_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
+    #     pickle.dump(gj_connectivity_matrix, f)
+    # with open("/home/tommy111/scratch/Membranes/SEM_adult_normalized_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
+    #     pickle.dump(normalized_gj_matrix, f)
     
     end = time.time()
     print("Job completed.")

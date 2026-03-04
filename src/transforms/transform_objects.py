@@ -17,6 +17,8 @@ from skimage.measure import block_reduce
 from skimage.morphology import remove_small_holes, disk
 from scipy.ndimage import binary_dilation, generate_binary_structure, distance_transform_edt, binary_fill_holes, binary_closing
 import cc3d
+import sys
+sys.path.append("/home/tommy111/projects/def-mzhen/tommy111/code/")
 from src.utils import check_output_directory
 
 def calculate_entity_metrics(preds:str|np.ndarray, points:str|np.ndarray, nerve_ring_mask:str|np.ndarray=None, verbose:bool=True) -> tuple[float, float, float, int, int, int]:
