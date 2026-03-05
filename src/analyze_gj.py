@@ -2,7 +2,7 @@
 Analyze neuron-specific gap junction expression and neuron-neuron gap junction 
 connectivity in C. elegans nerve ring.
 Tommy Tang
-Last Updated: Feb 27, 2025
+Last Updated: March 5, 2025
 """
 
 #Libraries
@@ -14,37 +14,52 @@ from transforms.gj_membrane import *
 from utils import check_output_directory
 
 class GapJunctionAnalyzer:
-    def __init__(self, name, neurons, gap_junctions, membrane_dir, neurons_expanded_dir, save):
+    def __init__(self, name, neurons, gap_junctions, membrane_dir, neurons_expanded_dir, results_dir, save):
         self.name = name
+        self.model_name = self.name.split("_")[1]
+        self.dataset_name = self.name.split("_")[2] + "_" + self.name.split("_")[3]
         self.neurons = neurons
         self.expanded_neurons_dir = neurons_expanded_dir
         self.membrane_dir = membrane_dir
+        self.results_dir = results_dir
         self.gap_junctions = gap_junctions
         self.save = save
         
     def extract_membranes(self):
-        self.membrane = extract_membranes_with_gradient(neurons=self.neurons, save=self.save, save_path=self.membrane_save_path)
+        save_file = Path(self.membrane_dir) / (self.dataset_name + "_neuron_membrane.npy")
+        self.membrane = extract_membranes_with_gradient(neurons=self.neurons, save=self.save, save_path=save_file)
         
     def expand_neurons(self):
-        self.expanded_neurons = expand_neurons_to_membrane(neuron_labels=self.neurons, membrane_mask=self.membrane, save=self.save, save_path=self.expanded_neurons_dir)
+        save_file = Path(self.expanded_neurons_dir) / (self.dataset_name + "_neurons_only_with_labels_non_uniform_expanded.npy")
+        self.expanded_neurons = expand_neurons_to_membrane(neuron_labels=self.neurons, membrane_mask=self.membrane, save=self.save, save_path=save_file)
         
     #Below methods have outputs always saved
     def analyze_neurons(self):
-        model = self.name.split("_")[1]
-        self.neuron_gjs = analyze_gj_per_neuron(self.membrane, self.expanded_neurons, self.gap_junctions, save_path=model)
+        save_file = Path(self.results_dir) / (self.dataset_name + "_neuronal_gj_analysis_" + self.model_name +".pkl")
+        self.neuron_gjs = analyze_gj_per_neuron(self.membrane, self.expanded_neurons, self.gap_junctions, save_path=save_file)
         
     def analyze_neuron_pairs(self):
-        self.contactome, self.electrical_connectivity, self.normalized_electrical_connectivity = get_electrical_connectivity(self.membrane, self.expanded_neurons, self.gap_junctions, )
+        save_file1 = Path(self.results_dir) / (self.dataset_name + "_contactome_" + self.model_name + ".pkl")
+        save_file2 = Path(self.results_dir) / (self.dataset_name + "_gj_connectivity_" + self.model_name + ".pkl")
+        save_file3 = Path(self.results_dir) / (self.dataset_name + "_normalized_gj_connectivity_" + self.model_name + ".pkl")
+        self.contactome, self.electrical_connectivity, self.normalized_electrical_connectivity = get_electrical_connectivity(self.membrane, 
+                                                                                                                             self.expanded_neurons, 
+                                                                                                                             self.gap_junctions,
+                                                                                                                             contactome=str(save_file1),
+                                                                                                                             gj_connectivity=str(save_file2),
+                                                                                                                             normalized_gj_connectivity=str(save_file3),
+                                                                                                                            )
         
 def main():
     #Count starting time
     start_time = time.time()
     
     pipeline = GapJunctionAnalyzer(
-        #Name of job (I recommend model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
+        #Name of job (Must use model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
+        #EXAMPLE "unet_p03lmvzp_sem_adult_s000-699_gj_analysis"
         name="unet_p03lmvzp_sem_adult_s000-699_gj_analysis",
         #Path to volume of proofread neuron labels
-        neurons="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
+        neurons="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
         #Path to volume of gap junction predictions
         gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy",
         #Membrane save path
@@ -64,23 +79,19 @@ def main():
     
     #Step 1: Neuron mask -> Membrane
     pipeline.extract_membranes()
-    print("Membrane extracted and saved in:", )
-    print()
+    print("Membrane extracted.\n")
     
     #Step 2: Membrane + Neuron mask -> Expanded Neuron mask
     pipeline.expand_neurons()
-    print("Expanded neuron mask created and saved in:", )
-    print()
+    print("Expanded neuron mask created.\n")
     
     #Step 3: Expanded Neuron Mask + Membrane + Gap Junctions -> Neuron-specific gap junction expression
     pipeline.analyze_neurons()
-    print("Neurons analysis completed and saved in:", )
-    print()
+    print("Neurons analysis completed.\n")
     
     #Step 4: Expanded Neuron Mask + Membrane + Gap Junctions -> Neuron-neuron gap junction connectivity
     pipeline.analyze_neuron_pairs()
-    print("Neuron pair analysis completed and saved in:", )
-    print()
+    print("Neuron pair analysis completed.\n")
     
     #Count ending time
     end_time = time.time()

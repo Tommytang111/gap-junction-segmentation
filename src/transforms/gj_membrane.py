@@ -249,7 +249,7 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.nd
 
     return results
 
-def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8, save:bool=True, save_path:str=None):
+def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8, save:bool=True, **save_paths:str):
     """
     Calculate:
       1) Contactome connectivity between neuron pairs:
@@ -383,17 +383,23 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
     # Normalized GJ = GJ / contactome (elementwise), 0 where no contact
     normalized_gj_matrix = gj_connectivity_matrix.div(contactome_matrix.where(contactome_matrix > 0), fill_value=0.0).astype(float)
     
-    #Optionally save analysis results 
-    if save and save_path is not None:
-        check_output_directory(Path(save_path).parent, clear=False)
-        with open(Path(save_path) / "contactome" .pkl, "wb") as f:
-            pickle.dump(contactome_matrix, f)
-        with open(Path(save_path) / "gj_connectivity" / .pkl, "wb") as f:
-            pickle.dump(gj_connectivity_matrix, f)
-        with open(Path(save_path) / "normalized_gj_connectivity" / .pkl, "wb") as f:
-            pickle.dump(normalized_gj_matrix, f)
-            
-        print(f"Neuronal analysis results saved as {save_path}.")
+    #Optionally save analysis results
+    if save and save_paths:
+        if "contactome" in save_paths:
+            check_output_directory(Path(save_paths["contactome"]).parent, clear=False)
+            with open(save_paths["contactome"], "wb") as f:
+                pickle.dump(contactome_matrix, f)
+            print(f"Contactome saved as {save_paths['contactome']}.")
+        if "gj_connectivity" in save_paths:
+            check_output_directory(Path(save_paths["gj_connectivity"]).parent, clear=False)
+            with open(save_paths["gj_connectivity"], "wb") as f:
+                pickle.dump(gj_connectivity_matrix, f)
+            print(f"GJ connectivity saved as {save_paths['gj_connectivity']}.")
+        if "normalized_gj_connectivity" in save_paths:
+            check_output_directory(Path(save_paths["normalized_gj_connectivity"]).parent, clear=False)
+            with open(save_paths["normalized_gj_connectivity"], "wb") as f:
+                pickle.dump(normalized_gj_matrix, f)
+            print(f"Normalized GJ connectivity saved as {save_paths['normalized_gj_connectivity']}.")
         
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
