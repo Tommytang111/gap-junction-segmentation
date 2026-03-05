@@ -761,7 +761,6 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
     print(f"Slices saved to {output_dir}")
     
     
-    
 if __name__ == "__main__":
     start = time()
     
