@@ -59,61 +59,21 @@ def main():
     
     pipeline = GapJunctionAnalyzer(
         #Name of job (Must use model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
-        #EXAMPLE "unet_p03lmvzp_sem_adult_s000-699_gj_analysis"
-        name="unet_p03lmvzp_sem_adult_s000-699_gj_analysis",
-        #Path to volume of proofread neuron labels
-        neurons="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
-        #Path to volume of gap junction predictions
-        gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy",
-        #Membrane save path
-        membrane_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/membranes/sem_adult",
-        #Expanded neurons save path
-        neurons_expanded_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/neurons/sem_adult",
-        #Analysis results save path
-        results_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult",
-        #Save membrane and expanded neuron objects
-        save=True
-    )
-    
-    """
-    pipeline = GapJunctionAnalyzer(
-        #Name of job (Must use model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
         #EXAMPLE "unet_h1qrqboc_sem_dauer1_s000-850_gj_analysis"
         name="unet_h1qrqboc_sem_dauer1_s000-850_gj_analysis",
         #Path to volume of proofread neuron labels
-        neurons="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
+        neurons="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy",
         #Path to volume of gap junction predictions
-        gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrained_in_NR_block_downsampled4x.npy",
+        gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR2_block_downsampled4x.npy",
         #Membrane save path
-        membrane_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/membranes/sem_adult",
+        membrane_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/membranes/sem_dauer_1",
         #Expanded neurons save path
-        neurons_expanded_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/neurons/sem_adult",
+        neurons_expanded_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/neurons/sem_dauer_1",
         #Analysis results save path
-        results_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult",
+        results_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1",
         #Save membrane and expanded neuron objects
         save=True
     )
-    """
-    
-    """
-    pipeline = GapJunctionAnalyzer(
-        #Name of job (Must use model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
-        #EXAMPLE "unet_h1qrqboc_sem_dauer2_s000-972_gj_analysis"
-        name="unet_h1qrqboc_sem_dauer2_s000-972_gj_analysis",
-        #Path to volume of proofread neuron labels
-        neurons="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
-        #Path to volume of gap junction predictions
-        gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrained_in_NR_block_downsampled4x.npy",
-        #Membrane save path
-        membrane_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/membranes/sem_adult",
-        #Expanded neurons save path
-        neurons_expanded_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/neurons/sem_adult",
-        #Analysis results save path
-        results_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult",
-        #Save membrane and expanded neuron objects
-        save=True
-    )
-    """
     
     print("Analysis Pipeline initialized with name:", pipeline.name)
     print(f"Shape of neuron volume: {pipeline.neurons.shape}")

@@ -764,73 +764,7 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     
-    print('Recreating filtered neuron masks for SEM_dauers')
-    
-    #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_1
-    #Read neuron labels
-    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    sem_dauer1_neuron_ids = df[df['dauer-1']>0]['adult'].tolist()
-    
-    #Clear output directory if it exists
-    check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/", clear=True)
-    
-    #Filter neuron segmentation mask by labels in sem dauer 1
-    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1")
-    for img in data.glob("*.png"):
-        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-        filter_labels(img_read, sem_dauer1_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/{str(img.name)}")
-    print("Filtering neuron slices finished.\n")
-    
-    #Task: Save filtered neurons
-    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered")
-    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
-    #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
-    #Also save downsampled mask
-    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
-    del vol
-    
-    # #Task: Generate a binary neuron mask
-    # #Stack into volume
-    # data = Path("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neuron_slices_filtered")
-    # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
-    # vol[vol > 0] = 255
-    # vol = vol.astype(np.uint8)
-    # #Downsample
-    # downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_binary_block_downsampled4x.npy")
-    # #Also save original size
-    # np.save("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_binary.npy", vol)
-    # print("Stacking and mask binarization finished.\n")
-    # del vol
-    
-    # #Task: Generate the final neuron mask by binary_closing and hole filling
-    # neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_binary.npy", mmap_mode="r")
-    # nr_volume = generate_mask(neuron_volume, dilation_radius=15, save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask.npy")
-    # downsample(nr_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask_block_downsampled4x.npy")
-    # print("Nerve ring mask finished.")
-    
-    #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_2
-    #Read neuron labels
-    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    sem_dauer2_neuron_ids = df[df['dauer-2']>0]['adult'].tolist()
-    
-    #Clear output directory if it exists
-    check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/", clear=True)
-    
-    #Filter neuron segmentation mask by labels in sem dauer 2
-    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2")
-    for img in data.glob("*.png"):
-        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-        filter_labels(img_read, sem_dauer2_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/{str(img.name)}")
-    print("Filtering neuron slices finished.\n")
-    
-    #Task: Save filtered neurons
-    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered")
-    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
-    #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
-    #Also save downsampled mask
-    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_block_downsampled4x.npy")
-    del vol
-    
+    print('Recreating filtered neuron masks for SEM_adult')
   
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
     # #Read neuron labels
@@ -840,14 +774,14 @@ if __name__ == "__main__":
     # #Clear output directory if it exists
     # check_output_directory("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neuron_slices_filtered/", clear=True)
     
-    # #Filter neuron segmentation mask by labels in sem adult
+    # #Filter neuron mask by labels in sem adult
     # data = Path("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neuron_slices")
     # for img in data.glob("*.png"):
     #     img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
     #     filter_labels(img_read, sem_adult_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neuron_slices_filtered/{str(img.name)}")
     # print("Filtering neuron slices finished.\n")
     
-    # #Task: Save filtered neurons
+    # #Task: Save neuron mask
     # data = Path("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neuron_slices_filtered")
     # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
     # np.save("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels.npy", vol)
@@ -875,12 +809,28 @@ if __name__ == "__main__":
     # print("Nerve ring mask finished.")
     
     # #Task: Constrain predictions to within the neuron mask and calculate entity metrics
-    # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
+    # #SEM Adult
+    # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask2_block_downsampled4x.npy")
+    # pred = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume.npy")
+    # downsample(pred, block_size=(1,4,4), save_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_block_downsampled4x.npy")
+    # del pred
+    # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
     # nr_preds = preds & nr_volume
-    # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_p03lmvzp/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
     
-    #Need to move points again but only in x and y, so will recalculate points volume.
+    #Dauer 1
+    nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_NR_mask_downsampled4x.npy")
+    preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy").astype(bool)
+    nr_preds = preds & nr_volume
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    
+    #Dauer 2
+    nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_NR_mask_downsampled4x.npy")
+    preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy").astype(bool)
+    nr_preds = preds & nr_volume
+    np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    
+    # #Need to move points again but only in x and y, so will recalculate points volume.
     # print("Calculating entity metrics from points moved only in x & y.")
     # move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
     #                          preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
@@ -889,7 +839,7 @@ if __name__ == "__main__":
     # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
     #                          points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
     #                          nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    # print("Task 6 finished.")
+    # print("Task X finished.")
     
     
     # #Task: Generate full-sized images for NR mask and constrained predictions
