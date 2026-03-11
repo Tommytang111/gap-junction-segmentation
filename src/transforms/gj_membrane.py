@@ -1,5 +1,6 @@
 #Libraries
 import numpy as np
+import cv2
 import time
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import pickle
 import sys
 sys.path.append("/home/tommy111/projects/def-mzhen/tommy111/code/")
 from src.utils import check_output_directory
+from scipy.ndimage import sobel
 
 #FUNCTIONS 
 def extract_membranes(neurons:np.ndarray|str, radius:int=1) -> np.ndarray:
@@ -39,27 +41,81 @@ def extract_membranes(neurons:np.ndarray|str, radius:int=1) -> np.ndarray:
 
     raise ValueError(f"Expected 2D or 3D array, got shape {neurons.shape}")
 
-def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float = 0, save:bool=False, save_path:str=None) -> np.ndarray:
-    """Extract membrane using Sobel gradient (thin edges). Works for 2D or 3D (slice-wise)."""
-    from scipy.ndimage import sobel
-    import numpy as np
+def extract_membranes_with_gradient(neurons: np.ndarray | str, kernel_size: int = 3, threshold: float = 0, save:bool=False, save_path:str=None) -> np.ndarray:
+    """
+    Extract neuron membrane voxels using Sobel gradient edge detection.
+
+    Applies Sobel filters along X and Y axes to detect boundaries between
+    neuron regions. Pixels where the gradient magnitude exceeds `threshold`
+    are classified as membrane. Custom kernel sizes can be defined. For 3D 
+    volumes, the Sobel filter is applied independently to each Z-slice 
+    (slice-wise 2D processing).
+
+    Parameters
+    ----------
+    neurons : np.ndarray or str
+        2D or 3D integer-labeled neuron volume (Y, X) or (Z, Y, X).
+        If a str filepath is provided, the array is loaded with np.load().
+    kernel_size : int
+        Size of the kernel to use.
+        Must be an odd integer.
+        Default is 3.
+    threshold : float, optional
+        Minimum gradient magnitude to be classified as membrane.
+        Default is 0, meaning any non-zero gradient is classified as membrane.
+    save : bool, optional
+        If True, saves the resulting membrane mask to disk at `save_path`.
+        Default is False.
+    save_path : str, optional
+        File path where the membrane mask will be saved as a .npy file.
+        Only used if `save` is True. Parent directory is created if it
+        does not exist. Default is None.
+
+    Returns
+    -------
+    np.ndarray
+        uint8 membrane mask of the same shape as `neurons`, where 255
+        indicates a membrane voxel and 0 indicates non-membrane.
+
+    Examples
+    --------
+    >>> membrane = extract_membranes_with_gradient(neurons=neuron_volume)
+
+    >>> membrane = extract_membranes_with_gradient(
+    ...     neurons=neuron_volume,
+    ...     threshold=10.0,
+    ...     kernel_size=5,
+    ...     save=True,
+    ...     save_path="outputs/membranes/membrane.npy"
+    ... )
+    """
     
     neurons = np.load(neurons) if isinstance(neurons, str) else neurons
     arr = neurons.astype(float)
 
-    def _membrane_2d(img2d: np.ndarray) -> np.ndarray:
-        sx = sobel(img2d, axis=0)
-        sy = sobel(img2d, axis=1)
+    def _membrane_2d(img2d: np.ndarray, k_size:int) -> np.ndarray:
+        if k_size == 3:
+            sx = sobel(img2d, axis=0)
+            sy = sobel(img2d, axis=1)
+            
+        elif kernel_size % 2 == 1:
+            img = neurons.astype(np.float64)
+            sx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=kernel_size)
+            sy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=kernel_size)
+        
+        else:
+            raise ValueError("Kernel size must be odd.")
+            
         grad = np.hypot(sx, sy)
         return (grad > threshold).astype(np.uint8) * 255
 
     if arr.ndim == 2:
-        final_membrane = _membrane_2d(arr)
+        final_membrane = _membrane_2d(arr, k_size=kernel_size)
 
     if arr.ndim == 3:
         membrane = np.zeros_like(arr, dtype=np.uint8)
         for z in range(arr.shape[0]):
-            membrane[z] = _membrane_2d(arr[z])
+            membrane[z] = _membrane_2d(arr[z], k_size=kernel_size)
         final_membrane = membrane
         
     #Optionally save membrane 
@@ -69,7 +125,6 @@ def extract_membranes_with_gradient(neurons: np.ndarray | str, threshold: float 
         print(f"Membrane saved as {save_path}.")
         
     return final_membrane
-
 
 def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, save:bool=False, save_path:str=None) -> np.ndarray:
     """
