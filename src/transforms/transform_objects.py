@@ -613,8 +613,6 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
     - points_path: binary point annotations (non-zero = point locations).
 
     Processing pipeline:
-    - Downsample both volumes in-plane by a factor of 2 using max pooling
-    (block_reduce(..., block_size=(1, 2, 2))) to reduce memory and noise.
     - Remove small speckles from the predictions with cc3d.dust(threshold=dust_size, connectivity=26).
     - Label remaining connected components (entities) with 26-connectivity (uint32 labels).
     - Compute a Euclidean distance transform from the point mask.
@@ -625,10 +623,8 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
         Path to .npy file or actual .npy of the predicted binary volume.
     points : str | np.ndarray
         Path to .npy file or actual .npy of the point-annotation volume.
-    radius : int, default=15
+    radius : int, default=10
         Neighborhood radius in voxels in the downsampled grid
-    (after the 2× downsampling in X and Y). Adjust accordingly if you need a radius
-    in the original resolution.
     dust_size : int, default=6
         Minimum size of connected components to keep in preds.
 
@@ -764,8 +760,40 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     
-    print('Splitting volumes to slices for dauers')
+    print('Generating high confidence gap junction entities')
     
+    #Task: Generate high confidence gap junction entities
+    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_high_confidence_GJs.json",
+                   volume_shape=(700, 11008, 19968),
+                   voxel_size=(30, 4, 4),
+                   point_value=255,
+                   save=True,
+                   save_path="/home/tommy111/scratch/outputs/sem_adult_high_confidence_GJs.npy")
+    
+    downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_hc_GJ_points_downsampled4x.npy")
+    
+    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/outputs/sem_adult_GJs_entities_downsampled4x.npy",
+                                                                          points="/home/tommy111/scratch/outputs/sem_adult_hc_GJ_points_downsampled4x.npy",
+                                                                          save=False)
+    
+    print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
+    
+    filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699", 
+                                        points=moved_points,
+                                        save=True,
+                                        save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
+    
+    filtered_entities_upsampled = upsample(filtered_entities, scale_factors=(1,4,4), save=False)
+    volume_to_slices(volume=filtered_entities_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_hc_NR_entities")
+    
+    #Save moved points to VAST
+    moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
+    
+    enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
+    
+    volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_hc_gj_points")
+    
+    # #Task: Upsample GJA outputs
     # #Membrane 1
     # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/membranes/sem_dauer_1/sem_dauer_1_neuron_membrane.npy") 
     # vol_upsampled = upsample(vol, (1,4,4), save=False)
