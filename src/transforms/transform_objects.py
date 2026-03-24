@@ -760,23 +760,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Calculate entity metrics for low confidence points\n')
+    print('Transforming volumes to slices for sem_dauer 1\n')
     
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_low_confidence_GJs.json",
-                   volume_shape=(700, 11008, 19968),
-                   voxel_size=(30, 4, 4),
-                   point_value=255,
-                   save=True,
-                   save_path="/home/tommy111/scratch/outputs/sem_adult_low_confidence_GJs.npy")
-    
-    points = downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_lc_GJ_points_downsampled4x.npy")
-    
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/outputs/sem_adult_GJs_entities_downsampled4x.npy",
-                                                                          points=points,
-                                                                          save="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_moved_low_confidence_GJs_downsampled4x.npy")
-    
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy",
-                             points=moved_points)
+    volume = np.load("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy")
+    volume_upsampled = upsample(volume, (1,4,4))
+    volume_to_slices(volume=volume_upsampled,
+                     output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_neuron_membrane")
     
     # #Task: Generate high confidence gap junction entities and save objects for VAST import
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_GJs.json",
@@ -834,7 +823,7 @@ if __name__ == "__main__":
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_1
     # #Read neuron labels
     # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    # sem_dauer1_neuron_ids = df[df['dauer-1']>0]['adult'].tolist()
+    # sem_dauer1_neuron_ids = df[df['dauer-1']>0]['dauer-1'].tolist()
     
     # #Clear output directory if it exists
     # check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/", clear=True)
@@ -884,7 +873,7 @@ if __name__ == "__main__":
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_2
     # #Read neuron labels
     # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    # sem_dauer2_neuron_ids = df[df['dauer-2']>0]['adult'].tolist()
+    # sem_dauer2_neuron_ids = df[df['dauer-2']>0]['dauer-2'].tolist()
     
     # #Clear output directory if it exists
     # check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/", clear=True)

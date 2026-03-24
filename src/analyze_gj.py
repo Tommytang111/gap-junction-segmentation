@@ -61,7 +61,7 @@ def main():
         #Name of job (Must use model + data + "gj analysis"). It is essential to include underscores in this format for the pipeline to work.
         #EXAMPLE "unet_p03lmvzp_sem_adult_s000-699_gj_analysis"
         name="unet_p03lmvzp_sem_adult_s000-699_gj_analysis",
-        #Path to volume of proofread neuron labels
+        #Path to volume of proofread and filtered neuron labels
         neurons="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
         #Path to volume of gap junction predictions
         gap_junctions="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy",

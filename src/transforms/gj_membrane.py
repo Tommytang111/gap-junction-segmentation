@@ -15,8 +15,42 @@ from scipy.ndimage import sobel
 #FUNCTIONS 
 def extract_membranes(neurons:np.ndarray|str, radius:int=1) -> np.ndarray:
     """
-    Dilation-based membrane: return the 1-pixel-thick (or thin) ring created by dilation.
-    Works for 2D images or 3D stacks (dilates each z-slice in 2D).
+    Extract membrane voxels by dilation and XOR.
+
+    Generates a thin membrane ring around neuron regions by dilating each
+    neuron mask and taking the logical XOR between the original mask and
+    the dilated mask. Supports both 2D images and 3D volumes. For 3D
+    inputs, processing is done independently on each Z-slice (2D slice-wise).
+
+    Parameters
+    ----------
+    neurons : np.ndarray or str
+        2D or 3D neuron mask array with shape (Y, X) or (Z, Y, X).
+        If a str filepath is provided, the array is loaded with np.load().
+        Non-zero values are treated as neuron foreground.
+    radius : int, optional
+        Radius of the disk-shaped structuring element used for dilation.
+        Larger values produce thicker membrane rings. Default is 1.
+
+    Returns
+    -------
+    np.ndarray
+        uint8 membrane mask with the same shape as `neurons`, where 255
+        indicates membrane voxels and 0 indicates non-membrane.
+
+    Raises
+    ------
+    ValueError
+        If `neurons` is not a 2D or 3D array.
+
+    Examples
+    --------
+    >>> membrane = extract_membranes(neurons=neuron_mask_2d)
+
+    >>> membrane = extract_membranes(
+    ...     neurons="/path/to/neuron_volume.npy",
+    ...     radius=3
+    ... )
     """
     from skimage.morphology import disk
     from scipy.ndimage import binary_dilation
@@ -461,36 +495,33 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
 if __name__ == "__main__": 
     start = time.time()
     
-    print("Calculating neuronal GJ connectivity for sem adult constrained predictions... \n")
+    print("Calculating neuronal GJ connectivity for sem dauer 1 constrained predictions... \n")
     
     #Load data
-    #neurons = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_block_downsampled4x.npy")
-    #neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy")
-    #print(np.unique(neurons, return_counts=True))
-    #print(np.unique(neuron_labels, return_counts=True))
+    neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_block_downsampled4x.npy")
+    neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
     #membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
     
-    # #Task 1: Extract membrane
-    # membrane = extract_membranes_with_gradient(neurons)
-    # np.save("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", membrane)
+    #Task 1: Extract membrane
+    membrane = extract_membranes(neurons, radius=5)
+    np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
     
-    # #Task 2: Expand neurons to membrane
-    # expanded_neurons = expand_neurons_to_membrane(neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_block_downsampled4x.npy",
-    #                                               membrane_mask=membrane)
-    # np.save("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
+    #Task 2: Expand neurons to membrane
+    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane)
+    np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
-    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
-    gjs[gjs>0] = 255
-    gjs = gjs.astype(np.uint8)
+    # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
+    # gjs[gjs>0] = 255
+    # gjs = gjs.astype(np.uint8)
     
-    #Task 3: Calculate gap junctions per neuron and write output
-    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-                                             gj_segmentation=gjs)
+    # #Task 3: Calculate gap junctions per neuron and write output
+    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
+    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+    #                                          gj_segmentation=gjs)
             
-    import pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_neuronal_hc_gj_analysis_u4lqcs5g.pkl", "wb") as f:
-        pickle.dump(neuronal_gj_dict, f)
+    # import pickle
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_neuronal_hc_gj_analysis_u4lqcs5g.pkl", "wb") as f:
+    #     pickle.dump(neuronal_gj_dict, f)
     
     # #Task 4: Calculate electrical connectivity matrix 
     
