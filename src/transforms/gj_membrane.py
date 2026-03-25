@@ -160,7 +160,7 @@ def extract_membranes_with_gradient(neurons: np.ndarray | str, kernel_size: int 
         
     return final_membrane
 
-def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, save:bool=False, save_path:str=None) -> np.ndarray:
+def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, penetration: int = 1, save:bool=False, save_path:str=None) -> np.ndarray:
     """
     Expand labeled neuron regions until they reach and overlap 1 pixel into the membrane boundary.
     Each neuron expands locally - different edges can expand at different rates until they hit membrane.
@@ -188,7 +188,7 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
     
     # Create output array
     expanded_labels = neuron_labels.copy()
-    membrane_binary = (membrane_mask > 0)
+    membrane_binary = (membrane_mask > 0) #Should already be binarized anyways
     
     # Structuring element for dilation
     se = disk(1)
@@ -238,10 +238,10 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
                 labels_slice[can_expand] = label
                 neuron_mask = (labels_slice == label)
                 
-                # Mark pixels that touched membrane (and their 1-pixel overlap) as "reached"
+                # Mark pixels that touched membrane (and their N-pixel overlap) as "reached"
                 if np.any(new_membrane_pixels):
-                    # Dilate the membrane-touching pixels by 1 to get the overlap region
-                    membrane_region = binary_dilation(new_membrane_pixels, structure=se)
+                    # Dilate the membrane-touching pixels by N to get the overlap region
+                    membrane_region = binary_dilation(new_membrane_pixels, structure=disk(penetration))
                     reached_membrane |= membrane_region & neuron_mask
         
         expanded_labels[z] = labels_slice
@@ -498,8 +498,7 @@ if __name__ == "__main__":
     print("Calculating neuronal GJ connectivity for sem dauer 1 constrained predictions... \n")
     
     #Load data
-    neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_block_downsampled4x.npy")
-    neuron_labels = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
+    neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
     #membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
     
     #Task 1: Extract membrane
@@ -507,7 +506,7 @@ if __name__ == "__main__":
     np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
     
     #Task 2: Expand neurons to membrane
-    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane)
+    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, penetration=3)
     np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
     # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")

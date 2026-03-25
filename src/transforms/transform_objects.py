@@ -225,7 +225,7 @@ def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int
     
     return array_enlarged
 
-def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, save_path:str=None) -> np.ndarray:
+def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, save_path:str=None, verbose:bool=False) -> np.ndarray:
     """
     Keep only specified label IDs in a labeled mask; set all other pixels to 0.
 
@@ -239,6 +239,8 @@ def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, 
         If True, writes the filtered mask to save_path using cv2.imwrite.
     save_path : str | None
         Destination path for the filtered image. Required when save=True.
+    verbose : bool, default False
+        If True, checks whether the parent directory of the file to be written is empty.
 
     Returns
     -------
@@ -253,18 +255,16 @@ def filter_labels(img:str|np.ndarray, labels_to_keep:list[int], save:bool=True, 
     - When saving, ensure the dtype is supported by cv2.imwrite (e.g., uint8 or uint16); otherwise,
         cast accordingly before saving.
     """
-    if isinstance(img, str):
-        #Read img/mask
-        mask = cv2.imread(img, cv2.IMREAD_UNCHANGED)
-    else:
-        mask=img
-    
+    #Read img/mask
+    mask = cv2.imread(img, cv2.IMREAD_UNCHANGED) if isinstance(img, str) else img
+
     #Filter mask
     mask_filtered = np.where(np.isin(mask, labels_to_keep), mask, 0)
     
     #Save mask
     if save and save_path is not None:
-        check_output_directory(Path(save_path).parent, clear=False)
+        if verbose:
+            check_output_directory(Path(save_path).parent, clear=False)
         cv2.imwrite(save_path, mask_filtered)
         print(f"Filtered mask successfully saved as {save_path}.")
         
@@ -760,12 +760,7 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Transforming volumes to slices for sem_dauer 1\n')
-    
-    volume = np.load("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy")
-    volume_upsampled = upsample(volume, (1,4,4))
-    volume_to_slices(volume=volume_upsampled,
-                     output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_neuron_membrane")
+    print('Regenerating filtered neuron masks for sem_dauer 1 & 2\n')
     
     # #Task: Generate high confidence gap junction entities and save objects for VAST import
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_GJs.json",
@@ -820,30 +815,30 @@ if __name__ == "__main__":
     
     ##############################################################################################################################
     
-    # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_1
-    # #Read neuron labels
-    # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    # sem_dauer1_neuron_ids = df[df['dauer-1']>0]['dauer-1'].tolist()
+    #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_1
+    #Read neuron labels
+    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
+    sem_dauer1_neuron_ids = df[df['dauer-1']>0]['dauer-1'].tolist()
     
-    # #Clear output directory if it exists
-    # check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/", clear=True)
+    #Clear output directory if it exists
+    check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/", clear=True)
     
-    # #Filter neuron segmentation mask by labels in sem dauer 1
-    # data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1")
-    # for img in data.glob("*.png"):
-    #     img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-    #     filter_labels(img_read, sem_dauer1_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/{str(img.name)}")
-    # print("Filtering neuron slices finished.\n")
+    #Filter neuron segmentation mask by labels in sem dauer 1
+    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1")
+    for img in data.glob("*.png"):
+        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
+        filter_labels(img_read, sem_dauer1_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered/{str(img.name)}")
+    print("Filtering neuron slices finished.\n")
     
     ##############################################################################################################################
     
-    # #Task: Save filtered neurons
-    # data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered")
-    # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
-    # #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
-    # #Also save downsampled mask
-    # downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
-    # del vol
+    #Task: Save filtered neurons
+    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_filtered")
+    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
+    #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
+    #Also save downsampled mask
+    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
+    del vol
     
     ##############################################################################################################################
     
@@ -870,30 +865,30 @@ if __name__ == "__main__":
     
     ##############################################################################################################################
     
-    # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_2
-    # #Read neuron labels
-    # df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
-    # sem_dauer2_neuron_ids = df[df['dauer-2']>0]['dauer-2'].tolist()
+    #Task: Filter neuron segmentation mask by neuron-only labels in SEM_dauer_2
+    #Read neuron labels
+    df = pd.read_csv("/home/tommy111/projects/def-mzhen/tommy111/neuron_ids_no_muscles.csv")
+    sem_dauer2_neuron_ids = df[df['dauer-2']>0]['dauer-2'].tolist()
     
-    # #Clear output directory if it exists
-    # check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/", clear=True)
+    #Clear output directory if it exists
+    check_output_directory("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/", clear=True)
     
-    # #Filter neuron segmentation mask by labels in sem dauer 2
-    # data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2")
-    # for img in data.glob("*.png"):
-    #     img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
-    #     filter_labels(img_read, sem_dauer2_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/{str(img.name)}")
-    # print("Filtering neuron slices finished.\n")
+    #Filter neuron segmentation mask by labels in sem dauer 2
+    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2")
+    for img in data.glob("*.png"):
+        img_read = cv2.imread(str(img), cv2.IMREAD_UNCHANGED)
+        filter_labels(img_read, sem_dauer2_neuron_ids, save=True, save_path=f"/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered/{str(img.name)}")
+    print("Filtering neuron slices finished.\n")
     
     ##############################################################################################################################
     
-    # #Task: Save filtered neurons
-    # data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered")
-    # vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
-    # #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
-    # #Also save downsampled mask
-    # downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_block_downsampled4x.npy")
-    # del vol
+    #Task: Save filtered neurons
+    data = Path("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_filtered")
+    vol = np.stack([cv2.imread(str(img), cv2.IMREAD_UNCHANGED) for img in sorted(data.glob("*.png"))], axis=0)
+    #np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels.npy", vol)
+    #Also save downsampled mask
+    downsample(vol, block_size=(1, 4, 4), save_path="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_block_downsampled4x.npy")
+    del vol
     
     
     # #Task: Filter neuron segmentation mask by neuron-only labels in SEM_adult
