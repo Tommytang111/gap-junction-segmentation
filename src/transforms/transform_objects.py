@@ -715,7 +715,7 @@ def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True,
         
     return upsampled_volume
 
-def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) -> None:
+def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -> None:
     """
     Save each z-slice of a 3D NumPy volume (.npy) as a PNG image.
 
@@ -726,7 +726,7 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
     output_dir : str
         Directory where PNG slices will be written. The directory is created
         and cleared (existing contents removed) before saving.
-    binary : bool, default=True
+    binary : bool, default=False
         Saves the slices as binary masks of uint8 type (0 and 255). If False, saves the original values and data type.
 
     Behavior
@@ -760,11 +760,40 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=True) ->
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Regenerating filtered neuron masks for sem_dauer 1 & 2\n')
+    print('Regenerating filtered neuron masks for sem_dauer 1\n')
     
     volume = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy")
     volume_upsampled = upsample(volume, (1,4,4), save=False)
-    volume_to_slices(volume_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_neurons_only_with_labels_non_uniform_expanded")
+    volume_to_slices(volume_upsampled, "/home/tommy111/scratch/split_volumes/sem_dauer_1_neurons_only_with_labels_non_uniform_expanded")
+    
+    # #Task: Generate the final neuron mask by binary_closing and hole filling
+    # neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_binary.npy", mmap_mode="r")
+    # nr_volume = generate_mask(neuron_volume, dilation_radius=15, save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask.npy")
+    # downsample(nr_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask_block_downsampled4x.npy")
+    # print("Nerve ring mask finished.")
+    
+    # #Task: Constrain predictions to within the neuron mask and calculate entity metrics
+    # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
+    # nr_preds = preds & nr_volume
+    # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    
+    # Need to move points again but only in x and y, so will recalculate points volume.
+    # print("Calculating entity metrics from points moved only in x & y.")
+    # move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
+    #                          preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
+    #                          save=True,
+    #                          save_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
+    #                          points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
+    #                          nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
+    # print("Task 6 finished.")
+    
+    
+    
+    
+    
+    
     
     # #Task: Generate high confidence gap junction entities and save objects for VAST import
     # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_GJs.json",

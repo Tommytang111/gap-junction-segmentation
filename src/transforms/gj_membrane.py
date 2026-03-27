@@ -254,15 +254,7 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
     
     return expanded_labels
 
-def expand_neurons_to_membrane2(
-    neuron_labels: np.ndarray | str,
-    membrane_mask: np.ndarray | str,
-    max_iterations: int = 100,
-    penetration: int = 1,
-    connectivity: int = 8,
-    save: bool = False,
-    save_path: str = None
-) -> np.ndarray:
+def expand_neurons_to_membrane2(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, penetration: int = 1, connectivity: int = 8, save: bool = False, save_path: str = None) -> np.ndarray:
     """
     Expand labeled neurons simultaneously into background, with optional membrane penetration.
 
@@ -635,35 +627,35 @@ if __name__ == "__main__":
     expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, dilation_factor=3)
     np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
-    # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
-    # gjs[gjs>0] = 255
-    # gjs = gjs.astype(np.uint8)
+    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR2_block_downsampled4x.npy")
+    gjs[gjs>0] = 255
+    gjs = gjs.astype(np.uint8)
     
-    # #Task 3: Calculate gap junctions per neuron and write output
-    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-    #                                          gj_segmentation=gjs)
+    #Task 3: Calculate gap junctions per neuron and write output
+    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", 
+                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+                                             gj_segmentation=gjs)
             
-    # import pickle
-    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_neuronal_hc_gj_analysis_u4lqcs5g.pkl", "wb") as f:
-    #     pickle.dump(neuronal_gj_dict, f)
+    import pickle
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_analysis_model.pkl", "wb") as f:
+        pickle.dump(neuronal_gj_dict, f)
     
-    # #Task 4: Calculate electrical connectivity matrix 
+    #Task 4: Calculate electrical connectivity matrix 
     
-    # #MODEL u4lqcs5g
-    # contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
-    #     neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy", 
-    #     neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
-    #     gj_segmentation=gjs
-    # )
+    #MODEL u4lqcs5g
+    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", 
+        neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", 
+        gj_segmentation=gjs
+    )
     
-    # #Write out to pickle
-    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_hc_contactome_u4lqcs5g.pkl", "wb") as f:
-    #     pickle.dump(contactome_matrix, f)
-    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_neuronal_hc_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
-    #     pickle.dump(gj_connectivity_matrix, f)
-    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_normalized_hc_gj_connectivity_u4lqcs5g.pkl", "wb") as f:
-    #     pickle.dump(normalized_gj_matrix, f)
+    #Write out to pickle
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_hc_contactome_model.pkl", "wb") as f:
+        pickle.dump(contactome_matrix, f)
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_connectivity_model.pkl", "wb") as f:
+        pickle.dump(gj_connectivity_matrix, f)
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_normalized_hc_gj_connectivity_model.pkl", "wb") as f:
+        pickle.dump(normalized_gj_matrix, f)
     
     end = time.time()
     print("Job completed.")
