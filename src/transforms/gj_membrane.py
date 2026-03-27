@@ -160,7 +160,7 @@ def extract_membranes_with_gradient(neurons: np.ndarray | str, kernel_size: int 
         
     return final_membrane
 
-def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, max_iterations: int = 100, penetration: int = 1, save:bool=False, save_path:str=None) -> np.ndarray:
+def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: np.ndarray | str, dilation_factor: int = 1, max_iterations: int = 100, save:bool=False, save_path:str=None) -> np.ndarray:
     """
     Expand labeled neuron regions until they reach and overlap 1 pixel into the membrane boundary.
     Each neuron expands locally - different edges can expand at different rates until they hit membrane.
@@ -191,22 +191,22 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
     membrane_binary = (membrane_mask > 0) #Should already be binarized anyways
     
     # Structuring element for dilation
-    se = disk(1)
+    se = disk(dilation_factor)
     
     # Process each z-slice independently
     slices = expanded_labels.shape[0]
     for z in tqdm(range(slices), total=slices, desc="Expanding neurons to membrane"):
-        labels_slice = expanded_labels[z]
+        neuron_slice = expanded_labels[z]
         membrane_slice = membrane_binary[z]
         
         # Get all unique neuron labels in this slice (excluding background)
-        unique_labels = np.unique(labels_slice)
+        unique_labels = np.unique(neuron_slice)
         unique_labels = unique_labels[unique_labels > 0]
         
         # Track which pixels have reached membrane for each neuron
         for label in unique_labels:
             # Get mask for this specific neuron
-            neuron_mask = (labels_slice == label).astype(bool)
+            neuron_mask = (neuron_slice == label).astype(bool)
             
             # Track pixels that have reached the membrane (stop expanding from these)
             reached_membrane = np.zeros_like(neuron_mask, dtype=bool)
@@ -226,7 +226,7 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
                 new_pixels = dilated & ~neuron_mask
                 
                 # Only expand into background (not other neurons)
-                can_expand = new_pixels & (labels_slice == 0)
+                can_expand = new_pixels & (neuron_slice == 0)
                 
                 if not np.any(can_expand):
                     break  # No more room to expand
@@ -235,16 +235,16 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
                 new_membrane_pixels = can_expand & membrane_slice
                 
                 # Add expandable pixels to the neuron
-                labels_slice[can_expand] = label
-                neuron_mask = (labels_slice == label)
+                neuron_slice[can_expand] = label
+                neuron_mask = (neuron_slice == label)
                 
-                # Mark pixels that touched membrane (and their N-pixel overlap) as "reached"
+                # Mark pixels that touched membrane (and their 1-pixel overlap) as "reached"
                 if np.any(new_membrane_pixels):
-                    # Dilate the membrane-touching pixels by N to get the overlap region
-                    membrane_region = binary_dilation(new_membrane_pixels, structure=disk(penetration))
+                    # Dilate the membrane-touching pixels by 1 to get the overlap region
+                    membrane_region = binary_dilation(new_membrane_pixels, structure=disk(1))
                     reached_membrane |= membrane_region & neuron_mask
         
-        expanded_labels[z] = labels_slice
+        expanded_labels[z] = neuron_slice
         
     #Optionally save expanded labels 
     if save and save_path is not None:
@@ -253,6 +253,132 @@ def expand_neurons_to_membrane(neuron_labels: np.ndarray | str, membrane_mask: n
         print(f"Expanded labels saved as {save_path}.")
     
     return expanded_labels
+
+def expand_neurons_to_membrane2(
+    neuron_labels: np.ndarray | str,
+    membrane_mask: np.ndarray | str,
+    max_iterations: int = 100,
+    penetration: int = 1,
+    connectivity: int = 8,
+    save: bool = False,
+    save_path: str = None
+) -> np.ndarray:
+    """
+    Expand labeled neurons simultaneously into background, with optional membrane penetration.
+
+    This version avoids per-label order bias by growing all neuron labels at the same time.
+    A background pixel is assigned from neighboring labels each iteration.
+    If multiple labels compete for the same pixel, the smallest label id is chosen
+    deterministically.
+
+    Parameters
+    ----------
+    neuron_labels : np.ndarray or str
+        Integer labeled mask (Z, Y, X), 0 is background.
+    membrane_mask : np.ndarray or str
+        Binary membrane mask (Z, Y, X), non-zero means membrane.
+    max_iterations : int, optional
+        Maximum number of simultaneous growth steps per slice.
+    penetration : int, optional
+        Allowed depth (in voxels) into membrane regions. 0 means no membrane entry.
+    connectivity : int, optional
+        Neighborhood for growth: 4 or 8.
+    save : bool, optional
+        If True, save output to `save_path`.
+    save_path : str, optional
+        Output .npy path.
+
+    Returns
+    -------
+    np.ndarray
+        Expanded neuron labels with same shape as input.
+    """
+    from scipy.ndimage import distance_transform_edt
+
+    if connectivity not in (4, 8):
+        raise ValueError(f"connectivity must be 4 or 8, got {connectivity}")
+    if penetration < 0:
+        raise ValueError("penetration must be >= 0")
+
+    neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
+    membrane_mask = np.load(membrane_mask) if isinstance(membrane_mask, str) else membrane_mask
+
+    expanded_labels = neuron_labels.copy().astype(np.int32, copy=False)
+    membrane_binary = membrane_mask > 0
+
+    def _grow_once(labels_slice: np.ndarray, allowed: np.ndarray, conn: int) -> int:
+        """
+        One simultaneous growth step.
+        Returns number of newly assigned pixels.
+        """
+        unlabeled = (labels_slice == 0) & allowed
+        if not np.any(unlabeled):
+            return 0
+
+        proposed = np.zeros_like(labels_slice, dtype=np.int32)
+
+        def propose_from_neighbor(src_rows, src_cols, dst_rows, dst_cols):
+            src_vals = labels_slice[src_rows, src_cols]
+            dst_mask = unlabeled[dst_rows, dst_cols] & (src_vals > 0)
+            if not np.any(dst_mask):
+                return
+            dst_r = dst_rows[dst_mask]
+            dst_c = dst_cols[dst_mask]
+            src_v = src_vals[dst_mask]
+            cur = proposed[dst_r, dst_c]
+            proposed[dst_r, dst_c] = np.where(cur == 0, src_v, np.minimum(cur, src_v))
+            
+        H, W = labels_slice.shape
+
+        # 4-neighborhood
+        propose_from_neighbor(np.s_[1:H, :],   np.s_[:], np.s_[0:H-1, :], np.s_[:])   # from down to up
+        propose_from_neighbor(np.s_[0:H-1, :], np.s_[:], np.s_[1:H, :],   np.s_[:])   # from up to down
+        propose_from_neighbor(np.s_[:, 1:W],   np.s_[:], np.s_[:, 0:W-1], np.s_[:])   # from right to left
+        propose_from_neighbor(np.s_[:, 0:W-1], np.s_[:], np.s_[:, 1:W],   np.s_[:])   # from left to right
+
+        if conn == 8:
+            # diagonals
+            propose_from_neighbor(np.s_[1:H, 1:W],   np.s_[:], np.s_[0:H-1, 0:W-1], np.s_[:])
+            propose_from_neighbor(np.s_[0:H-1, 0:W-1], np.s_[:], np.s_[1:H, 1:W],   np.s_[:])
+            propose_from_neighbor(np.s_[1:H, 0:W-1], np.s_[:], np.s_[0:H-1, 1:W],   np.s_[:])
+            propose_from_neighbor(np.s_[0:H-1, 1:W], np.s_[:], np.s_[1:H, 0:W-1],   np.s_[:])
+
+        new_pixels = unlabeled & (proposed > 0)
+        n_new = int(np.count_nonzero(new_pixels))
+        if n_new > 0:
+            labels_slice[new_pixels] = proposed[new_pixels]
+        return n_new
+
+    for z in tqdm(range(expanded_labels.shape[0]), total=expanded_labels.shape[0], desc="Expanding neurons to membrane"):
+        labels_slice = expanded_labels[z]
+        membrane_slice = membrane_binary[z]
+
+        # Allow expansion everywhere non-membrane, and optionally into membrane up to `penetration` depth.
+        if penetration == 0:
+            allowed = ~membrane_slice
+        else:
+            # Depth inside membrane (distance to nearest non-membrane pixel)
+            mem_depth = distance_transform_edt(membrane_slice)
+            allowed_membrane = membrane_slice & (mem_depth <= float(penetration))
+            allowed = (~membrane_slice) | allowed_membrane
+            
+        # Never overwrite already-labeled pixels
+        allowed = allowed & (labels_slice == 0)
+
+        for _ in range(max_iterations):
+            n_new = _grow_once(labels_slice, allowed, connectivity)
+            if n_new == 0:
+                break
+
+        expanded_labels[z] = labels_slice
+
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, expanded_labels)
+        print(f"Expanded labels saved as {save_path}.")
+
+    return expanded_labels
+
 
 def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.ndarray, gj_segmentation: np.ndarray, save:bool=True, save_path:str=None) -> dict:
     """
@@ -499,14 +625,14 @@ if __name__ == "__main__":
     
     #Load data
     neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
-    #membrane = np.load("/home/tommy111/scratch/Membranes/SEM_adult_neuron_membrane_downsampled4x.npy")
+    membrane = np.load("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy")
     
     #Task 1: Extract membrane
-    membrane = extract_membranes(neurons, radius=5)
-    np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
+    # membrane = extract_membranes(neurons, radius=5)
+    # np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
     
     #Task 2: Expand neurons to membrane
-    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, penetration=3)
+    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, dilation_factor=3)
     np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
     # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
