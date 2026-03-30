@@ -284,6 +284,10 @@ def expand_neurons_to_membrane2(neuron_labels: np.ndarray | str, membrane_mask: 
     -------
     np.ndarray
         Expanded neuron labels with same shape as input.
+        
+    Disclaimers
+    -------
+    This function was written by GPT-5.3
     """
     from scipy.ndimage import distance_transform_edt
 
@@ -624,10 +628,10 @@ if __name__ == "__main__":
     # np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
     
     #Task 2: Expand neurons to membrane
-    expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, dilation_factor=3)
-    np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
+    # expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, dilation_factor=3)
+    # np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
     
-    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR2_block_downsampled4x.npy")
+    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy")
     gjs[gjs>0] = 255
     gjs = gjs.astype(np.uint8)
     
@@ -637,7 +641,7 @@ if __name__ == "__main__":
                                              gj_segmentation=gjs)
             
     import pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_analysis_model.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_gj_analysis_h1qrqboc.pkl", "wb") as f:
         pickle.dump(neuronal_gj_dict, f)
     
     #Task 4: Calculate electrical connectivity matrix 
@@ -650,11 +654,11 @@ if __name__ == "__main__":
     )
     
     #Write out to pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_hc_contactome_model.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_contactome_h1qrqboc.pkl", "wb") as f:
         pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_connectivity_model.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_gj_connectivity_h1qrqboc.pkl", "wb") as f:
         pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_normalized_hc_gj_connectivity_model.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_normalized_gj_connectivity_h1qrqboc.pkl", "wb") as f:
         pickle.dump(normalized_gj_matrix, f)
     
     end = time.time()

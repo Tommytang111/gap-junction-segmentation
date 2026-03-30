@@ -760,71 +760,49 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Regenerating filtered neuron masks for sem_dauer 1\n')
+    print('Calculate entity statistics for GJ high confidence points and saved constrained entities for VAST and GJA pipeline.\n')
     
-    volume = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy")
-    volume_upsampled = upsample(volume, (1,4,4), save=False)
-    volume_to_slices(volume_upsampled, "/home/tommy111/scratch/split_volumes/sem_dauer_1_neurons_only_with_labels_non_uniform_expanded")
+    #1. JSON to Volume
+    #2. Points to junctions
+    #3. GJ to entities
+    #4. Calculate entity metrics
     
-    # #Task: Generate the final neuron mask by binary_closing and hole filling
-    # neuron_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_binary.npy", mmap_mode="r")
-    # nr_volume = generate_mask(neuron_volume, dilation_radius=15, save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask.npy")
-    # downsample(nr_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_NRmask_block_downsampled4x.npy")
-    # print("Nerve ring mask finished.")
+    #Task: Convert Ben's points to GJ entities and compute point to entity statistics
+    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_high_confidence_GJs.json",
+                   volume_shape=(851, 9216, 9728),
+                   voxel_size=(50, 2, 2),
+                   point_value=255,
+                   save=True,
+                   save_path="/home/tommy111/scratch/outputs/sem_dauer_1_high_confidence_GJs.npy")
     
-    # #Task: Constrain predictions to within the neuron mask and calculate entity metrics
-    # nr_volume = np.load("/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    # preds = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy").astype(bool)
-    # nr_preds = preds & nr_volume
-    # np.save("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrainedNR2_block_downsampled4x.npy", nr_preds.astype(np.uint8))
+    point_volume_downsampled = downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_dauer_1_hc_GJ_points_downsampled4x.npy")
     
-    # Need to move points again but only in x and y, so will recalculate points volume.
-    # print("Calculating entity metrics from points moved only in x & y.")
-    # move_points_to_junctions(points="/home/tommy111/scratch/outputs/sem_adult_GJ_points_downsampled4x.npy",
-    #                          preds="/home/tommy111/scratch/sem_adult_GJs_entities_downsampled4x.npy",
-    #                          save=True,
-    #                          save_path="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy")
-    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
-    #                          points="/home/tommy111/projects/def-mzhen/tommy111/gj_point_annotations/sem_adult_moved_GJs_downsampled4x.npy",
-    #                          nerve_ring_mask="/home/tommy111/scratch/Neurons/SEM_adult_neurons_only_NRmask2_block_downsampled4x.npy")
-    # print("Task 6 finished.")
+    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
+                                                                          points=point_volume_downsampled,
+                                                                          max_distance=20,
+                                                                          save=True,
+                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_GJs_downsampled4x.npy")
     
+    print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
     
+    filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy", 
+                                        points=moved_points,
+                                        save=True,
+                                        save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_high_confidence_NR_entities_downsampled4x.npy")
     
+    #Save Ben's GJ entities to VAST
+    filtered_entities_upsampled = upsample(filtered_entities, scale_factors=(1,4,4), save=False)
+    volume_to_slices(volume=filtered_entities_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_hc_NR_entities")
     
+    #Save moved points to VAST
+    moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
+    enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
+    volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_hc_gj_points")
     
-    
-    
-    # #Task: Generate high confidence gap junction entities and save objects for VAST import
-    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_GJs.json",
-    #                volume_shape=(700, 11008, 19968),
-    #                voxel_size=(30, 4, 4),
-    #                point_value=255,
-    #                save=True,
-    #                save_path="/home/tommy111/scratch/outputs/sem_adult_high_confidence_GJs.npy")
-    
-    # downsample(point_volume, block_size=(1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_hc_GJ_points_downsampled4x.npy")
-    
-    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/scratch/outputs/sem_adult_GJs_entities_downsampled4x.npy",
-    #                                                                       points="/home/tommy111/scratch/outputs/sem_adult_hc_GJ_points_downsampled4x.npy",
-    #                                                                       save=False)
-    
-    # print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
-    
-    # filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_constrained_in_NR_block_downsampled4x.npy", 
-    #                                     points=moved_points,
-    #                                     save=True,
-    #                                     save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult_high_confidence_NR_entities_block_downsampled4x.npy")
-    
-    # filtered_entities_upsampled = upsample(filtered_entities, scale_factors=(1,4,4), save=False)
-    # volume_to_slices(volume=filtered_entities_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_hc_NR_entities")
-    
-    # #Save moved points to VAST
-    # moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
-    
-    # enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
-    
-    # volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_hc_gj_points")
+    #Calculate entity metrics
+    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy",
+                             points=moved_points
+                            )
     
     ##############################################################################################################################
     
