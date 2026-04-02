@@ -10,6 +10,7 @@ import pickle
 import sys
 sys.path.append("/home/tommy111/projects/def-mzhen/tommy111/code/")
 from src.utils import check_output_directory
+from src.transforms.transform_objects import volume_to_slices, upsample
 from scipy.ndimage import sobel
 
 #FUNCTIONS 
@@ -617,21 +618,25 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
 if __name__ == "__main__": 
     start = time.time()
     
-    print("Calculating neuronal GJ connectivity for sem dauer 1 constrained predictions... \n")
+    print("Calculating neuronal GJ connectivity for sem dauer 2 constrained predictions... \n")
     
     #Load data
-    neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_block_downsampled4x.npy")
-    membrane = np.load("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy")
+    #neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_block_downsampled4x.npy")
+    #membrane = np.load("/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy")
     
-    #Task 1: Extract membrane
+    # #Task 1: Extract membrane
     # membrane = extract_membranes(neurons, radius=5)
-    # np.save("/home/tommy111/scratch/Membranes/SEM_dauer_1/SEM_dauer_1_neuron_membrane_downsampled4x.npy", membrane)
+    # np.save("/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", membrane)
+    # membrane_upsampled = upsample(membrane, (1,4,4), save=False)
+    # volume_to_slices(membrane_upsampled, "/home/tommy111/scratch/split_volumes/sem_dauer_2_neuron_membrane")
     
-    #Task 2: Expand neurons to membrane
+    # #Task 2: Expand neurons to membrane
     # expanded_neurons = expand_neurons_to_membrane(neuron_labels=neurons, membrane_mask=membrane, dilation_factor=3)
-    # np.save("/home/tommy111/scratch/Neurons/SEM_dauer_1/SEM_dauer_1_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
+    # np.save("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_block_downsampled4x.npy", expanded_neurons)
+    # expanded_neurons_upsampled = upsample(expanded_neurons, (1,4,4), save=False)
+    # volume_to_slices(expanded_neurons_upsampled, "/home/tommy111/scratch/split_volumes/sem_dauer_2_neurons_only_with_labels_non_uniform_expanded.npy")
     
-    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy")
+    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_high_confidence_NR_entities_downsampled4x.npy")
     gjs[gjs>0] = 255
     gjs = gjs.astype(np.uint8)
     
@@ -641,7 +646,7 @@ if __name__ == "__main__":
                                              gj_segmentation=gjs)
             
     import pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_gj_analysis_h1qrqboc.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_analysis_h1qrqboc.pkl", "wb") as f:
         pickle.dump(neuronal_gj_dict, f)
     
     #Task 4: Calculate electrical connectivity matrix 
@@ -656,9 +661,9 @@ if __name__ == "__main__":
     #Write out to pickle
     with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_contactome_h1qrqboc.pkl", "wb") as f:
         pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_neuronal_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
         pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_normalized_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_1/SEM_dauer_1_normalized_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
         pickle.dump(normalized_gj_matrix, f)
     
     end = time.time()

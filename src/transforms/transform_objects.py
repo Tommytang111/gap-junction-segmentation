@@ -744,6 +744,11 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -
         #Convert to boolean mask
         volume[volume > 0] = 255
         volume = volume.astype(np.uint8)
+    else:
+        if volume.dtype == np.uint32 or volume.dtype == np.uint64:
+            vmax = int(volume.vmax()) if volume.size else 0
+            raise ValueError(f"volume dtype {volume.dtype} with max={vmax} cannot be saved as PNG safely. "
+                             "Use uint16-compatible labels or save as .npy/.tif.")
     
     #Ensure output directory is empty
     check_output_directory(Path(output_dir), clear=True)
@@ -781,7 +786,7 @@ if __name__ == "__main__":
                                                                           points=point_volume_downsampled,
                                                                           max_distance=20,
                                                                           save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_GJs_downsampled4x.npy")
+                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_hc_GJs_downsampled4x.npy")
     
     print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
     
@@ -792,7 +797,8 @@ if __name__ == "__main__":
     
     #Save Ben's GJ entities to VAST
     filtered_entities_upsampled = upsample(filtered_entities, scale_factors=(1,4,4), save=False)
-    volume_to_slices(volume=filtered_entities_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_hc_NR_entities")
+    filtered_GJs_upsampled = (filtered_entities_upsampled>0).astype(np.uint8) * 255
+    volume_to_slices(volume=filtered_GJs_upsampled, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_hc_NR_GJs")
     
     #Save moved points to VAST
     moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
