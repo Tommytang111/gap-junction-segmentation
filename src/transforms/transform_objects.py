@@ -165,7 +165,7 @@ def downsample(array:str|np.ndarray, block_size:tuple[int,...], save:bool=True, 
     
     return downsampled_array
 
-def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int=1, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
+def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int=8, save:bool=True, save_path:str=None, to_uint8:bool=True) -> np.ndarray:
     """
     Morphologically enlarge (dilate) a binary or label volume.
 
@@ -177,7 +177,7 @@ def enlarge(array:str, binary_structure:tuple[int,int]|None=None, iterations:int
         (rank, connectivity) passed to scipy.ndimage.generate_binary_structure.
         If None, uses a 2D (rank=2, connectivity=2) structuring element broadcast along Z.
         For true 3D dilation, pass (3, 3).
-    iterations : int, default 1
+    iterations : int, default 8
         Number of dilation iterations. Each iteration expands boundaries once.
     save : bool, default True
         If True, writes the enlarged volume to save_path.
@@ -766,120 +766,161 @@ if __name__ == "__main__":
     start = time()
     #Job description
     print('Compute point statistics for dauer 1 & 2, get hc predictions for dauer 2, then analyze connectivity for dauer 2.\n')
+    
+    
+    #ALL CAN BE DELETED BELOW
+    # #DAUER 2 high confidence and low confidence 
+    # filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR_block_downsampled4x.npy", 
+    #                                     points="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_lc_GJs_downsampled4x.npy",
+    #                                     save=True,
+    #                                     save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_low_confidence_NR_entities_downsampled4x.npy")
+    # print(f"Number of entities = {num_entities}")
+    # filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR_block_downsampled4x.npy", 
+    #                                     points="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_hc_GJs_downsampled4x.npy",
+    #                                     save=True,
+    #                                     save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_high_confidence_NR_entities_downsampled4x.npy")
+    # print(f"Number of entities = {num_entities}")
+    
+    # #DAUER 1
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_GJs_downsampled4x.npy")
+    # vol_upsampled = upsample(vol, (1,4,4), save=False)
+    # enlarged_point_vol = enlarge(vol_upsampled, iterations=5, save=False)
+    # volume_to_slices(enlarged_point_vol, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_gj_points", binary=True)
+    
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_lc_GJs_downsampled4x.npy")
+    # vol_upsampled = upsample(vol, (1,4,4), save=False)
+    # enlarged_point_vol = enlarge(vol_upsampled, iterations=5, save=False)
+    # volume_to_slices(enlarged_point_vol, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_1_lc_gj_points", binary=True)
+    
+    # #DAUER 2
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_GJs_downsampled4x.npy")
+    # vol_upsampled = upsample(vol, (1,4,4), save=False)
+    # enlarged_point_vol = enlarge(vol_upsampled, iterations=5, save=False)
+    # volume_to_slices(enlarged_point_vol, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_2_gj_points", binary=True)
+    
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_lc_GJs_downsampled4x.npy")
+    # vol_upsampled = upsample(vol, (1,4,4), save=False)
+    # enlarged_point_vol = enlarge(vol_upsampled, iterations=5, save=False)
+    # volume_to_slices(enlarged_point_vol, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_2_lc_gj_points", binary=True)
+    
+    # vol = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_hc_GJs_downsampled4x.npy")
+    # vol_upsampled = upsample(vol, (1,4,4), save=False)
+    # enlarged_point_vol = enlarge(vol_upsampled, iterations=5, save=False)
+    # volume_to_slices(enlarged_point_vol, output_dir="/home/tommy111/scratch/split_volumes/sem_dauer_2_hc_gj_points", binary=True)
 
-    #DAUER 1 (ALL POINTS)
-    print("DAUER 1 (ALL POINTS)")
-    #Convert json to npy
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_GJs.json",
-                   volume_shape=(851, 9216, 9728),
-                   voxel_size=(50, 2, 2),
-                   point_value=255,
-                   save=True,
-                   save_path="/home/tommy111/scratch/outputs/sem_dauer_1_GJs.npy")
-    #Downsample
-    point_volume_downsampled = downsample(point_volume, (1,4,4), save=False)
-    del point_volume
-    #Move all points to entities
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
-                                                                          points=point_volume_downsampled,
-                                                                          max_distance=20,
-                                                                          save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_GJs_downsampled4x.npy")
-    print(f"Number of points: {num_points}")
-    print(f"Number of moved points: {num_moved_points}")
-    #Calculate entity metrics
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
-                             points=moved_points,
-                             )
+    # #DAUER 1 (ALL POINTS)
+    # print("DAUER 1 (ALL POINTS)")
+    # #Convert json to npy
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_GJs.json",
+    #                volume_shape=(851, 9216, 9728),
+    #                voxel_size=(50, 2, 2),
+    #                point_value=255,
+    #                save=True,
+    #                save_path="/home/tommy111/scratch/outputs/sem_dauer_1_GJs.npy")
+    # #Downsample
+    # point_volume_downsampled = downsample(point_volume, (1,4,4), save=False)
+    # del point_volume
+    # #Move all points to entities
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
+    #                                                                       points=point_volume_downsampled,
+    #                                                                       max_distance=20,
+    #                                                                       save=True,
+    #                                                                       save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_GJs_downsampled4x.npy")
+    # print(f"Number of points: {num_points}")
+    # print(f"Number of moved points: {num_moved_points}")
+    # #Calculate entity metrics
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy",
+    #                          points=moved_points,
+    #                          )
     
-    #DAUER 1 (LOW CONFIDENCE)
-    print("DAUER 1 (LOW CONFIDENCE)")
-    #Convert json to npy
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_low_confidence_GJs.json",
-                   volume_shape=(851, 9216, 9728),
-                   voxel_size=(50, 2, 2),
-                   point_value=255,
-                   save=False)
-    #Downsample
-    point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_1_lc_GJ_points_downsampled4x.npy")
-    del point_volume
-    #Move all points to entities
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
-                                                                          points=point_volume_downsampled,
-                                                                          max_distance=20,
-                                                                          save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_lc_GJs_downsampled4x.npy")
-    print(f"Number of points: {num_points}")
-    print(f"Number of moved points: {num_moved_points}")
-    #Calculate entity metrics
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
-                             points=moved_points)
+    # #DAUER 1 (LOW CONFIDENCE)
+    # print("DAUER 1 (LOW CONFIDENCE)")
+    # #Convert json to npy
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_low_confidence_GJs.json",
+    #                volume_shape=(851, 9216, 9728),
+    #                voxel_size=(50, 2, 2),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample
+    # point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_1_lc_GJ_points_downsampled4x.npy")
+    # del point_volume
+    # #Move all points to entities
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_block_downsampled4x.npy",
+    #                                                                       points=point_volume_downsampled,
+    #                                                                       max_distance=20,
+    #                                                                       save=True,
+    #                                                                       save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_moved_lc_GJs_downsampled4x.npy")
+    # print(f"Number of points: {num_points}")
+    # print(f"Number of moved points: {num_moved_points}")
+    # #Calculate entity metrics
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy",
+    #                          points=moved_points)
     
-    #DAUER 2 (ALL POINTS)
-    print("DAUER 2 (ALL POINTS)")
-    #Convert json to npy
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
-                   volume_shape=(973, 8328, 9360),
-                   voxel_size=(50, 2, 2),
-                   point_value=255,
-                   save=False)
-    #Downsample
-    point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_GJ_points_downsampled4x.npy")
-    del point_volume
-    #Move all points to entities
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                                                                          points=point_volume_downsampled,
-                                                                          max_distance=20,
-                                                                          save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_GJs_downsampled4x.npy")
-    print(f"Number of points: {num_points}")
-    print(f"Number of moved points: {num_moved_points}")
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                             points=moved_points)
+    # #DAUER 2 (ALL POINTS)
+    # print("DAUER 2 (ALL POINTS)")
+    # #Convert json to npy
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
+    #                volume_shape=(973, 8328, 9360),
+    #                voxel_size=(50, 2, 2),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample
+    # point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_GJ_points_downsampled4x.npy")
+    # del point_volume
+    # #Move all points to entities
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+    #                                                                       points=point_volume_downsampled,
+    #                                                                       max_distance=20,
+    #                                                                       save=True,
+    #                                                                       save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_GJs_downsampled4x.npy")
+    # print(f"Number of points: {num_points}")
+    # print(f"Number of moved points: {num_moved_points}")
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR_block_downsampled4x.npy",
+    #                          points=moved_points)
     
-    #DAUER 2 (HIGH CONFIDENCE)
-    print("DAUER 2 (HIGH CONFIDENCE)")
-    #Convert json to npy
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_high_confidence_GJs.json",
-                   volume_shape=(973, 8328, 9360),
-                   voxel_size=(50, 2, 2),
-                   point_value=255,
-                   save=False)
-    #Downsample
-    point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_hc_GJ_points_downsampled4x.npy")
-    del point_volume
-    #Move all points to entities
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                                                                          points=point_volume_downsampled,
-                                                                          max_distance=20,
-                                                                          save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_hc_GJs_downsampled4x.npy")
-    print(f"Number of points: {num_points}")
-    print(f"Number of moved points: {num_moved_points}")
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                             points=moved_points)
+    # #DAUER 2 (HIGH CONFIDENCE)
+    # print("DAUER 2 (HIGH CONFIDENCE)")
+    # #Convert json to npy
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_high_confidence_GJs.json",
+    #                volume_shape=(973, 8328, 9360),
+    #                voxel_size=(50, 2, 2),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample
+    # point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_hc_GJ_points_downsampled4x.npy")
+    # del point_volume
+    # #Move all points to entities
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+    #                                                                       points=point_volume_downsampled,
+    #                                                                       max_distance=20,
+    #                                                                       save=True,
+    #                                                                       save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_hc_GJs_downsampled4x.npy")
+    # print(f"Number of points: {num_points}")
+    # print(f"Number of moved points: {num_moved_points}")
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR_block_downsampled4x.npy",
+    #                          points=moved_points)
     
-    #DAUER 2 (LOW CONFIDENCE)
-    print("DAUER 2 (LOW CONFIDENCE)")
-    #Convert json to npy
-    point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_low_confidence_GJs.json",
-                   volume_shape=(973, 8328, 9360),
-                   voxel_size=(50, 2, 2),
-                   point_value=255,
-                   save=False)
-    #Downsample
-    point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_lc_GJ_points_downsampled4x.npy")
-    del point_volume
-    #Move all points to entities
-    moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                                                                          points=point_volume_downsampled,
-                                                                          max_distance=20,
-                                                                          save=True,
-                                                                          save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_lc_GJs_downsampled4x.npy")
-    print(f"Number of points: {num_points}")
-    print(f"Number of moved points: {num_moved_points}")
-    calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                             points=moved_points)
+    # #DAUER 2 (LOW CONFIDENCE)
+    # print("DAUER 2 (LOW CONFIDENCE)")
+    # #Convert json to npy
+    # point_volume = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_low_confidence_GJs.json",
+    #                volume_shape=(973, 8328, 9360),
+    #                voxel_size=(50, 2, 2),
+    #                point_value=255,
+    #                save=False)
+    # #Downsample
+    # point_volume_downsampled = downsample(point_volume, (1,4,4), save=True, save_path="/home/tommy111/scratch/outputs/sem_dauer_2_lc_GJ_points_downsampled4x.npy")
+    # del point_volume
+    # #Move all points to entities
+    # moved_points, num_points, num_moved_points = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+    #                                                                       points=point_volume_downsampled,
+    #                                                                       max_distance=20,
+    #                                                                       save=True,
+    #                                                                       save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_lc_GJs_downsampled4x.npy")
+    # print(f"Number of points: {num_points}")
+    # print(f"Number of moved points: {num_moved_points}")
+    # calculate_entity_metrics(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_constrainedNR_block_downsampled4x.npy",
+    #                          points=moved_points)
     
     #THE EXAMPLE CALLS BELOW SHOULD BE SEARCHED BY KEYWORDS AND USED AS A TEMPLATE
     ###########################################################################################
@@ -1009,7 +1050,7 @@ if __name__ == "__main__":
     #                                                                       save=False)
     # print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
     # moved_points_upsampled = upsample(moved_points, scale_factors=(1,4,4), save=False)
-    # enlarged_point_volume = enlarge(moved_points_upsampled, iterations=5, save=False)
+    # enlarged_point_volume = enlarge(moved_points_upsampled, iterations=8, save=False)
     # volume_to_slices(volume=enlarged_point_volume, output_dir="/home/tommy111/scratch/split_volumes/sem_adult_gj_points")
     
     ####################################################################################################################
