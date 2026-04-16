@@ -340,7 +340,7 @@ def generate_mask(volume:np.ndarray, dilation_radius:int=25, min_hole_size:int=1
 
     return final_mask
         
-def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, save:bool=True, save_path:str=None) -> np.ndarray:
+def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tuple[int,int,int], point_value:int=255, unique_points:bool=False, save:bool=True, save_path:str=None) -> np.ndarray:
     """
     Create a sparse 3D volume from 3D point coordinates stored in a JSON file.
 
@@ -356,7 +356,9 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
         Physical voxel size (dz, dy, dx). Each coordinate is divided by the corresponding
         voxel size and floored (//) to obtain integer indices.
     point_value : int, default 255
-        Value to assign at each point voxel.
+        Value to assign at each point voxel unless unique_points is True. 
+    unique_points : bool, default False
+        If True, assigns points unique values using the index values of the JSON.
     save : bool, default True
         If True, saves the resulting array to save_path as a .npy file.
     save_path : str | None
@@ -376,20 +378,21 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
     - Uses floor division; if rounding is preferred, pre-process coordinates accordingly.
     """
     #Read json
-    points = pd.read_json(json_path, orient='index')
-    points.rename(columns={0: "points"}, inplace=True)
+    df = pd.read_json(json_path, orient='index')
+    df.rename(columns={0: "points"}, inplace=True)
     
     #Create point volume
-    point_vol = np.zeros(volume_shape, dtype=np.uint8)  # Z, Y, X
+    point_vol = np.zeros(volume_shape, dtype=np.uint32 if unique_points else np.uint8)  # Z, Y, X
     
     #Assign a value in the volume for each point
     count = 0
-    for point in points['points']:
+    points = df['points']
+    for i, point in enumerate(points):
         z_idx = int(point[2] // voxel_size[0])
         y_idx = int(point[1] // voxel_size[1])
         x_idx = int(point[0] // voxel_size[2])
         if z_idx < volume_shape[0] and y_idx < volume_shape[1] and x_idx < volume_shape[2]:
-            point_vol[z_idx, y_idx, x_idx] = point_value
+            point_vol[z_idx, y_idx, x_idx] = points.index[i] if unique_points else point_value
             count += 1
     #Save point volume
     if save and save_path is not None:
@@ -397,7 +400,7 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
         np.save(save_path, point_vol)
         print(f"Volume successfully saved as {save_path}.")
 
-    print(f'# of Points assigned to volume: {count}/{len(points["points"])}')
+    print(f'# of Points assigned to volume: {count}/{len(points)}')
     return point_vol
 
 def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_distance:int=35, three:bool=False, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int, int]:
