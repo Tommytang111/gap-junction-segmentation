@@ -367,8 +367,8 @@ def json_to_volume(json_path:str, volume_shape:tuple[int,int,int], voxel_size:tu
     Returns
     -------
     np.ndarray
-        A uint8 volume of shape (Z, Y, X) with zeros everywhere except at point
-        locations set to point_value.
+        A volume of shape (Z, Y, X) with zeros everywhere except at point
+        locations set to point_value or unique_points.
 
     Notes
     -----
@@ -409,7 +409,7 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
     This function takes a binary/label prediction volume (gap junctions) and a sparse point
     volume (annotations) and relocates each point to the nearest predicted foreground voxel,
     provided the nearest-foreground distance is below ``max_distance`` (in voxels). The
-    output is a new sparse uint8 volume containing only the relocated points (255).
+    output is a new sparse volume containing only the relocated points (255).
 
     Two modes are supported via ``three``:
     - ``three=True``: a full 3D Euclidean distance transform is computed once over the entire
@@ -440,7 +440,7 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
     -------
     tuple[np.ndarray, int, int]
         moved_points : np.ndarray
-            A uint8 volume (same shape as inputs) containing relocated points.
+            A volume (same shape as inputs) containing relocated points.
         total_points : int
             Number of original point voxels detected.
         total_moved_points : int
@@ -640,6 +640,7 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
     - num_entities (int): Total number of connected components before filtering.
 
     Notes
+    - move_points_to_junctions() is preferred over this function unless using for quick 3D visualization
     - Inputs are cast to uint8; any non-zero value is treated as foreground/point.
     - Uses 26-connectivity for 3D components.
     - np.load errors (e.g., missing files) will propagate.
@@ -779,11 +780,11 @@ if __name__ == "__main__":
     #                unique_points=True,
     #                save=False)
     #vol_downsampled = downsample(vol, (1,4,4), save=False, save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs_connector_ids_downsampled4x.npy")
-    vol_downsampled = np.load("/home/tommy111/scratch/outputs/sem_dauer_2_GJs_connector_ids_downsampled4x.npy")
-    move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-                             points=vol_downsampled,
-                             max_distance=20,
-                             save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_GJs_connector_ids_downsampled4x.npy")
+    # move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+    #                          points=vol_downsampled,
+    #                          max_distance=20,
+    #                          save_path="/home/tommy
+    
     
     #THE EXAMPLE CALLS BELOW SHOULD BE SEARCHED BY KEYWORDS AND USED AS A TEMPLATE
     ###########################################################################################
