@@ -558,57 +558,7 @@ def move_points_to_junctions(preds:str|np.ndarray, points:str|np.ndarray, max_di
         
     return moved_points, total_points, total_moved_points
 
-def stack_slices(slice_dir:str, multi_label:bool=True, save:bool=False, save_path:str=None, file_extension:str=".png") -> np.ndarray:
-    """
-    Load 2D image slices from a directory and stack them into a 3D volume.
-
-    Parameters
-    ----------
-    slice_dir : str
-        Directory containing per-slice image files (e.g. z-slices).
-    multi_label : bool, default True
-        If True, load images with cv2.IMREAD_UNCHANGED (preserve multi-channel or multi-class labels).
-        If False, load as single-channel grayscale.
-    save : bool, default False
-        If True, save the stacked volume to save_path as .npy.
-    save_path : str | None
-        Output .npy file path. Required when save=True.
-    file_extension : str, default ".png"
-        File extension filter for slice selection.
-
-    Returns
-    -------
-    np.ndarray
-        3D volume with shape (Z, H, W) or (Z, H, W, C) depending on source images.
-
-    Notes
-    -----
-    - Slices are sorted lexicographically; use zero-padded filenames to ensure correct z-order.
-    - All slices must share identical spatial dimensions (and channels if multi-label).
-    - Missing imports: ensure `import os` and `import cv2` are present at top of file.
-    - `output_path` is not used; pass `save_path` when save=True.
-    """
-    #Load slices
-    img_dir = Path(slice_dir)
-    img_paths = sorted([p for p in os.listdir(img_dir) if p.endswith(file_extension)])
-    imgs = []
-    for img_path in img_paths:
-        img = cv2.imread(str(img_dir / img_path), cv2.IMREAD_UNCHANGED if multi_label else cv2.IMREAD_GRAYSCALE)
-        imgs.append(img)
-
-    #Stack slices along Z
-    volume = np.stack(imgs, axis=0)
-    
-    #Save stacked volume
-    if save and save_path is not None:
-        check_output_directory(Path(save_path).parent, clear=False)
-        np.save(save_path, volume)
-        print(f"Volume successfully saved as {save_path}.")
-        
-    print(f"Volume successfully stacked from slices in {slice_dir}.")
-    return volume
-
-def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndarray, radius:int=10, dust_size:int=6, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int]:
+def retain_entities_from_points(preds:str|np.ndarray, points:str|np.ndarray, radius:int=10, dust_size:int=6, save:bool=True, save_path:str=None) -> tuple[np.ndarray, int]:
     """
     Transform a points array into an entity array by keeping only the closest entity to a point within a specified radius. 
     This function performs a connected component analysis to identify entities, then computes a distance transform to find 
@@ -679,6 +629,113 @@ def transform_points_to_nearby_entities(preds:str|np.ndarray, points:str|np.ndar
         print(f"Filtered entity array saved as {save_path}.")
         
     return filtered_entity_array, num_entities
+
+def retain_unique_entity_ids_from_points(preds: str | np.ndarray, points: str | np.ndarray) -> np.ndarray:
+    """
+    Maps unique point IDs from a points array to their overlapping predicted 3D entities.
+
+    This function finds connected components in the `preds` volume and checks for overlap
+    with positive values in the `points` volume. It then creates a new volume where 
+    the overlapping 3D entities are labeled with the corresponding point IDs. If multiple 
+    points fall into the same entity, the last processed point will overwrite the value.
+
+    Parameters
+    ----------
+    preds : str | np.ndarray
+        A 3D array of predictions/segmentations (or a file path to one). Values > 0 
+        are treated as foreground entities.
+    points : str | np.ndarray
+        A 3D array of point locations (or a file path to one). Values > 0 act as the 
+        point IDs (e.g., connector IDs).
+
+    Returns:
+    - np.ndarray: A 3D array of the same shape as `preds` where the entities that 
+    overlap with a point are labeled with that point's value. Background and 
+    non-overlapping entities remain 0.
+    """
+    # Load volumes if paths are provided
+    preds = np.load(preds) if isinstance(preds, str) else preds
+    points = np.load(points) if isinstance(points, str) else points
+    
+    # Convert predictions to binary and get connected components (entities)
+    preds_binary = (preds > 0)
+    entities = cc3d.connected_components(preds_binary, connectivity=26)
+    
+    # Find locations where points exist
+    point_mask = points > 0
+    
+    # Extract the entity IDs and point values at these locations
+    entity_ids_at_points = entities[point_mask]
+    point_values_at_points = points[point_mask]
+    
+    # Filter out points that do not fall within any predicted entity (entity ID == 0)
+    valid_overlap = entity_ids_at_points > 0
+    valid_entity_ids = entity_ids_at_points[valid_overlap]
+    valid_point_values = point_values_at_points[valid_overlap]
+    
+    # Create a lookup table to map entity IDs to point values
+    # Size needs to accommodate the highest entity ID found
+    max_entity_id = entities.max()
+    lookup_table = np.zeros(max_entity_id + 1, dtype=points.dtype)
+    
+    # Map the unique point values to their overlapping entity ID
+    # Note: If multiple points fall into the same entity, the last processed point will overwrite the value
+    lookup_table[valid_entity_ids] = valid_point_values
+    
+    # Apply the lookup mapping across the entire entity volume
+    labeled_entities = lookup_table[entities]
+    
+    return labeled_entities
+
+def stack_slices(slice_dir:str, multi_label:bool=True, save:bool=False, save_path:str=None, file_extension:str=".png") -> np.ndarray:
+    """
+    Load 2D image slices from a directory and stack them into a 3D volume.
+
+    Parameters
+    ----------
+    slice_dir : str
+        Directory containing per-slice image files (e.g. z-slices).
+    multi_label : bool, default True
+        If True, load images with cv2.IMREAD_UNCHANGED (preserve multi-channel or multi-class labels).
+        If False, load as single-channel grayscale.
+    save : bool, default False
+        If True, save the stacked volume to save_path as .npy.
+    save_path : str | None
+        Output .npy file path. Required when save=True.
+    file_extension : str, default ".png"
+        File extension filter for slice selection.
+
+    Returns
+    -------
+    np.ndarray
+        3D volume with shape (Z, H, W) or (Z, H, W, C) depending on source images.
+
+    Notes
+    -----
+    - Slices are sorted lexicographically; use zero-padded filenames to ensure correct z-order.
+    - All slices must share identical spatial dimensions (and channels if multi-label).
+    - Missing imports: ensure `import os` and `import cv2` are present at top of file.
+    - `output_path` is not used; pass `save_path` when save=True.
+    """
+    #Load slices
+    img_dir = Path(slice_dir)
+    img_paths = sorted([p for p in os.listdir(img_dir) if p.endswith(file_extension)])
+    imgs = []
+    for img_path in img_paths:
+        img = cv2.imread(str(img_dir / img_path), cv2.IMREAD_UNCHANGED if multi_label else cv2.IMREAD_GRAYSCALE)
+        imgs.append(img)
+
+    #Stack slices along Z
+    volume = np.stack(imgs, axis=0)
+    
+    #Save stacked volume
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, volume)
+        print(f"Volume successfully saved as {save_path}.")
+        
+    print(f"Volume successfully stacked from slices in {slice_dir}.")
+    return volume
 
 def upsample(array:str|np.ndarray, scale_factors:tuple[int,...], save:bool=True, save_path:str=None) -> np.ndarray:
     """
@@ -808,7 +865,7 @@ if __name__ == "__main__":
     
     # print(f"Total original points: {num_points}, Moved points: {num_moved_points}")
     # #3. GJ to entities
-    # filtered_entities, num_entities = transform_points_to_nearby_entities(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy", 
+    # filtered_entities, num_entities = retain_entities_from_points(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_1_s000-850/volume_constrainedNR_block_downsampled4x.npy", 
     #                                     points=moved_points,
     #                                     save=True,
     #                                     save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_1/sem_dauer_1_high_confidence_NR_entities_downsampled4x.npy")
