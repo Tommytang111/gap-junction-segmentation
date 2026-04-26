@@ -1,4 +1,6 @@
 #Libraries
+from turtle import pd
+
 import numpy as np
 import cv2
 import time
@@ -461,7 +463,7 @@ def analyze_gj_per_neuron(neuron_membrane_mask: np.ndarray, neuron_labels: np.nd
 
     return results
 
-def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8, save:bool=True, **save_paths:str):
+def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_labels: np.ndarray | str, gj_segmentation: np.ndarray | str, *, contact_connectivity: int = 8, save:bool=True, **save_paths:str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Calculate:
       1) Contactome connectivity between neuron pairs:
@@ -614,6 +616,160 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
             print(f"Normalized GJ connectivity saved as {save_paths['normalized_gj_connectivity']}.")
         
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
+
+def calculate_gj_relative_intensity(
+    em_volume: np.ndarray, 
+    neuron_membranes: np.ndarray, 
+    neuron_labels: np.ndarray, 
+    unique_entities: np.ndarray, 
+    radius: int = 100
+) -> pd.DataFrame:
+    """
+    Compute per-entity gap junction (GJ) relative intensity against local non-GJ membrane.
+
+    For each non-zero `connector_ID` in `unique_entities`, the function:
+      1) computes the mean intensity of the darkest 50% of voxels belonging to that entity,
+      2) finds the two neurons most overlapping the entity (via `neuron_label volume`),
+      3) collects membrane voxels within a 3D spherical neighborhood of radius `radius`
+         centered at the entity centroid, restricted to:
+           - membrane voxels (`membrane_volume > 0`)
+           - non-GJ voxels (`entity_id_volume == 0`)
+           - belonging to either of the two neurons
+      4) computes relative intensity = (darkest50_mean / surrounding_membrane_mean),
+      5) returns a table of results.
+
+    Parameters
+    ----------
+    em_volume : np.ndarray
+        3D raw image intensity volume with shape (Z, Y, X). Has to be uint8 in [0, 255]
+    neuron_membranes : np.ndarray
+        3D membrane mask with shape (Z, Y, X). Non-zero values indicate membrane voxels.
+    neuron_labels : np.ndarray
+        3D integer neuron label volume with shape (Z, Y, X) where labels have been expanded
+        onto membranes. Used to infer which two neurons the GJ entity belongs to based on
+        spatial overlap.
+    unique_entities : np.ndarray
+        3D volume with shape (Z, Y, X) containing per-voxel GJ entity IDs / connector IDs.
+        Background must be 0; each GJ entity should have a positive integer ID.
+    radius : int, optional
+        Radius (in voxels) of the spherical neighborhood used to sample surrounding membrane.
+        Default is 100.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with one row per `connector_ID` and columns:
+          - 'connector_ID' : int
+          - 'average_intensity' : float
+                Relative intensity (darkest50_mean / surrounding_membrane_mean).
+                NaN if no valid surrounding membrane is found or if the denominator is 0.
+          - 'neuron_1' : int
+          - 'neuron_2' : int
+        If an entity overlaps only one neuron label, 'neuron_2' is set to 0.
+
+    Notes
+    -----
+    * The spherical neighborhood is implemented via a bounding box crop plus a distance mask,
+      to avoid computing distances over the full volume.
+    * If multiple neuron labels overlap the GJ entity, the two labels with the largest overlap
+      counts are selected as (neuron_1, neuron_2).
+    * This function assumes all inputs share the same (Z, Y, X) shape.
+
+    Examples
+    --------
+    >>> df = calculate_gj_relative_intensity(
+    ...     em_volume=raw,
+    ...     neuron_membranes=membrane,
+    ...     neuron_labels=expanded_neurons,
+    ...     unique_entities=connector_ids,
+    ...     radius=100,
+    ... )
+    >>> df.head()
+    """
+    if em_volume.dtype != np.uint8:
+        raise ValueError(f"Expected em_volume to be uint8, got {em_volume.dtype}")
+    
+    results = []
+    
+    #Get all unique gap junction entities (ignore background 0)
+    unique_ids = np.unique(unique_entities)
+    unique_ids = unique_ids[unique_ids > 0]
+    
+    Z, Y, X = em_volume.shape
+    
+    for connector_id in unique_ids:
+        #1. Get GJ voxels and average intensity of top 50% darkest voxels
+        gj_coords = np.argwhere(unique_entities == connector_id)
+        if len(gj_coords) == 0:
+            continue
+            
+        gj_intensities = em_volume[unique_entities == connector_id]
+        sorted_intensities = np.sort(gj_intensities)
+        half_thresh = max(1, len(sorted_intensities) // 2)
+        darkest_50_avg = np.mean(sorted_intensities[:half_thresh])
+        
+        #Determine the two unique neurons this entity belongs to
+        overlapping_neurons = neuron_labels[unique_entities == connector_id]
+        unique_neurons, counts = np.unique(overlapping_neurons[overlapping_neurons > 0], return_counts=True)
+        
+        if len(unique_neurons) >= 2:
+            top_2_idx = np.argsort(counts)[-2:]
+            neuron1 = unique_neurons[top_2_idx[1]]
+            neuron2 = unique_neurons[top_2_idx[0]]
+        elif len(unique_neurons) == 1:
+            neuron1 = unique_neurons[0]
+            neuron2 = 0
+        else:
+            neuron1, neuron2 = 0, 0
+            
+        #2. Generate a sphere around the entity's centroid
+        z_c, y_c, x_c = np.mean(gj_coords, axis=0).astype(int)
+        
+        #Calculate bounding box bounds to avoid full-volume operations
+        z_min, z_max = max(0, z_c - radius), min(Z, z_c + radius + 1)
+        y_min, y_max = max(0, y_c - radius), min(Y, y_c + radius + 1)
+        x_min, x_max = max(0, x_c - radius), min(X, x_c + radius + 1)
+        
+        local_membrane = neuron_membranes[z_min:z_max, y_min:y_max, x_min:x_max]
+        local_neurons = neuron_labels[z_min:z_max, y_min:y_max, x_min:x_max]
+        local_entities = unique_entities[z_min:z_max, y_min:y_max, x_min:x_max]
+        local_img = em_volume[z_min:z_max, y_min:y_max, x_min:x_max]
+        
+        #Distance calculation for the sphere mask
+        zz, yy, xx = np.ogrid[z_min:z_max, y_min:y_max, x_min:x_max]
+        dist_sq = (zz - z_c)**2 + (yy - y_c)**2 + (xx - x_c)**2
+        local_sphere_mask = dist_sq <= radius**2
+        
+        #3. Filter for surrounding membrane voxels based on criteria
+        valid_membrane_mask = (
+            local_sphere_mask & 
+            (local_membrane > 0) & 
+            (local_entities == 0) & 
+            ((local_neurons == neuron1) | (local_neurons == neuron2))
+        )
+        
+        surrounding_membrane_intensities = local_img[valid_membrane_mask]
+        
+        if len(surrounding_membrane_intensities) > 0:
+            membrane_avg_intensity = np.mean(surrounding_membrane_intensities)
+        else:
+            membrane_avg_intensity = np.nan
+            
+        #4. Calculate GJ entity relative intensity
+        if not np.isnan(membrane_avg_intensity) and membrane_avg_intensity != 0:
+            relative_intensity = darkest_50_avg / membrane_avg_intensity
+        else:
+            relative_intensity = np.nan
+            
+        #5. Append values for the dictionary output
+        results.append({
+            'connector_ID': connector_id,
+            'average_intensity': relative_intensity,
+            'neuron_1': neuron1,
+            'neuron_2': neuron2
+        })
+        
+    return pd.DataFrame(results)
 
 if __name__ == "__main__": 
     start = time.time()
