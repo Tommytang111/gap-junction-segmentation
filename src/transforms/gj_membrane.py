@@ -618,10 +618,10 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
 def calculate_gj_relative_intensity(
-    em_volume: np.ndarray, 
-    neuron_membranes: np.ndarray, 
-    neuron_labels: np.ndarray, 
-    unique_entities: np.ndarray, 
+    em_volume: np.ndarray | str, 
+    neuron_membranes: np.ndarray | str, 
+    neuron_labels: np.ndarray | str, 
+    unique_entities: np.ndarray | str, 
     radius: int = 100
 ) -> pd.DataFrame:
     """
@@ -640,15 +640,15 @@ def calculate_gj_relative_intensity(
 
     Parameters
     ----------
-    em_volume : np.ndarray
+    em_volume : np.ndarray | str
         3D raw image intensity volume with shape (Z, Y, X). Has to be uint8 in [0, 255]
-    neuron_membranes : np.ndarray
+    neuron_membranes : np.ndarray | str
         3D membrane mask with shape (Z, Y, X). Non-zero values indicate membrane voxels.
-    neuron_labels : np.ndarray
+    neuron_labels : np.ndarray | str
         3D integer neuron label volume with shape (Z, Y, X) where labels have been expanded
         onto membranes. Used to infer which two neurons the GJ entity belongs to based on
         spatial overlap.
-    unique_entities : np.ndarray
+    unique_entities : np.ndarray | str
         3D volume with shape (Z, Y, X) containing per-voxel GJ entity IDs / connector IDs.
         Background must be 0; each GJ entity should have a positive integer ID.
     radius : int, optional
@@ -686,6 +686,12 @@ def calculate_gj_relative_intensity(
     ... )
     >>> df.head()
     """
+    #Load objects
+    em_volume = np.load(em_volume) if isinstance(em_volume, str) else em_volume
+    neuron_membranes = np.load(neuron_membranes) if isinstance(neuron_membranes, str) else neuron_membranes
+    neuron_labels = np.load(neuron_labels) if isinstance(neuron_labels, str) else neuron_labels
+    unique_entities = np.load(unique_entities) if isinstance(unique_entities, str) else unique_entities
+    
     if em_volume.dtype != np.uint8:
         raise ValueError(f"Expected em_volume to be uint8, got {em_volume.dtype}")
     
@@ -697,7 +703,7 @@ def calculate_gj_relative_intensity(
     
     Z, Y, X = em_volume.shape
     
-    for connector_id in unique_ids:
+    for connector_id in tqdm(unique_ids, desc="Processing GJ entities", total=len(unique_ids)):
         #1. Get GJ voxels and average intensity of top 50% darkest voxels
         gj_coords = np.argwhere(unique_entities == connector_id)
         if len(gj_coords) == 0:
@@ -770,6 +776,7 @@ def calculate_gj_relative_intensity(
         })
         
     return pd.DataFrame(results)
+
 
 if __name__ == "__main__": 
     start = time.time()
