@@ -829,10 +829,13 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Get downsampled em volume for SEM Dauer 2.\n')
+    print('Get downsampled em volume for SEM Adult & Dauer 1.\n')
     
-    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_2/SEM_full/s000-972")
-    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_dauer_2_em_volume_downsampled4x.npy")
+    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_1/SEM_full/s000-850")
+    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_dauer_1_em_volume_downsampled4x.npy")
+    
+    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699")
+    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_em_volume_downsampled4x.npy")
     
     #SEM Dauer 2
     # vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
