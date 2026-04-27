@@ -5,13 +5,13 @@ import cv2
 import time
 import seaborn as sns
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from pathlib import Path
 import pickle
 import sys
 sys.path.append("/home/tommy111/projects/def-mzhen/tommy111/code/")
 from src.utils import check_output_directory
-from src.transforms.transform_objects import volume_to_slices, upsample
+from src.transforms.transform_objects import retain_unique_entity_ids_from_points, downsample, move_points_to_junctions, json_to_volume
 from scipy.ndimage import sobel
 
 #FUNCTIONS 
@@ -616,13 +616,7 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
         
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
-def calculate_gj_relative_intensity(
-    em_volume: np.ndarray | str, 
-    neuron_membranes: np.ndarray | str, 
-    neuron_labels: np.ndarray | str, 
-    unique_entities: np.ndarray | str, 
-    radius: int = 100
-) -> pd.DataFrame:
+def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membranes: np.ndarray | str, neuron_labels: np.ndarray | str, unique_entities: np.ndarray | str, radius: int = 100, save:bool=True, save_path:str=None) -> pd.DataFrame:
     """
     Compute per-entity gap junction (GJ) relative intensity against local non-GJ membrane.
 
@@ -773,14 +767,81 @@ def calculate_gj_relative_intensity(
             'neuron_1': neuron1,
             'neuron_2': neuron2
         })
+    
+    #Convert to pandas Dataframe
+    results = pd.DataFrame(results)
+    
+    if save and save_path != None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        with open(save_path, "wb") as f:
+            pickle.dump(results, f)
+        print(f"Intensity table saved as {save_path}.")
         
-    return pd.DataFrame(results)
+    return results
 
 
 if __name__ == "__main__": 
     start = time.time()
     
-    print("Running gap junction analysis for sem dauer 2... \n")
+    print("Calculating relative gap junction intensities for SEM adult & dauer 2... \n")
+    
+    #SEM DAUER 2
+    # #Convert JSON to numpy volume
+    # vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
+    #                volume_shape=(973, 8328, 9360),
+    #                voxel_size=(50,2,2),
+    #                unique_points=True,
+    #                save=False)
+    # #Move points to GJs
+    #vol_downsampled = downsample(vol, (1,4,4), save=False, save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs_connector_ids_downsampled4x.npy")
+    # move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+    #                          points=vol_downsampled,
+    #                          max_distance=20,
+    #                          save_path="/home/tommy"
+    #Retain unique GJ entities
+    point_entities = retain_unique_entity_ids_from_points(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
+                                         points="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_moved_GJs_connector_ids_downsampled4x.npy",
+                                         save="/home/tommy111/scratch/outputs/sem_dauer_2_GJ_connector_id_entities_downsampled4x.npy")
+    #Calculate GJ relative intensities
+    df = calculate_gj_relative_intensity(em_volume="/home/tommy111/scratch/outputs/sem_dauer_2_em_volume_downsampled4x.npy",
+                                    neuron_membranes="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy",
+                                    neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy",
+                                    unique_entities=point_entities,
+                                    radius=50,
+                                    save_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_gj_relative_intensities.pkl")
+    
+    #Backup plan
+    df.to_csv("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_gj_relative_intensities.csv", index=False)
+    
+    #SEM ADULT
+    #Convert JSON to numpy volume
+    vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
+                   volume_shape=(700, 11008, 19968),
+                   voxel_size=(30,4,4),
+                   unique_points=True,
+                   save=False)
+    #Move points to GJs
+    vol_downsampled = downsample(vol, (1,4,4), save=False, save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_GJs_connector_ids_downsampled4x.npy")
+    point_entities = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
+                             points=vol_downsampled,
+                             max_distance=20,
+                             save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_moved_GJs_connector_ids_downsampled4x.npy")
+    #Retain unique GJ entities
+    point_entities = retain_unique_entity_ids_from_points(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
+                                         points=point_entities,
+                                         save="/home/tommy111/scratch/outputs/sem_adult_GJ_connector_id_entities_downsampled4x.npy")
+    #Calculate GJ relative intensities
+    df = calculate_gj_relative_intensity(em_volume="/home/tommy111/scratch/outputs/sem_adult_em_volume_downsampled4x.npy",
+                                    neuron_membranes="/home/tommy111/scratch/Membranes/SEM_adult/SEM_adult_neuron_membrane_downsampled4x.npy",
+                                    neuron_labels="/home/tommy111/scratch/Neurons/SEM_adult/SEM_adult_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy",
+                                    unique_entities=point_entities,
+                                    radius=50,
+                                    save_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/SEM_adult_gj_relative_intensities.pkl")
+    
+    #Backup plan
+    df.to_csv("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_adult/sem_adult_gj_relative_intensities.csv", index=False)
+    
+    ################################################################################################################################
     
     # #Load data
     # neurons = np.load("/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_block_downsampled4x.npy")
@@ -798,66 +859,66 @@ if __name__ == "__main__":
     # expanded_neurons_upsampled = upsample(expanded_neurons, (1,4,4), save=False)
     # volume_to_slices(expanded_neurons_upsampled, "/home/tommy111/scratch/split_volumes/sem_dauer_2_neurons_only_with_labels_non_uniform_expanded_dilation2")
     
-    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_high_confidence_NR_entities_downsampled4x.npy")
-    gjs[gjs>0] = 255
-    gjs = gjs.astype(np.uint8)
+    # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_high_confidence_NR_entities_downsampled4x.npy")
+    # gjs[gjs>0] = 255
+    # gjs = gjs.astype(np.uint8)
     
-    #Task 3: Calculate gap junctions per neuron and write output
-    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
-                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
-                                             gj_segmentation=gjs)
+    # #Task 3: Calculate gap junctions per neuron and write output
+    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
+    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
+    #                                          gj_segmentation=gjs)
             
-    import pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_hc_gj_analysis_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(neuronal_gj_dict, f)
+    # import pickle
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_hc_gj_analysis_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(neuronal_gj_dict, f)
     
-    #Task 4: Calculate electrical connectivity matrix 
+    # #Task 4: Calculate electrical connectivity matrix 
     
-    #MODEL h1qrqboc
-    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
-        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
-        neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
-        gj_segmentation=gjs
-    )
+    # #MODEL h1qrqboc
+    # contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+    #     neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
+    #     neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
+    #     gj_segmentation=gjs
+    # )
     
-    #Write out to pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_contactome_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_normalized_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(normalized_gj_matrix, f)
+    # #Write out to pickle
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_contactome_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(contactome_matrix, f)
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(gj_connectivity_matrix, f)
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_normalized_hc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(normalized_gj_matrix, f)
         
         
-    gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_low_confidence_NR_entities_downsampled4x.npy")
-    gjs[gjs>0] = 255
-    gjs = gjs.astype(np.uint8)
+    # gjs = np.load("/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_low_confidence_NR_entities_downsampled4x.npy")
+    # gjs[gjs>0] = 255
+    # gjs = gjs.astype(np.uint8)
     
-    #Task 3: Calculate gap junctions per neuron and write output
-    neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
-                                             neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
-                                             gj_segmentation=gjs)
+    # #Task 3: Calculate gap junctions per neuron and write output
+    # neuronal_gj_dict = analyze_gj_per_neuron(neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
+    #                                          neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
+    #                                          gj_segmentation=gjs)
             
-    import pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_lc_gj_analysis_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(neuronal_gj_dict, f)
+    # import pickle
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_lc_gj_analysis_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(neuronal_gj_dict, f)
     
-    #Task 4: Calculate electrical connectivity matrix 
+    # #Task 4: Calculate electrical connectivity matrix 
     
-    #MODEL h1qrqboc
-    contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
-        neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
-        neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
-        gj_segmentation=gjs
-    )
+    # #MODEL h1qrqboc
+    # contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix = get_electrical_connectivity(
+    #     neuron_membrane_mask="/home/tommy111/scratch/Membranes/SEM_dauer_2/SEM_dauer_2_neuron_membrane_downsampled4x.npy", 
+    #     neuron_labels="/home/tommy111/scratch/Neurons/SEM_dauer_2/SEM_dauer_2_neurons_only_with_labels_not_uniform_expanded_downsampled4x.npy", 
+    #     gj_segmentation=gjs
+    # )
     
-    #Write out to pickle
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_contactome_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(contactome_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_lc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(gj_connectivity_matrix, f)
-    with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_normalized_lc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
-        pickle.dump(normalized_gj_matrix, f)
+    # #Write out to pickle
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_contactome_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(contactome_matrix, f)
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_neuronal_lc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(gj_connectivity_matrix, f)
+    # with open("/home/tommy111/projects/def-mzhen/tommy111/outputs/analysis_results/sem_dauer_2/SEM_dauer_2_normalized_lc_gj_connectivity_h1qrqboc.pkl", "wb") as f:
+    #     pickle.dump(normalized_gj_matrix, f)
     
     end = time.time()
     print("Job completed.")

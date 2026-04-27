@@ -630,7 +630,7 @@ def retain_entities_from_points(preds:str|np.ndarray, points:str|np.ndarray, rad
         
     return filtered_entity_array, num_entities
 
-def retain_unique_entity_ids_from_points(preds: str | np.ndarray, points: str | np.ndarray) -> np.ndarray:
+def retain_unique_entity_ids_from_points(preds: str | np.ndarray, points: str | np.ndarray, save:bool=True, save_path:str=None) -> np.ndarray:
     """
     Maps unique point IDs from a points array to their overlapping predicted 3D entities.
 
@@ -684,6 +684,12 @@ def retain_unique_entity_ids_from_points(preds: str | np.ndarray, points: str | 
     
     # Apply the lookup mapping across the entire entity volume
     labeled_entities = lookup_table[entities]
+    
+    # Save
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        np.save(save_path, labeled_entities)
+        print(f"Unique entity array saved as {save_path}.")
     
     return labeled_entities
 
@@ -836,19 +842,7 @@ if __name__ == "__main__":
     
     vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699")
     vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_em_volume_downsampled4x.npy")
-    
-    #SEM Dauer 2
-    # vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
-    #                volume_shape=(973, 8328, 9360),
-    #                voxel_size=(50,2,2),
-    #                unique_points=True,
-    #                save=False)
-    #vol_downsampled = downsample(vol, (1,4,4), save=False, save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs_connector_ids_downsampled4x.npy")
-    # move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_h1qrqboc/sem_dauer_2_s000-972/volume_block_downsampled4x.npy",
-    #                          points=vol_downsampled,
-    #                          max_distance=20,
-    #                          save_path="/home/tommy
-    
+
     
     #THE EXAMPLE CALLS BELOW SHOULD BE SEARCHED BY KEYWORDS AND USED AS A TEMPLATE
     ###########################################################################################
