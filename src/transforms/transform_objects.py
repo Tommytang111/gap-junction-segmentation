@@ -829,7 +829,11 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Convert JSON to numpy volume with connector ID values.\n')
+    print('Get downsampled em volume for SEM Dauer 2.\n')
+    
+    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_2/SEM_full/s000-972")
+    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_dauer_2_em_volume_downsampled4x.npy")
+    
     #SEM Dauer 2
     # vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
     #                volume_shape=(973, 8328, 9360),
