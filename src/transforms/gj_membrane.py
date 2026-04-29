@@ -825,7 +825,7 @@ if __name__ == "__main__":
     points, _, _ = move_points_to_junctions(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
                              points=vol_downsampled,
                              max_distance=20,
-                             save_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_moved_GJs_connector_ids_downsampled4x.npy")
+                             save_path="/home/tommy111/scratch/outputs/sem_adult_moved_GJs_connector_ids_downsampled4x.npy")
     #Retain unique GJ entities
     point_entities = retain_unique_entity_ids_from_points(preds="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_u4lqcs5g/sem_adult_s000-699/volume_block_downsampled4x.npy",
                                          points=points,
