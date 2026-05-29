@@ -1,7 +1,9 @@
 *.sh
+.DS_Store
 .vscode/
 legacy/
 catmaid/
+sam3/
 **/wandb/
 **/__pycache__/
 secrets.txt
