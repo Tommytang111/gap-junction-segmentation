@@ -815,7 +815,7 @@ if __name__ == "__main__":
     
     #SEM ADULT
     #Convert JSON to numpy volume
-    vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_dauer_2/sem_dauer_2_GJs.json",
+    vol = json_to_volume(json_path="/home/tommy111/projects/def-mzhen/tommy111/em_objects/gj_point_annotations/sem_adult/sem_adult_GJs.json",
                    volume_shape=(700, 11008, 19968),
                    voxel_size=(30,4,4),
                    unique_points=True,

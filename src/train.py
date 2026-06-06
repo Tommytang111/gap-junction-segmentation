@@ -445,8 +445,8 @@ def main(run_name:str, data_dir:str, output_path:str, data_shape:tuple[int,int]=
     wandb.finish()
         
 if __name__ == "__main__":
-    main(run_name="unet_3D2D_972vols_sem_adult",
-         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/972vols_sem_adult",
+    main(run_name="unet_3D2D_204vols_sem_dauer_1",
+         data_dir="/home/tommy111/projects/def-mzhen/tommy111/data/204vols_sem_dauer_1",
          seed=40,
          epochs=200,
          data_shape=(512, 512),
