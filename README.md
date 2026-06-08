@@ -7,22 +7,35 @@ Gap junctions are specialized intercellular connections that facilitate direct c
 ```
 .
 ├── notebooks
-│   ├── inference.ipynb
-│   ├── sweep.ipynb
-│   ├── testing.ipynb
-│   ├── train.ipynb
-│   └── utilities.ipynb
+│   ├── 3d_visualizations.ipynb
+│   ├── algo_testing.ipynb
+│   ├── catmaid.ipynb
+│   ├── gj_connectivity_analysis_adult.ipynb
+│   ├── gj_connectivity_analysis_dauer.ipynb
+│   ├── gj_hc_lc_connectivity_analysis_adult.ipynb
+│   ├── gj_hc_lc_connectivity_analysis_dauer.ipynb
+│   ├── inference.ipynb
+│   ├── membrane_testing.ipynb
+│   ├── sweep.ipynb
+│   ├── train.ipynb
+│   └── utilities.ipynb
 ├── src
-│   ├── inference.py
-│   ├── models.py
-│   ├── segment_dataset.py
-│   ├── sweep.py
-│   ├── train.py
-│   ├── train_local.py
-│   └── utils.py
-└── README.md
+│   ├── transforms
+│   │   ├── gj_membrane.py
+│   │   └── transform_objects.py
+│   ├── analyze_gj.py
+│   ├── inference.py
+│   ├── models.py
+│   ├── segment_dataset.py
+│   ├── sweep.py
+│   ├── train.py
+│   ├── train_local.py
+│   └── utils.py
+├── .gitignore
+├── README.md
+└── requirements.txt
 
-2 directories, 13 files
+4 directories, 25 files
 ```
 
 The `notebooks` directory contains Jupyter notebooks used for experimentation and model development. The `src` directory contains the source code for the project, including model definitions, dataset handling, and utility functions. Python scripts are intuitively named (e.g., `train.py` for training models, `inference.py` for making predictions using a specific model). Most importantly, `segment_dataset.py` is the script that contains the `GapJunctionSegmentationPipeline` class, which orchestrates the entire segmentation process from ETL to model inference and post-processing.

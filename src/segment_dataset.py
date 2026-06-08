@@ -181,7 +181,7 @@ def main():
         #Path to where to save volume and downsampled volume results
         volume_dir="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_r1x0hn96/sem_dauer_1_s000-850",
         #Template name for images and masks, edit as needed
-        template="SEM_dauer_1_image_export_",
+        template="SEM_dauer_1_export_",
         #Augmentations to use for inference, edit above as needed
         augmentations=valid_augmentation3D,
         #Image size of tiles, default is 512
