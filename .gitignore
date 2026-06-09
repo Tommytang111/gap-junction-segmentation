@@ -5,6 +5,7 @@ scripts/
 legacy/
 catmaid/
 sam3/
+notebooks/gj*.ipynb
 **/wandb/
 **/__pycache__/
 secrets.txt

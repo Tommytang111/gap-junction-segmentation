@@ -1,19 +1,74 @@
-# Gap Junction Segmentation (GJS)
-Welcome to the Gap Junction Segmentation Project! This repository contains the set of all codes required for training and utilizing customized deep learning models for the task of gap junction semantic segmentation. It also aids in the visualization and evaluation of model performance metrics and outputs. For the Gap Junction Segmentation Online Tool, please refer to the [Gap Junction Segmentation App](https://Github.com/Tommytang111/gap-junction-segmentation-app).
+# Gap Junction Connectomics (GJC)
+Welcome to the Gap Junction Connectomics Project! This python repository contains all relevant code for 1) training and applying customized CNNs for gap junction semantic segmentation, 2) automated gap junction volumetric inference of any 3D electron microscopy (EM)dataset, and 3) gap junction analysis for characterizing the electrical connectome as a fraction of neuronal contacts. 
 
-Gap junctions are specialized intercellular connections that facilitate direct communication between cells. Semantic segmentation models can be used to identify these proteins from electron microscopy images of *C. elegans*. The [Zhen Lab](https://zhenlab.com/) at the University of Toronto/Lunenfeld-Tanenbaum Research Institute investigates many aspects of neural circuits, including their electrical coupling and communication via gap junctions. Using specially-stained EM datasets from adult and dauer (alternative developmental pathway) *C. elegans*, we have developed a pipeline for creating 3D segmentation volumes of gap junctions from 2D EM slices. Such volumes enable the exploration of the electrical connectome of *C. elegans*, which answer questions related to the structure, function, and plasticity of electrical synapses in neural circuits.
+Given any EM volume selectively stained for gap junctions and the corresponding neuron segmentation masks, this repo provides the means to explore the electrical connectome of any organism.
 
-### Project Structure
+![Flow Process](imgs/flowchart.png)
+
+Gap junctions are specialized intercellular connections that facilitate direct communication between cells. Semantic segmentation models can be used to identify these proteins from specially-stained electron microscopy images. The [Zhen Lab](https://zhenlab.com/) investigates nervous systems during development, including the electrical coupling of neural circuits through gap junctions. Using EM datasets from adult and dauer (alternative developmental pathway) *C. elegans*, we have developed a pipeline for creating and analyzing 3D segmentation volumes of gap junctions from raw EM volumes. Such volumes enable the exploration of the electrical connectome of these animals, which answer questions related to the structure, function, and plasticity of electrical synapses in neural circuits.
+
+## Getting Started
+
+### Prerequisites
+- Python 3.10+
+- CUDA-compatible GPU (recommended for training and inference)
+- [conda](https://docs.conda.io/en/latest/) or `pip`
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/<your-username>/gap-junction-connectomics.git
+cd gap-junction-connectomics
+```
+
+### Installation
+
+Install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+> **Note:** The `requirements.txt` pins exact versions from a conda environment. For a lighter install, install the core packages manually: `torch`, `torchvision`, `numpy`, `scipy`, `scikit-image`, `opencv-python`, `zarr`, `napari`, and `wandb`.
+
+### Usage
+
+**Training a model:**
+```bash
+python src/train.py
+```
+
+**Running inference on an EM volume:**
+```python
+from src.segment_dataset import GapJunctionSegmenter
+
+segmenter = GapJunctionSegmenter(...)
+segmenter.create_dataset()
+segmenter.run_inference()
+segmenter.stitch_predictions()
+segmenter.stack_slices()
+```
+
+**Analyzing the connectome:**
+```python
+from src.analyze_gj import GapJunctionAnalyzer
+
+analyzer = GapJunctionAnalyzer(...)
+analyzer.extract_membranes()
+analyzer.expand_neurons()
+analyzer.analyze_neurons()
+analyzer.analyze_neuron_pairs()
+```
+
+---
+
+## Project Structure
 ```
 .
 ├── notebooks
 │   ├── 3d_visualizations.ipynb
 │   ├── algo_testing.ipynb
 │   ├── catmaid.ipynb
-│   ├── gj_connectivity_analysis_adult.ipynb
-│   ├── gj_connectivity_analysis_dauer.ipynb
-│   ├── gj_hc_lc_connectivity_analysis_adult.ipynb
-│   ├── gj_hc_lc_connectivity_analysis_dauer.ipynb
 │   ├── inference.ipynb
 │   ├── membrane_testing.ipynb
 │   ├── sweep.ipynb
@@ -35,7 +90,8 @@ Gap junctions are specialized intercellular connections that facilitate direct c
 ├── README.md
 └── requirements.txt
 
-4 directories, 25 files
+4 directories, 21 files
 ```
 
-The `notebooks` directory contains Jupyter notebooks used for experimentation and model development. The `src` directory contains the source code for the project, including model definitions, dataset handling, and utility functions. Python scripts are intuitively named (e.g., `train.py` for training models, `inference.py` for making predictions using a specific model). Most importantly, `segment_dataset.py` is the script that contains the `GapJunctionSegmentationPipeline` class, which orchestrates the entire segmentation process from ETL to model inference and post-processing.
+The `notebooks` directory contains Jupyter notebooks used for experimentation and model development. The `src` directory contains the source code for the project, including model definitions, dataset handling, and utility functions. The `transforms` subdirectory contains mainly functions for volumetric transformations such as upsampling/downsampling. Python scripts are intuitively named (e.g., `train.py` for training models, `inference.py` for making predictions using a specific model). The two main classes are `GapJunctionSegmenter` from `segment_dataset.py`, which performs automated gap junction volumetric inference, and `GapJunctionAnalyzer` from `analyze_gj.py`, which extracts gap junction connectivity matrices and normalized statistics.
+

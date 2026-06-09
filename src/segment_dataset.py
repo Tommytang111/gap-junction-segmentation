@@ -12,6 +12,7 @@ from utils import create_dataset_2d, create_dataset_3d, assemble_imgs, check_out
 from inference import inference
 from models import TestDataset, TestDataset3D
 import albumentations as A
+import cv2
 import os
 import numpy as np
 import multiprocessing
@@ -21,7 +22,7 @@ import time
 import scipy.ndimage as ndi
 from skimage.measure import block_reduce
 
-class GapJunctionSegmentationPipeline:
+class GapJunctionSegmenter:
     def __init__(self, name, model_path, dataset_class, sections_dir, output_dir, pred_dir, assembled_dir, volume_dir, template, augmentations, three=False, overlap=True, img_size=512, batch_size=8, num_workers=None):
         self.name = name
         self.model = model_path
@@ -161,7 +162,7 @@ def main():
     ])
     
     #Step 0: Create pipeline
-    pipeline = GapJunctionSegmentationPipeline(
+    pipeline = GapJunctionSegmenter(
         #Name of job / Name of final volume output (I recommend model + data + "segmentation volume")
         name="unet_r1x0hn96_sem_dauer_1_s000-850_segmentation_volume",
         #Path to model
@@ -229,4 +230,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

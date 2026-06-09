@@ -835,15 +835,12 @@ def volume_to_slices(volume:str|np.ndarray, output_dir:str, binary:bool=False) -
 if __name__ == "__main__":
     start = time()
     #Job description
-    print('Get downsampled em volume for SEM Adult & Dauer 1.\n')
+    print('Stack slices for sem dauer 1 and downsample\n')
     
-    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_dauer_1/SEM_full/s000-850")
-    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_dauer_1_em_volume_downsampled4x.npy")
-    
-    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/data/sem_adult/SEM_full/s000-699")
-    vol_downsampled = downsample(vol, (1,4,4), save_path="/home/tommy111/scratch/outputs/sem_adult_em_volume_downsampled4x.npy")
+    vol = stack_slices("/home/tommy111/projects/def-mzhen/tommy111/outputs/assembled_results/unet_r1x0hn96/sem_dauer_1_s000-850/preds",
+                       multi_label=False, save=True, save_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_r1x0hn96/sem_dauer_1_s000-850/volume.npy")
+    downsampled_vol = downsample(vol, block_size=(1,4,4), save=True, save_path="/home/tommy111/projects/def-mzhen/tommy111/outputs/volumetric_results/unet_r1x0hn96/sem_dauer_1_s000-850/volume_downsampled4x.npy")
 
-    
     #THE EXAMPLE CALLS BELOW SHOULD BE SEARCHED BY KEYWORDS AND USED AS A TEMPLATE
     ###########################################################################################
     
