@@ -1,5 +1,5 @@
 # Gap Junction Connectomics (GJC)
-Welcome to the Gap Junction Connectomics Project! This python repository contains all relevant code for 1) training and applying customized CNNs for gap junction semantic segmentation, 2) automated gap junction volumetric inference of any 3D electron microscopy (EM)dataset, and 3) gap junction analysis for characterizing the electrical connectome as a fraction of neuronal contacts. 
+Welcome to the Gap Junction Connectomics Project! This python repository contains all relevant code for 1) training and applying customized CNNs for gap junction semantic segmentation, 2) automated gap junction volumetric inference of any 3D electron microscopy (EM) dataset, and 3) gap junction analysis for characterizing the electrical connectome as a fraction of neuronal contacts. 
 
 Given any EM volume selectively stained for gap junctions and the corresponding neuron segmentation masks, this repo provides the means to explore the electrical connectome of any organism.
 
