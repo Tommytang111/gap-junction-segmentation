@@ -616,20 +616,21 @@ def get_electrical_connectivity(neuron_membrane_mask: np.ndarray | str, neuron_l
         
     return contactome_matrix, gj_connectivity_matrix, normalized_gj_matrix
 
-def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membranes: np.ndarray | str, neuron_labels: np.ndarray | str, unique_entities: np.ndarray | str, radius: int = 100, save:bool=True, save_path:str=None) -> pd.DataFrame:
+def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membranes: np.ndarray | str, neuron_labels: np.ndarray | str, unique_entities: np.ndarray | str, radius: int = 100, max_std_dev: float = None, save:bool=True, save_path:str=None) -> pd.DataFrame:
     """
     Compute per-entity gap junction (GJ) relative intensity against local non-GJ membrane.
 
     For each non-zero `connector_ID` in `unique_entities`, the function:
       1) computes the mean intensity of the darkest 50% of voxels belonging to that entity,
-      2) finds the two neurons most overlapping the entity (via `neuron_label volume`),
-      3) collects membrane voxels within a 3D spherical neighborhood of radius `radius`
+      2) computes the standard deviation of all voxel intensities belonging to that entity,
+      3) finds the two neurons most overlapping the entity (via `neuron_label volume`),
+      4) collects membrane voxels within a 3D spherical neighborhood of radius `radius`
          centered at the entity centroid, restricted to:
            - membrane voxels (`membrane_volume > 0`)
            - non-GJ voxels (`entity_id_volume == 0`)
            - belonging to either of the two neurons
-      4) computes relative intensity = (darkest50_mean / surrounding_membrane_mean),
-      5) returns a table of results.
+      5) computes relative intensity = (darkest50_mean / surrounding_membrane_mean),
+      6) returns a table of results, optionally filtered by standard deviation.
 
     Parameters
     ----------
@@ -647,6 +648,11 @@ def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membrane
     radius : int, optional
         Radius (in voxels) of the spherical neighborhood used to sample surrounding membrane.
         Default is 100.
+    max_std_dev : float, optional
+        If provided, entities whose voxel intensity standard deviation exceeds this threshold
+        are excluded from the returned DataFrame. Useful for filtering out entities with
+        highly heterogeneous intensity (e.g. noise, artefacts, or partial segmentations).
+        Default is None (no filtering).
 
     Returns
     -------
@@ -656,9 +662,12 @@ def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membrane
           - 'average_intensity' : float
                 Relative intensity (darkest50_mean / surrounding_membrane_mean).
                 NaN if no valid surrounding membrane is found or if the denominator is 0.
+          - 'std_dev' : float
+                Standard deviation of raw voxel intensities for that entity.
           - 'neuron_1' : int
           - 'neuron_2' : int
         If an entity overlaps only one neuron label, 'neuron_2' is set to 0.
+        Rows where `std_dev > max_std_dev` are excluded when `max_std_dev` is set.
 
     Notes
     -----
@@ -678,6 +687,15 @@ def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membrane
     ...     radius=100,
     ... )
     >>> df.head()
+
+    >>> df_filtered = calculate_gj_relative_intensity(
+    ...     em_volume=raw,
+    ...     neuron_membranes=membrane,
+    ...     neuron_labels=expanded_neurons,
+    ...     unique_entities=connector_ids,
+    ...     radius=100,
+    ...     max_std_dev=20.0,
+    ... )
     """
     #Load objects
     em_volume = np.load(em_volume) if isinstance(em_volume, str) else em_volume
@@ -706,6 +724,7 @@ def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membrane
         sorted_intensities = np.sort(gj_intensities)
         half_thresh = max(1, len(sorted_intensities) // 2)
         darkest_50_avg = np.mean(sorted_intensities[:half_thresh])
+        std_dev = float(np.std(gj_intensities))
         
         #Determine the two unique neurons this entity belongs to
         overlapping_neurons = neuron_labels[unique_entities == connector_id]
@@ -764,23 +783,149 @@ def calculate_gj_relative_intensity(em_volume: np.ndarray | str, neuron_membrane
         results.append({
             'connector_ID': connector_id,
             'average_intensity': relative_intensity,
+            'std_dev': std_dev,
             'neuron_1': neuron1,
             'neuron_2': neuron2
         })
     
     #Convert to pandas Dataframe
     results = pd.DataFrame(results)
-    
+
+    if max_std_dev is not None:
+        results = results[results['std_dev'] <= max_std_dev].reset_index(drop=True)
+
     if save and save_path != None:
         check_output_directory(Path(save_path).parent, clear=False)
         with open(save_path, "wb") as f:
             pickle.dump(results, f)
         print(f"Intensity table saved as {save_path}.")
-        
+
+    return results
+
+def closest_chemical_synapse(gj_entities: np.ndarray | str, chemical_synapses: np.ndarray | str, save: bool = True, save_path: str = None) -> pd.DataFrame:
+    """
+    Find the closest chemical synapse to each gap junction (GJ) entity.
+
+    For every non-zero `connector_ID` in `gj_entities`, the function computes the entity's
+    voxel centroid and finds the nearest chemical synapse point (by Euclidean distance in
+    voxel space) using a KD-tree over all labeled synapse voxels. Each chemical synapse is
+    assumed to be a single point uniquely labeled by its synapse ID in `chemical_synapses`.
+
+    Parameters
+    ----------
+    gj_entities : np.ndarray or str
+        3D volume with shape (Z, Y, X) containing per-voxel GJ entity IDs / connector IDs.
+        Background must be 0; each GJ entity should have a positive integer ID.
+        If a str filepath is provided, the array is loaded with np.load().
+    chemical_synapses : np.ndarray or str
+        3D volume with shape (Z, Y, X) where each chemical synapse is a single voxel
+        uniquely labeled by a positive integer synapse ID. Background must be 0.
+        Must share the same (Z, Y, X) shape as `gj_entities`.
+        If a str filepath is provided, the array is loaded with np.load().
+    save : bool, optional
+        If True and `save_path` is given, pickle the returned table to `save_path`.
+        Default is True.
+    save_path : str, optional
+        Destination .pkl path for the results table. Only used if `save` is True.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per `connector_ID` with columns:
+          - 'connector_ID'       : int
+          - 'closest_synapse_ID' : int    ID of the nearest chemical synapse.
+          - 'synapse_z'          : int    Z coordinate of that synapse.
+          - 'synapse_y'          : int    Y coordinate of that synapse.
+          - 'synapse_x'          : int    X coordinate of that synapse.
+          - 'distance'           : float  Euclidean distance (in voxels) from the GJ
+                                          centroid to the synapse.
+        If `chemical_synapses` contains no labeled points, the synapse columns are NaN.
+
+    Notes
+    -----
+    * Distances are computed in voxel space (z, y, x treated equally). For anisotropic
+      volumes, scale the coordinates by the physical voxel size before querying if a
+      physically accurate nearest neighbor is required.
+    * The GJ centroid is the geometric mean of the entity's voxel coordinates, matching the
+      centroid definition used in `calculate_gj_relative_intensity`.
+
+    Examples
+    --------
+    >>> df = closest_chemical_synapse(
+    ...     gj_entities=connector_ids,
+    ...     chemical_synapses=synapse_ids,
+    ... )
+    >>> df.head()
+    """
+    from scipy.spatial import cKDTree
+    from scipy.ndimage import center_of_mass
+
+    #Load objects
+    gj_entities = np.load(gj_entities) if isinstance(gj_entities, str) else gj_entities
+    chemical_synapses = np.load(chemical_synapses) if isinstance(chemical_synapses, str) else chemical_synapses
+
+    if gj_entities.shape != chemical_synapses.shape:
+        raise ValueError(
+            f"gj_entities {gj_entities.shape} and chemical_synapses {chemical_synapses.shape} "
+            "must share the same (Z, Y, X) shape"
+        )
+
+    #Get all unique GJ entities (ignore background 0) and their voxel centroids
+    gj_mask = gj_entities > 0
+    unique_ids = np.unique(gj_entities[gj_mask])
+
+    columns = ['connector_ID', 'closest_synapse_ID', 'synapse_z', 'synapse_y', 'synapse_x', 'distance']
+    if len(unique_ids) == 0:
+        return pd.DataFrame(columns=columns)
+
+    #center_of_mass on the binary mask gives the geometric centroid (z, y, x) of each entity
+    centroids = np.atleast_2d(center_of_mass(gj_mask, labels=gj_entities, index=unique_ids))
+
+    #Get chemical synapse points (z, y, x) and their unique ids
+    syn_coords = np.argwhere(chemical_synapses > 0)
+    syn_ids = chemical_synapses[chemical_synapses > 0]
+
+    results = []
+    if len(syn_coords) == 0:
+        #No synapses to match against; report NaNs
+        for connector_id in unique_ids:
+            results.append({
+                'connector_ID': int(connector_id),
+                'closest_synapse_ID': np.nan,
+                'synapse_z': np.nan,
+                'synapse_y': np.nan,
+                'synapse_x': np.nan,
+                'distance': np.nan,
+            })
+    else:
+        #KD-tree nearest neighbor query from each GJ centroid to the synapse points
+        tree = cKDTree(syn_coords)
+        distances, indices = tree.query(centroids)
+
+        for connector_id, idx, dist in tqdm(zip(unique_ids, indices, distances), total=len(unique_ids), desc="Finding closest chemical synapses"):
+            syn_z, syn_y, syn_x = syn_coords[idx]
+            results.append({
+                'connector_ID': int(connector_id),
+                'closest_synapse_ID': int(syn_ids[idx]),
+                'synapse_z': int(syn_z),
+                'synapse_y': int(syn_y),
+                'synapse_x': int(syn_x),
+                'distance': float(dist),
+            })
+
+    #Convert to pandas Dataframe
+    results = pd.DataFrame(results, columns=columns)
+
+    if save and save_path is not None:
+        check_output_directory(Path(save_path).parent, clear=False)
+        with open(save_path, "wb") as f:
+            pickle.dump(results, f)
+        print(f"Closest chemical synapse table saved as {save_path}.")
+
     return results
 
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     start = time.time()
     
     print("Calculating relative gap junction intensities for SEM adult & dauer 2... \n")
